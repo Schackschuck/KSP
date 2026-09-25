@@ -13,7 +13,7 @@ O objetivo principal é **aprender firmware/embarcados e eletrônica**, e de que
           ▲
           │  rede — cabo ou Wi-Fi (kRPC, TCP/protobuf)
           ▼
- Raspberry Pi 3 = computador de bordo ..... bridge/
+ Raspberry Pi 4 = computador de bordo ..... bridge/
    • ponte kRPC ⇄ painel
    • tela de telemetria (pygame)
           ▲
@@ -31,7 +31,7 @@ Cada parte tem um papel bem definido:
 | Parte | Responsabilidade | Não faz |
 |---|---|---|
 | **KSP + kRPC** (PC) | Expõe o estado da nave e aceita comandos. | — |
-| **Computador de bordo** (Raspberry Pi 3, Python) | Conecta no kRPC pela rede, abre *streams* de telemetria, traduz eventos do painel em comandos do jogo e telemetria em mensagens para o painel. Desenha a tela de telemetria. Dispara scripts (ex.: pouso autônomo). | Não lê pino nenhum. |
+| **Computador de bordo** (Raspberry Pi 4, Python) | Conecta no kRPC pela rede, abre *streams* de telemetria, traduz eventos do painel em comandos do jogo e telemetria em mensagens para o painel. Desenha a tela de telemetria. Dispara scripts (ex.: pouso autônomo). | Não lê pino nenhum. |
 | **Firmware** (Arduino Mega, C++) | Lê entradas (com debounce), envia eventos; recebe valores e atualiza LEDs, displays e ponteiros. | **Não sabe que o KSP existe.** É um painel de I/O genérico. |
 
 Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o endereço do servidor kRPC e a porta serial.
@@ -55,7 +55,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **kRPC** em vez de mods de serial (Kerbal Simpit etc.) | Acesso a praticamente tudo do jogo (órbita, estágios, delta-v, autopilot) e permite scripts de voo. A ferramenta não deve ser o limite. |
 | **Ponte fora do microcontrolador** em vez do cliente kRPC C-nano | kRPC completo com *streams*; o firmware fica simples e ganha um protocolo próprio — que é onde está o aprendizado de embarcados. |
 | **Python** na ponte | Já usado com kRPC antes; o mesmo código roda no PC e no Pi. |
-| **Raspberry Pi 3** como computador de bordo | Liga uma tela colorida de verdade sem esforço e deixa o cockpit independente do PC (só um cabo de rede). |
+| **Raspberry Pi 4** como computador de bordo | Liga uma tela colorida de verdade sem esforço e deixa o cockpit independente do PC (só um cabo de rede). |
 | **Arduino Mega** para o I/O | O Pi não tem entradas analógicas e o Linux não é tempo real; o Mega tem muitos pinos, trabalha em 5V e é compatível com praticamente todo módulo. |
 | **ESP32** fica para depois | Candidato a painel sem fio ou módulo extra (fase 7). |
 
@@ -84,7 +84,7 @@ Cada fase termina com algo funcionando de ponta a ponta. Não pule o critério d
 - Instalar Python 3, `pip install krpc pyserial` e a Arduino IDE 2 (ou PlatformIO no VS Code).
 - Se a placa for clone com chip CH340, instalar o driver CH340 no Windows.
 
-**No Raspberry Pi 3:**
+**No Raspberry Pi 4:**
 
 - Gravar o Raspberry Pi OS com o Raspberry Pi Imager, já configurando Wi-Fi e SSH.
 - `pip install krpc pyserial pygame` (de preferência dentro de um *venv*).
@@ -128,7 +128,7 @@ while True:
 
 - Interface em pygame no Pi: altitude, velocidades, apoapse/periapse, tempo até Ap/Pe, combustível e delta-v por estágio.
 - Depois: gráfico de altitude × tempo, desenho simples da órbita, indicador de atitude.
-- Cuidado com desempenho no Pi 3: redesenhar só o que mudou e limitar a taxa de quadros.
+- O Pi 4 tem folga de desempenho, mas vale o bom hábito: redesenhar só o que mudou e limitar a taxa de quadros.
 
 **Pronto quando:** dá para circularizar uma órbita olhando só para a tela.
 
@@ -178,9 +178,10 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 ### Fases 0–1 — Kit inicial
 
 - [x] Arduino Mega 2560 (também tem Uno e Nano)
-- [x] Raspberry Pi 3
+- [x] Raspberry Pi 4
 - [x] Botões
-- [ ] Fonte para o Pi 3: 5,1V 2,5A micro-USB de boa qualidade (fonte fraca causa travamentos)
+- [ ] Fonte para o Pi 4: 5,1V 3A USB-C de boa qualidade (fonte fraca causa travamentos)
+- [ ] Dissipador ou case com ventoinha (o Pi 4 esquenta, principalmente dentro de uma caixa fechada)
 - [ ] Cartão microSD de 16 GB ou mais (classe A1)
 - [ ] Cabo USB-B para ligar o Mega no Pi
 - [ ] 2× protoboard de 830 pontos
@@ -204,6 +205,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 
 - [x] TFT (modelo a identificar — pode servir, dependendo do tipo)
 - [ ] Se for comprar: tela **HDMI de 7" (1024x600)**, com ou sem touch, ou a tela oficial DSI de 7" do Raspberry Pi. Evitar telas SPI pequenas no Pi (lentas e trabalhosas de configurar).
+- [ ] Cabo ou adaptador **micro-HDMI → HDMI** (o Pi 4 só tem saída micro-HDMI)
 
 ### Fase 4 — Instrumentos físicos
 
