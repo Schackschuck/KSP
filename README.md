@@ -13,17 +13,20 @@ O objetivo principal é **aprender firmware/embarcados e eletrônica**, e de que
           ▲
           │  rede — cabo ou Wi-Fi (kRPC, TCP/protobuf)
           ▼
- Raspberry Pi 4 = computador de bordo ..... bridge/
-   • ponte kRPC ⇄ painel
+ Raspberry Pi 4 = computador de bordo ............... bridge/
+   • ponte kRPC ⇄ placas
    • tela de telemetria (pygame)
-          ▲
-          │  USB/serial (protocolo próprio)
-          ▼
- Arduino Mega = I/O do painel ............. firmware/
+          ▲                              ▲
+          │ USB/serial                   │ USB/serial
+          │ (protocolo próprio)          │ (mesmo protocolo)
+          ▼                              ▼
+ Arduino Mega = I/O do painel     mikromedia (LPC2148) = tela multifunção
+ firmware/painel/                 firmware/mfd/
           ▲
           │  pinos, I2C, SPI
           ▼
- Painel: chaves, LEDs, joystick, displays de 7 segmentos, ponteiros
+ Painel: chaves, LEDs, joystick,
+ displays de 7 segmentos, ponteiros
 ```
 
 Cada parte tem um papel bem definido:
@@ -32,7 +35,8 @@ Cada parte tem um papel bem definido:
 |---|---|---|
 | **KSP + kRPC** (PC) | Expõe o estado da nave e aceita comandos. | — |
 | **Computador de bordo** (Raspberry Pi 4, Python) | Conecta no kRPC pela rede, abre *streams* de telemetria, traduz eventos do painel em comandos do jogo e telemetria em mensagens para o painel. Desenha a tela de telemetria. Dispara scripts (ex.: pouso autônomo). | Não lê pino nenhum. |
-| **Firmware** (Arduino Mega, C++) | Lê entradas (com debounce), envia eventos; recebe valores e atualiza LEDs, displays e ponteiros. | **Não sabe que o KSP existe.** É um painel de I/O genérico. |
+| **Painel** (Arduino Mega, C++) | Lê entradas (com debounce), envia eventos; recebe valores e atualiza LEDs, displays e ponteiros. | **Não sabe que o KSP existe.** É um painel de I/O genérico. |
+| **Tela multifunção** (mikromedia for ARM, LPC2148, C sem framework) | Recebe telemetria pelo mesmo protocolo serial, desenha páginas (atitude, órbita, pouso), troca de página pelo touch e toca alarmes sonoros. | Não fala com o kRPC; só mostra o que o computador de bordo manda. |
 
 Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o endereço do servidor kRPC e a porta serial.
 
@@ -45,7 +49,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
     Pi → placa:  ALT 12345      SAS 1      FUEL 73
     placa → Pi:  BTN STAGE 1    SW SAS 0   AX PITCH -312
     ```
-  - **v1 — binário**, com enquadramento [COBS](https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing), ID de mensagem e CRC. Mais rápido e robusto; vem quando a v0 começar a apertar.
+  - **v1 — binário**, com enquadramento [COBS](https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing), ID de mensagem e CRC. Mais rápido e robusto; vem quando a v0 começar a apertar. É o mesmo protocolo para o Mega e para a mikromedia.
 - **Entradas analógicas** (joystick, acelerador) são enviadas a uma taxa fixa, com zona morta e filtro; **entradas digitais** são enviadas só quando mudam.
 
 ### Decisões
@@ -55,17 +59,19 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **kRPC** em vez de mods de serial (Kerbal Simpit etc.) | Acesso a praticamente tudo do jogo (órbita, estágios, delta-v, autopilot) e permite scripts de voo. A ferramenta não deve ser o limite. |
 | **Ponte fora do microcontrolador** em vez do cliente kRPC C-nano | kRPC completo com *streams*; o firmware fica simples e ganha um protocolo próprio — que é onde está o aprendizado de embarcados. |
 | **Python** na ponte | Já usado com kRPC antes; o mesmo código roda no PC e no Pi. |
-| **Raspberry Pi 4** como computador de bordo | Liga uma tela colorida de verdade sem esforço e deixa o cockpit independente do PC (só um cabo de rede). |
+| **Raspberry Pi 4** como computador de bordo | Deixa o cockpit independente do PC (só um cabo de rede) e pode ligar uma tela colorida grande. A compra dessa tela foi adiada — decidir depois. |
 | **Arduino Mega** para o I/O | O Pi não tem entradas analógicas e o Linux não é tempo real; o Mega tem muitos pinos, trabalha em 5V e é compatível com praticamente todo módulo. |
-| **ESP32** fica para depois | Candidato a painel sem fio ou módulo extra (fase 7). |
+| **mikromedia for ARM (LPC2148)** como tela multifunção | Já está na bancada. ARM programado sem framework, com tela touch, microSD e áudio. Entra depois do protocolo v1, que ela também usa. |
+| **ESP32** fica para depois | Candidato a painel sem fio ou módulo extra (fase 8). |
 
 ### Estrutura planejada do repositório
 
 ```
-bridge/     computador de bordo em Python: ponte kRPC ⇄ serial, tela de telemetria, scripts de voo
-firmware/   código da placa (Arduino IDE ou PlatformIO)
-hardware/   esquemáticos e PCBs (KiCad), desenhos da caixa
-docs/       protocolo serial, pinagem, anotações
+bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de telemetria, scripts de voo
+firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
+firmware/mfd/     mikromedia for ARM / LPC2148 (C, GCC e make)
+hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa
+docs/             protocolo serial, pinagem, anotações
 ```
 
 ---
@@ -129,6 +135,7 @@ while True:
 - Interface em pygame no Pi: altitude, velocidades, apoapse/periapse, tempo até Ap/Pe, combustível e delta-v por estágio.
 - Depois: gráfico de altitude × tempo, desenho simples da órbita, indicador de atitude.
 - O Pi 4 tem folga de desempenho, mas vale o bom hábito: redesenhar só o que mudou e limitar a taxa de quadros.
+- A tela definitiva do Pi foi adiada. Enquanto isso, desenvolver com qualquer monitor ou TV HDMI (ou rodando a interface no PC).
 
 **Pronto quando:** dá para circularizar uma órbita olhando só para a tela.
 
@@ -150,16 +157,32 @@ while True:
 
 **Pronto quando:** um booster pousa sozinho a partir de um botão no painel.
 
-### Fase 6 — Hardware definitivo
+### Fase 6 — Tela multifunção (mikromedia for ARM)
+
+Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de flash, 32 KB de RAM), tela 320x240 com touch resistivo, microSD, saída de áudio e carregador de Li-Po. Aqui o firmware é escrito **sem framework**: C, registradores, script de linker e código de inicialização próprios.
+
+- **Antes de começar:** achar o manual e o esquemático da placa (site da MikroE) para confirmar o controlador da tela, o chip de áudio e qual mini-USB está ligada à serial do LPC2148.
+- **Ferramentas:** `arm-none-eabi-gcc` + `make`. Gravação pelo bootloader serial de fábrica do LPC2148, com `lpc21isp` ou Flash Magic — provavelmente pela mini-USB com LEDs RX/TX, sem precisar de gravador.
+- **Passos:**
+  1. Piscar um LED: código de inicialização, script de linker, configuração do PLL.
+  2. Serial: eco de caracteres; depois, receber o protocolo v1.
+  3. Driver da tela: inicializar o controlador, desenhar pixels, retângulos e texto com fonte bitmap. Com 32 KB de RAM não cabe um *framebuffer* (320×240×2 = 150 KB), então o desenho vai direto para a memória do controlador da tela, atualizando só o que mudou.
+  4. Touch: leitura pelo ADC e calibração.
+  5. Páginas: indicador de atitude, mapa da órbita, dados de pouso; troca de página pelo touch.
+  6. Áudio: alarmes e avisos gravados no microSD (combustível baixo, contagem de altitude no pouso).
+
+**Pronto quando:** a mikromedia mostra telemetria ao vivo recebida do Pi e toca um alarme de combustível baixo.
+
+### Fase 7 — Hardware definitivo
 
 - Esquemático e PCB no **KiCad**; fabricação (JLCPCB, PCBWay…).
-- Caixa impressa em 3D ou MDF cortado a laser, painel com legendas, Pi e tela embutidos.
+- Caixa impressa em 3D ou MDF cortado a laser, painel com legendas, Pi e mikromedia embutidos.
 
-### Fase 7 — Embarcados avançado (opcional)
+### Fase 8 — Embarcados avançado (opcional)
 
 - Painéis modulares, cada um com seu micro, falando com um mestre via I2C, RS-485 ou CAN.
 - Painel sem fio com **ESP32**.
-- Reescrever o firmware sem o framework Arduino (registradores do AVR) ou migrar para RP2040 (Raspberry Pi Pico) com o C SDK ou Rust + Embassy.
+- Reescrever o firmware do Mega sem o framework Arduino (registradores do AVR) ou migrar para RP2040 (Raspberry Pi Pico) com o C SDK ou Rust + Embassy.
 
 ---
 
@@ -203,8 +226,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 
 ### Fase 3 — Tela de telemetria
 
-- [x] TFT (modelo a identificar — pode servir, dependendo do tipo)
-- [ ] Se for comprar: tela **HDMI de 7" (1024x600)**, com ou sem touch, ou a tela oficial DSI de 7" do Raspberry Pi. Evitar telas SPI pequenas no Pi (lentas e trabalhosas de configurar).
+- **Tela do Pi: adiada** — decidir depois. Para desenvolver, qualquer monitor ou TV HDMI serve.
 - [ ] Cabo ou adaptador **micro-HDMI → HDMI** (o Pi 4 só tem saída micro-HDMI)
 
 ### Fase 4 — Instrumentos físicos
@@ -215,7 +237,15 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [ ] 2–4× motores de passo X27.168 (ponteiros)
 - [ ] 1× fonte 5V 3A + conector/borne
 
-### Fase 6 — Hardware definitivo
+### Fase 6 — Tela multifunção
+
+- [x] mikromedia for ARM (LPC2148)
+- [ ] Cabo mini-USB
+- [ ] Cartão microSD (para os sons de alarme)
+- [ ] Fone ou caixinha de som com plugue P2
+- [ ] Gravador JTAG compatível com ARM7 (opcional, só para depurar passo a passo)
+
+### Fase 7 — Hardware definitivo
 
 - [ ] PCBs fabricadas
 - [ ] Conectores JST/dupont, parafusos e espaçadores M3
@@ -231,4 +261,8 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [Raspberry Pi — documentação](https://www.raspberrypi.com/documentation/)
 - [Arduino — documentação](https://docs.arduino.cc/)
 - [KiCad](https://www.kicad.org/)
+- [LPC214x User Manual (UM10139)](https://www.nxp.com/docs/en/user-guide/UM10139.pdf) — referência de todos os registradores do LPC2148
+- [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (`arm-none-eabi-gcc`)
+- [lpc21isp](https://sourceforge.net/projects/lpc21isp/) — gravação pelo bootloader serial do LPC2148
+- Manual e esquemático da mikromedia for ARM: site da [MikroElektronika](https://www.mikroe.com/)
 - Bibliotecas úteis para o firmware: `LiquidCrystal_I2C`, `LedControl` (MAX7219), `FastLED` ou `Adafruit_NeoPixel` (WS2812), `SwitecX25` (X27.168)
