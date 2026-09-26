@@ -17,6 +17,7 @@ O objetivo principal é **aprender firmware/embarcados e eletrônica**, e de que
    • ponte kRPC ⇄ placas
    • tela de telemetria (pygame)
    • tela multifunção no navegador do celular, pelo Wi-Fi (enquanto a placa não fica pronta)
+   • dispara os scripts de voo ....................... scripts/
           ▲                              ▲
           │ USB/serial                   │ USB/serial
           │ (protocolo próprio)          │ (mesmo protocolo)
@@ -44,7 +45,7 @@ Cada parte tem um papel bem definido:
 | Parte | Responsabilidade | Não faz |
 |---|---|---|
 | **KSP + kRPC** (PC) | Expõe o estado da nave e aceita comandos. | — |
-| **Computador de bordo** (Raspberry Pi 4, Python) | Conecta no kRPC pela rede, abre *streams* de telemetria, traduz eventos do painel em comandos do jogo e telemetria em mensagens para o painel. Desenha a tela de telemetria. Dispara scripts (ex.: pouso autônomo). | Não lê pino nenhum. |
+| **Computador de bordo** (Raspberry Pi 4, Python) | Conecta no kRPC pela rede, abre *streams* de telemetria, traduz eventos do painel em comandos do jogo e telemetria em mensagens para o painel. Desenha a tela de telemetria. Dispara os scripts de voo de `scripts/` (ex.: pouso autônomo). | Não lê pino nenhum. |
 | **Painel** (Arduino Mega, C++) | Lê entradas (com debounce), envia eventos; recebe valores e atualiza LEDs, displays e ponteiros. | **Não sabe que o KSP existe.** É um painel de I/O genérico. |
 | **Celular** (opcional, página no navegador) | Mostra a tela multifunção pelo Wi-Fi, com o mesmo protocolo e o mesmo layout, enquanto a mikromedia não tem firmware. | Não fala com o kRPC nem guarda estado: só desenha o que a ponte manda. |
 | **Tela multifunção** (mikromedia for ARM, LPC2148, C sem framework) | Recebe telemetria pelo mesmo protocolo serial, desenha páginas (atitude, órbita, pouso), troca de página pelo touch e toca alarmes sonoros. | Não fala com o kRPC; só mostra o que o computador de bordo manda. |
@@ -81,13 +82,15 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Pouso por previsão**: simula a freada até o chão e acha o acelerador por bisseção | Com arrasto, a freada não tem conta fechada. Simular funciona igual em qualquer planeta, com ou sem atmosfera, e refazer a conta 20 vezes por segundo corrige os erros da previsão. O arrasto é medido em voo, e a previsão só usa parte dele, porque ele cai quando a nave fica mais lenta que o som. A guiagem não conhece o kRPC, então é testada numa nave simulada. |
 | **Pé da nave medido pelas pernas do trem**, não pela caixa da nave inteira | Nas versões lançadas do kRPC (até a 0.6.0), a caixa de uma peça junta tudo o que está pendurado nela, como a chama do motor ligado. A caixa da nave inteira descia metros abaixo do pé, e a freada terminava alta. |
 | **SAS do KSP aponta a nave no pouso**, não o piloto automático do kRPC | O piloto automático do kRPC vem ajustado para levar 3 s até o ângulo pedido e não conta a força do ar. No segundo teste, a nave caindo de ré balançou até 31° na freada. O SAS o jogo ajusta para cada nave. Retrógrado enquanto a nave desce rápido; devagar, perto do chão, o retrógrado pula de um lado para o outro, então no fim o SAS só segura a atitude. |
+| **Scripts de voo numa pasta própria** (`scripts/`), fora da ponte | Cada script roda sozinho pela linha de comando, no PC ou no Pi, com ou sem o cockpit. A ponte só dispara o script quando o botão do painel é apertado; o script não depende dela nem do painel. |
 | **ESP32** fica para depois | Candidato a painel sem fio ou módulo extra (fase 8). |
 
 ### Estrutura planejada do repositório
 
 ```
-bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de telemetria, scripts de voo;
+bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de telemetria;
                   tela multifunção: ponte (mfd.py), simulador, navball e a página do celular (celular/)
+scripts/          scripts de voo (pouso...), que rodam com ou sem o cockpit; testes em scripts/tests/
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
 firmware/passos/  sketches de aprendizado, um por passo da fase 1
 firmware/mfd/     mikromedia for ARM / LPC2148 (C, GCC e make)
@@ -189,7 +192,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 ### Fase 5 — Protocolo v1 + scripts de voo
 
-**Status: script de pouso escrito, em teste no jogo.** No primeiro teste, em Kerbin, a freada terminou alta e a nave tocou o chão inclinada e tombou. Corrigido: o pé agora é medido pelas pernas do trem. No segundo teste o pé ficou certo (0,4 m de erro no toque), mas a nave balançou até 31° na freada: o piloto automático do kRPC não segurava a nave. Agora quem aponta a nave é o SAS do KSP (falta testar de novo). [`bridge/pouso.py`](bridge/pouso.py) faz a queima de suicídio numa descida vertical, em qualquer planeta, contando o arrasto do ar; roda pela linha de comando enquanto o botão não existe. [`bridge/test_pouso.py`](bridge/test_pouso.py) testa a mesma guiagem numa nave simulada, sem o KSP, em planetas com e sem atmosfera.
+**Status: script de pouso escrito, em teste no jogo.** No primeiro teste, em Kerbin, a freada terminou alta e a nave tocou o chão inclinada e tombou. Corrigido: o pé agora é medido pelas pernas do trem. No segundo teste o pé ficou certo (0,4 m de erro no toque), mas a nave balançou até 31° na freada: o piloto automático do kRPC não segurava a nave. Agora quem aponta a nave é o SAS do KSP (falta testar de novo). [`scripts/pouso.py`](scripts/pouso.py) faz a queima de suicídio numa descida vertical, em qualquer planeta, contando o arrasto do ar; roda pela linha de comando enquanto o botão não existe. [`scripts/tests/test_pouso.py`](scripts/tests/test_pouso.py) testa a mesma guiagem numa nave simulada, sem o KSP, em planetas com e sem atmosfera.
 
 - Migrar para o protocolo binário (COBS + CRC).
 - Chave "ARM" + botão "SUICIDE BURN" que dispara o script de pouso autônomo no computador de bordo.
@@ -232,11 +235,13 @@ Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de fla
 
 ## Scripts de voo
 
-Scripts que pilotam a nave, ou ajudam o piloto a pilotar, disparados pelo painel e acompanhados na tela. O primeiro é o pouso autônomo da [fase 5](#fase-5--protocolo-v1--scripts-de-voo) ([`bridge/pouso.py`](bridge/pouso.py)). Os outros desta seção são ideias ainda sem código e sem ordem: cada um entra no roteiro quando o hardware de que precisa existir.
+Scripts que pilotam a nave, ou ajudam o piloto a pilotar, disparados pelo painel e acompanhados na tela. O primeiro é o pouso autônomo da [fase 5](#fase-5--protocolo-v1--scripts-de-voo) ([`scripts/pouso.py`](scripts/pouso.py)). Os outros desta seção são ideias ainda sem código e sem ordem: cada um entra no roteiro quando o hardware de que precisa existir.
+
+Os scripts ficam em [`scripts/`](scripts/), fora da ponte: cada um roda sozinho pela linha de comando, no PC ou no Pi, mesmo sem o painel. No cockpit, a ponte só dispara o script pelo botão e mostra o estado dele no painel e na tela. Os testes, com naves simuladas e sem o KSP, ficam em `scripts/tests/`.
 
 ### Base comum
 
-- **Um script ativo por vez**, rodando na ponte. Liga com a chave ARM + o botão do script. ABORT, ou mexer no joystick, devolve o controle ao piloto na hora.
+- **Um script ativo por vez.** No cockpit, liga com a chave ARM + o botão do script. ABORT, ou mexer no joystick, devolve o controle ao piloto na hora.
 - O painel e a tela mostram o estado do script (armado, ativo, terminado, abortado). Como nos outros LEDs, o LED mostra o que o script está fazendo, não o botão que foi apertado.
 - **Guiagem separada do kRPC**, como em `pouso.py`: recebe uma leitura da nave e devolve comandos. Assim ela é testada numa nave simulada, sem o KSP, antes de ir para o jogo.
 - **Diretor de voo:** todo script pode rodar no automático ou só como guia. No modo guia, a tela mostra para onde apontar e quanto acelerar, e o piloto voa pelo joystick. Serve para testar a guiagem sem entregar a nave e para aprender a pilotar junto.
@@ -287,6 +292,27 @@ O pouso da SpaceX completo. O `pouso.py` desce na vertical onde a nave estiver; 
 - Na descida, as aletas corrigem a trajetória para o alvo.
 - Termina com a queima de suicídio do `pouso.py`, com a mira puxando para o alvo em vez de só anular a deriva.
 - É o mais difícil da lista: precisa prever onde a trajetória cai, com arrasto, como o `pouso.py` já faz na vertical.
+
+### Rendezvous
+
+Levar a nave até perto de outra em órbita. O script **não pilota até a última etapa**: ele cria nós de manobra, que o piloto confere e ajusta no editor da [fase 4](#fase-4--instrumentos-físicos) e o EXEC da fase 5 executa. Assim a parte de planejar e a parte de queimar ficam separadas, e cada uma é testada sozinha.
+
+- **As etapas**, cada uma um nó novo:
+  1. **Igualar o plano:** nó no nodo ascendente ou descendente em relação ao alvo, queima na direção normal de Δv = 2·v·sen(Δi/2). Conta fechada; o kRPC dá a inclinação relativa e onde fica o nodo (`relative_inclination`, `true_anomaly_at_an`).
+  2. **Transferência:** a conta pesada, feita como no pouso, prevendo e ajustando. Para cada momento de queima ao longo de uma volta, calcula a queima pró-grado que leva o apoastro até a órbita do alvo, prevê as duas órbitas e mede a menor distância entre as naves. Fica com o melhor momento e refina por bisseção. Sem motor, as órbitas seguem as leis de Kepler: a previsão é exata, sem o arrasto que complica o pouso.
+  3. **Igualar a velocidade:** nó no momento da menor distância, com a queima igual à diferença entre a velocidade do alvo e a da nave nesse instante.
+  4. **Aproximação final**, sem nó: aponta para o alvo, se aproxima com uma velocidade que cai com a distância, anula a deriva para os lados e para a uns 50–100 m. Dali segue o acoplamento assistido.
+- **Automático ou diretor de voo:** no automático, o script encadeia as etapas e acelera o tempo entre elas (`warp_to`). Como diretor de voo, ele só propõe cada nó e o piloto ajusta e executa.
+- **Na tela e no LCD do editor de manobras:** a menor distância prevista até o alvo, quando ela acontece e a velocidade relativa nesse ponto, atualizadas enquanto os encoders mexem no nó.
+- **Ordem para fazer**, do mais simples ao mais difícil:
+  1. Só mostrar a menor distância prevista enquanto o piloto edita os nós na mão. Sem automação, e já é como se faz rendezvous "de olho" no KSP.
+  2. Os nós de igualar o plano e igualar a velocidade, que são contas fechadas.
+  3. A busca da transferência.
+  4. A aproximação final e a passagem para o acoplamento.
+- **A decidir:**
+  - Quem prevê as órbitas: o kRPC calcula a aproximação com um nó criado, mas cada pergunta vai pela rede, e a busca faz dezenas delas. Uma previsão própria (resolver a equação de Kepler, umas 30 linhas) é rápida e testável sem o KSP. A ideia é a própria, conferida contra a do kRPC.
+  - Queimas longas: o EXEC tem que começar metade da queima antes do nó, senão o encontro erra por quilômetros. Vale para todo nó, então fica no EXEC.
+- **Precisa de:** o editor de manobras (fase 4) e o EXEC (fase 5). A etapa 1 da ordem só precisa da tela.
 
 ### Acoplamento assistido
 

@@ -6,15 +6,20 @@ caminho todo, arrasto que passa do dobro perto de Mach 1, empuxo que cai no ar
 grosso e a guiagem sempre uma volta atrasada (as leituras do kRPC chegam com
 atraso, principalmente pelo Wi-Fi).
 
-Uso:
-    python test_pouso.py
-    python test_pouso.py -v          # uma linha por cenário
+Uso, a partir da raiz do repositório:
+    python scripts/tests/test_pouso.py
+    python scripts/tests/test_pouso.py -v    # uma linha por cenário
 """
 
 import math
+import os
+import sys
 import unittest
 from dataclasses import dataclass
 from unittest import mock
+
+# Os scripts ficam na pasta de cima (scripts/).
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 import pouso
 from pouso import ATITUDE, POUSADA, QUEDA, QUEIMA, RETROGRADO, V_TOQUE, Guiagem, Leitura
