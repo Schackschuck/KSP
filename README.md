@@ -193,7 +193,8 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - Migrar para o protocolo binário (COBS + CRC).
 - Chave "ARM" + botão "SUICIDE BURN" que dispara o script de pouso autônomo no computador de bordo.
 - Chave "ARM" + botão "EXEC" que executa o nó de manobra da fase 4: aponta a nave para o nó, acelera o tempo até perto dele, queima e corta quando o Δv restante chega a zero.
-- Painel e tela mostram o estado do script (armado, queimando, pousado, abortado).
+- Painel e tela mostram o estado do script (armado, queimando, pousado, abortado). O pouso e o EXEC já seguem a [base comum dos scripts](#base-comum).
+- Os outros scripts (piloto automático de avião, subida até a órbita, pouso de precisão...) estão em [Scripts de voo](#scripts-de-voo) e não entram no critério desta fase.
 
 **Pronto quando:** um booster pousa sozinho a partir de um botão no painel, e um nó de manobra é executado pelo botão EXEC.
 
@@ -225,6 +226,73 @@ Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de fla
 - Painéis modulares, cada um com seu micro, falando com um mestre via I2C, RS-485 ou CAN.
 - Painel sem fio com **ESP32**.
 - Reescrever o firmware do Mega sem o framework Arduino (registradores do AVR) ou migrar para RP2040 (Raspberry Pi Pico) com o C SDK ou Rust + Embassy.
+
+---
+
+## Scripts de voo
+
+Scripts que pilotam a nave, ou ajudam o piloto a pilotar, disparados pelo painel e acompanhados na tela. O primeiro é o pouso autônomo da [fase 5](#fase-5--protocolo-v1--scripts-de-voo) ([`bridge/pouso.py`](bridge/pouso.py)). Os outros desta seção são ideias ainda sem código e sem ordem: cada um entra no roteiro quando o hardware de que precisa existir.
+
+### Base comum
+
+- **Um script ativo por vez**, rodando na ponte. Liga com a chave ARM + o botão do script. ABORT, ou mexer no joystick, devolve o controle ao piloto na hora.
+- O painel e a tela mostram o estado do script (armado, ativo, terminado, abortado). Como nos outros LEDs, o LED mostra o que o script está fazendo, não o botão que foi apertado.
+- **Guiagem separada do kRPC**, como em `pouso.py`: recebe uma leitura da nave e devolve comandos. Assim ela é testada numa nave simulada, sem o KSP, antes de ir para o jogo.
+- **Diretor de voo:** todo script pode rodar no automático ou só como guia. No modo guia, a tela mostra para onde apontar e quanto acelerar, e o piloto voa pelo joystick. Serve para testar a guiagem sem entregar a nave e para aprender a pilotar junto.
+
+### Piloto automático de avião
+
+Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing, o FCU do Airbus).
+
+- **Modos**, cada um ligado e desligado pelo seu botão:
+  - **HDG:** vira para o rumo escolhido e segura.
+  - **ALT:** segura a altitude escolhida.
+  - **V/S:** sobe ou desce com a velocidade vertical escolhida. Com o ALT ligado junto, nivela ao chegar na altitude escolhida.
+  - **SPD:** acelerador automático, segura a velocidade escolhida.
+  - Sem HDG ligado, mantém as asas niveladas.
+- **No painel:**
+  - Um encoder por valor: rumo, altitude, velocidade vertical e velocidade. Lidos como os encoders da [fase 4](#fase-4--instrumentos-físicos); apertar o encoder troca o passo.
+  - Os valores escolhidos em displays de 7 segmentos (MAX7219).
+  - Um botão com LED por modo. O LED acende quando o modo assumiu no jogo, não quando o botão é apertado.
+- **Na tela:** os modos ligados, os valores escolhidos e um marcador do rumo escolhido na navball.
+- **Antes dos encoders existirem:** botões de + e − na tela do celular, que já manda toques para a ponte (`TOQUE <nome>`).
+- **Por dentro:** controladores PID em duas camadas:
+  - a de fora transforma a altitude e o rumo desejados em pitch e inclinação das asas;
+  - a de dentro mexe no pitch, roll e yaw da nave (`control.pitch` etc.) para chegar nesse pitch e nessa inclinação.
+  - A decidir: a camada de dentro pode ser o piloto automático do próprio kRPC (`vessel.auto_pilot`) ou um PID próprio.
+- **Precisa de:** 4 encoders e displays como os da fase 4. Para começar, só o celular.
+
+**Pronto quando:** um avião decola na mão, e o piloto automático leva ele até a altitude e o rumo escolhidos no painel e segura lá.
+
+### Rover com controle de cruzeiro
+
+- Os mesmos botões e encoders HDG e SPD do avião, e o mesmo PID: segura a velocidade e o rumo no chão, pelo acelerador e pela direção das rodas (`control.wheel_throttle` e `control.wheel_steering`).
+- Freia nas descidas, para não passar da velocidade escolhida.
+- Sai quase de graça depois do piloto automático de avião.
+
+### Subida até a órbita
+
+- O piloto escolhe a altitude da órbita e a inclinação nos encoders e aperta ARM + LAUNCH.
+- O script decola, faz a curva de gravidade, solta os estágios quando o combustível acaba e corta o motor quando o apoastro chega na altitude escolhida.
+- No apoastro, circulariza com um nó de manobra executado pelo EXEC da fase 5.
+- Junto com o pouso, fecha o ciclo: do chão até a órbita e de volta.
+
+### Pouso de precisão (volta à base)
+
+O pouso da SpaceX completo. O `pouso.py` desce na vertical onde a nave estiver; aqui o booster volta para um lugar escolhido, como a plataforma do KSC.
+
+- **Queima de retorno** logo depois da separação: vira a nave e queima até a trajetória cair no alvo.
+- **Queima de reentrada**, para chegar mais devagar nas camadas grossas da atmosfera.
+- Na descida, as aletas corrigem a trajetória para o alvo.
+- Termina com a queima de suicídio do `pouso.py`, com a mira puxando para o alvo em vez de só anular a deriva.
+- É o mais difícil da lista: precisa prever onde a trajetória cai, com arrasto, como o `pouso.py` já faz na vertical.
+
+### Acoplamento assistido
+
+- Página nova na tela multifunção: a mira de alinhamento com a porta de acoplamento do alvo, a distância e a velocidade de aproximação.
+- Uma chave troca o joystick entre girar a nave e movê-la para os lados com o RCS.
+- Primeiro manual, com a tela ajudando. Depois automático: a nave se alinha e se aproxima devagar sozinha.
+- **Precisa de:** joystick (fase 2) e a tela multifunção.
 
 ---
 
