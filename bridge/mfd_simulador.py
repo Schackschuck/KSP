@@ -10,15 +10,15 @@ O desenho daqui é a referência do firmware: as posições, os tamanhos e as
 cores são os que a placa vai usar. A janela só aumenta os pontos (--zoom),
 sem suavizar, para parecer com a tela de verdade.
 
-Layout, inspirado na navball do KSP2:
+Layout, inspirado na navball do KSP2 (os números do rumo e do pitch ficam
+na própria navball):
 
-    ACEL            [ 269 ]             V VERT
-     |         240 ' ' O ' ' 300          | +100
-     |          .-----------.             |  +10
-     |        .'    navball  '.           |
+    ACEL                                V VERT
+     |          .-----------.             | +100
+     |        .'  N  30  60  '.           |  +10
      | [VEL ORB ]     -W-     [ ALT     ] |
      | [2287 m/s]             [ 84321 m ] |  -10
-     |        '.             .'           | -100
+     |        '.   -30       .'           | -100
      |          '-(RCS)-(SAS)-'           |
     45%   AP  85123 m  T-00:27:53
           PE  71234 m  T-00:11:41
@@ -43,13 +43,11 @@ DESTAQUE_TOQUE = 0.2    # s que o botão fica com a borda acesa depois do toque
 
 # ---- Layout, em pontos da tela (origem no canto superior esquerdo) ----
 
-BOLA_X, BOLA_Y, BOLA_RAIO = 160, 104, 64
-ARO_RAIO = 78           # o aro escuro em volta da bola, onde fica a fita de rumo
-FITA_ALCANCE = 60       # graus de rumo mostrados para cada lado do atual
+BOLA_X, BOLA_Y, BOLA_RAIO = 160, 98, 72
+ARO_RAIO = 76           # o aro escuro em volta da bola
 
-CAIXA_RUMO = pygame.Rect(141, 2, 38, 18)
-CAIXA_VEL = pygame.Rect(22, 90, 80, 32)      # tocar nela troca o modo
-CAIXA_ALT = pygame.Rect(218, 90, 80, 32)
+CAIXA_VEL = pygame.Rect(20, 82, 80, 32)      # tocar nela troca o modo
+CAIXA_ALT = pygame.Rect(220, 82, 80, 32)
 
 # Barras verticais nas bordas. Na placa, preencher um retângulo é muito mais
 # rápido que desenhar um arco ponto a ponto.
@@ -59,7 +57,7 @@ VV_MAX = 1000           # m/s no fim da barra; a escala é logarítmica
 
 PAINEL = pygame.Rect(48, 198, 224, 40)       # informações do modo, embaixo
 
-BOTOES_REDONDOS = {"RCS": (140, 178), "SAS": (180, 178)}
+BOTOES_REDONDOS = {"RCS": (140, 181), "SAS": (180, 181)}
 RAIO_BOTAO = 13
 
 # Onde cada toque vale: o botão MODO é a caixa da velocidade, como no KSP2.
@@ -82,8 +80,7 @@ TEXTO = rgb565(240, 240, 240)
 ROTULO = rgb565(130, 150, 200)
 ARO = rgb565(22, 32, 60)
 BORDA = rgb565(60, 80, 140)
-TRACO_FITA = rgb565(110, 140, 210)
-CARDEAL_FITA = rgb565(255, 90, 80)
+TRACO = rgb565(110, 140, 210)
 COR_VEL = rgb565(235, 190, 40)
 COR_ALT = rgb565(225, 70, 200)
 COR_ACEL = rgb565(90, 120, 255)
@@ -95,7 +92,9 @@ BOTAO_LIGADO = rgb565(40, 170, 80)
 BORDA_LIGADO = rgb565(130, 240, 150)
 NAVE = rgb565(255, 140, 0)
 AVISO = rgb565(230, 60, 40)
-CARDEAL = rgb565(255, 255, 255)
+NUMERO_RUMO = rgb565(255, 255, 255)
+NUMERO_PITCH = rgb565(200, 215, 240)
+SOMBRA_NUMERO = rgb565(10, 15, 30)
 TRANSPARENTE = rgb565(255, 0, 255)  # fora do círculo da bola; não é desenhado
 
 # Marcadores, com as cores do KSP.
@@ -105,13 +104,20 @@ COR_RDL = rgb565(60, 210, 230)
 COR_TGT = rgb565(255, 140, 200)
 COR_MNV = rgb565(60, 130, 255)
 
-# Pontos cardeais: L = leste, O = oeste.
-CARDEAIS = (("N", 0), ("L", 90), ("S", 180), ("O", 270))
+# Números pintados na navball. O rumo vai a cada 30°, logo acima do
+# horizonte, com letras nos pontos cardeais (L = leste, O = oeste). O pitch
+# vai a cada 30°, um pouco ao lado dos meridianos de N, L, S e O.
+CARDEAIS = {0: "N", 90: "L", 180: "S", 270: "O"}
+NUMEROS_RUMO = tuple((CARDEAIS.get(h, str(h)), 4, h) for h in range(0, 360, 30))
+NUMEROS_PITCH = tuple(
+    (str(p), p, h + 6) for h in (0, 90, 180, 270) for p in (60, 30, -30, -60)
+)
+VISIVEL_MIN = 0.3       # perto da borda da bola (z pequeno) o número ficaria amassado
 
 # Marcadores que dependem do modo e números que só existem em alguns modos:
 # a tela os apaga quando o modo muda.
 MARCADORES_DO_MODO = ("PRO", "NRM", "RDL")
-NUMEROS_DO_MODO = ("VEL", "VH", "AP", "PE", "TAP", "TPE", "DIST")
+NUMEROS_DO_MODO = ("VEL", "AP", "PE", "TAP", "TPE", "DIST")
 NUMEROS_OFF = ("AP", "PE", "TAP", "TPE", "DIST")   # aceitam OFF
 
 
@@ -153,12 +159,6 @@ def formatar_tempo(segundos):
     if horas >= 100:
         return f"T-{horas}h"
     return f"T-{horas:02d}:{resto // 60:02d}:{resto % 60:02d}"
-
-
-def _polar(raio, angulo):
-    """Ponto da tela a esse raio do centro da bola; ângulo em graus, 0 à direita, 90 em cima."""
-    a = math.radians(angulo)
-    return (BOLA_X + raio * math.cos(a), BOLA_Y - raio * math.sin(a))
 
 
 class Simulador:
@@ -277,7 +277,7 @@ class Simulador:
     def _desenhar(self, agora):
         self._tela.fill(FUNDO)
         com_sinal = agora - self._ultima_valida < SEM_SINAL
-        self._desenhar_aro(com_sinal)
+        self._desenhar_aro()
         self._desenhar_navball(com_sinal)
         self._desenhar_caixas(com_sinal, agora)
         self._desenhar_barras(com_sinal)
@@ -303,34 +303,9 @@ class Simulador:
         """Ponto da tela para as coordenadas (x, y) da bola, de -1 a 1."""
         return (round(BOLA_X + x * BOLA_RAIO), round(BOLA_Y - y * BOLA_RAIO))
 
-    def _desenhar_aro(self, com_sinal):
-        """O aro com a fita de rumo em cima, e a caixa com o rumo atual."""
+    def _desenhar_aro(self):
         pygame.draw.circle(self._tela, ARO, (BOLA_X, BOLA_Y), ARO_RAIO)
         pygame.draw.circle(self._tela, BORDA, (BOLA_X, BOLA_Y), ARO_RAIO, 1)
-
-        if com_sinal and self._atitude is not None:
-            rumo = self._atitude[1]
-            pequena = self._fonte_pequena
-            # Um traço a cada 10°; a cada 30°, o número no lugar do traço.
-            # Rumo maior fica à direita, como na bússola de um avião.
-            primeiro = math.ceil((rumo - FITA_ALCANCE) / 10) * 10
-            for marca in range(primeiro, int(rumo + FITA_ALCANCE) + 1, 10):
-                angulo = 90 - (marca - rumo)
-                if marca % 30:
-                    pygame.draw.line(self._tela, TRACO_FITA, _polar(66, angulo), _polar(71, angulo), 1)
-                    continue
-                marca %= 360
-                letra = dict((h, n) for n, h in CARDEAIS).get(marca)
-                rotulo, cor = (letra, CARDEAL_FITA) if letra else (f"{marca:03d}", TRACO_FITA)
-                self._texto(rotulo, cor, centro=_polar(71, angulo), fonte=pequena)
-            texto_rumo = f"{round(rumo) % 360:03d}"
-        else:
-            texto_rumo = "---"
-
-        pygame.draw.polygon(self._tela, TEXTO, [(BOLA_X - 4, 21), (BOLA_X + 4, 21), (BOLA_X, 27)])
-        pygame.draw.rect(self._tela, FUNDO, CAIXA_RUMO, border_radius=3)
-        pygame.draw.rect(self._tela, TEXTO, CAIXA_RUMO, 1, border_radius=3)
-        self._texto(texto_rumo, TEXTO, centro=CAIXA_RUMO.center)
 
     def _desenhar_navball(self, com_sinal):
         if not com_sinal or self._atitude is None:
@@ -348,10 +323,16 @@ class Simulador:
         bola.set_colorkey(TRANSPARENTE)
         self._tela.blit(bola, (BOLA_X - BOLA_RAIO, BOLA_Y - BOLA_RAIO))
 
-        for letra, rumo_cardeal in CARDEAIS:
-            x, y, z = navball.projetar(base, navball.direcao(5, rumo_cardeal))
-            if z > 0.3:  # perto da borda a letra ficaria em cima do aro
-                self._texto(letra, CARDEAL, centro=self._na_bola(x, y), fonte=self._fonte_pequena)
+        # Os números ficam sempre de pé na tela, sem girar com a bola: na
+        # placa, é só escrever com a fonte normal no ponto projetado. Uma
+        # sombra escura, 1 ponto abaixo e à direita, separa o número da grade.
+        for numeros, cor in ((NUMEROS_PITCH, NUMERO_PITCH), (NUMEROS_RUMO, NUMERO_RUMO)):
+            for texto, pitch_numero, rumo_numero in numeros:
+                x, y, z = navball.projetar(base, navball.direcao(pitch_numero, rumo_numero))
+                if z > VISIVEL_MIN:
+                    cx, cy = self._na_bola(x, y)
+                    self._texto(texto, SOMBRA_NUMERO, centro=(cx + 1, cy + 1), fonte=self._fonte_pequena)
+                    self._texto(texto, cor, centro=(cx, cy), fonte=self._fonte_pequena)
 
         # Cada marcador tem um par do lado oposto da bola (menos a manobra).
         # Um marcador só aparece se estiver na metade visível da bola. A
@@ -494,7 +475,7 @@ class Simulador:
         # Sem o rótulo do zero: ele ficaria embaixo da caixa da altitude.
         for mps in (100, 10, -10, -100):
             y = y_da_vv(mps)
-            pygame.draw.line(self._tela, TRACO_FITA, (b.x - 3, y), (b.x, y), 1)
+            pygame.draw.line(self._tela, TRACO, (b.x - 3, y), (b.x, y), 1)
             self._texto(f"{mps:+d}", ROTULO, direita=(b.x - 4, y - 6), fonte=pequena)
         self._texto("V VERT", ROTULO, direita=(LARGURA - 2, 4), fonte=pequena)
 
@@ -511,16 +492,12 @@ class Simulador:
             self._texto(nome, TEXTO, centro=centro, fonte=self._fonte_pequena)
 
     def _desenhar_painel(self, com_sinal):
-        """Embaixo: o que interessa em cada modo."""
+        """Embaixo: AP e PE no modo ORB, a distância no ALVO. No SUP o painel
+        não aparece: a velocidade vertical já está na barra."""
         n = self._numeros
         modo = self._estados["MODO"]
         if not com_sinal:
             linhas = []
-        elif modo == "SUP":
-            linhas = [
-                ("V VERT", formatar_velocidade(n["VV"]), ""),
-                ("V HOR", formatar_velocidade(n["VH"]), ""),
-            ]
         elif modo == "ORB":
             linhas = [
                 ("AP", formatar_distancia(n["AP"]), formatar_tempo(n["TAP"])),
@@ -530,6 +507,8 @@ class Simulador:
             linhas = [("DIST", formatar_distancia(n["DIST"]), "")]
         else:
             linhas = []
+        if not linhas:
+            return
 
         pygame.draw.rect(self._tela, BORDA, PAINEL, 1, border_radius=4)
         y = PAINEL.y + 3

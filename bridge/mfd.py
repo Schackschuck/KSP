@@ -253,12 +253,9 @@ class Transmissor:
             else:
                 enviar(f"ALT {inteiro32(t.altitude)}")
             enviar(f"VEL {decimos(modulo(velocidade))}")
-            cima, norte, leste = t.velocidades["SUP"]
-            enviar(f"VV {decimos(cima)}")   # a barra da velocidade vertical aparece em todo modo
+            enviar(f"VV {decimos(t.velocidades['SUP'][0])}")   # a barra aparece em todo modo
             enviar(f"ACEL {round(100 * max(0.0, min(1.0, t.acelerador)))}")
-            if modo == "SUP":
-                enviar(f"VH {decimos(math.hypot(norte, leste))}")
-            elif modo == "ALVO":
+            if modo == "ALVO":
                 enviar(f"DIST {metros(modulo(t.posicao_alvo))}")
 
         # 4. Órbita: só interessa no modo ORB.

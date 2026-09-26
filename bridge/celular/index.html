@@ -45,26 +45,25 @@ const SEM_SINAL = 1000;           // ms sem mensagem válida
 const DESTAQUE_TOQUE = 200;       // ms de borda acesa depois do toque
 const INTERVALO_QUADRO = 1000 / 30;
 
-const BOLA = { x: 160, y: 104, r: 64 };
-const ARO_RAIO = 78;
-const FITA_ALCANCE = 60;          // graus de rumo para cada lado
-const CAIXA_RUMO = { x: 141, y: 2, w: 38, h: 18 };
-const CAIXA_VEL = { x: 22, y: 90, w: 80, h: 32 };   // tocar nela troca o modo
-const CAIXA_ALT = { x: 218, y: 90, w: 80, h: 32 };
+const BOLA = { x: 160, y: 98, r: 72 };
+const ARO_RAIO = 76;
+const CAIXA_VEL = { x: 20, y: 82, w: 80, h: 32 };   // tocar nela troca o modo
+const CAIXA_ALT = { x: 220, y: 82, w: 80, h: 32 };
 const BARRA_ACEL = { x: 6, y: 30, w: 10, h: 156 };
 const BARRA_VV = { x: 304, y: 30, w: 10, h: 156 };
 const VV_MAX = 1000;              // m/s no fim da barra; escala logarítmica
 const PAINEL = { x: 48, y: 198, w: 224, h: 40 };
-const BOTOES_REDONDOS = { RCS: [140, 178], SAS: [180, 178] };
+const BOTOES_REDONDOS = { RCS: [140, 181], SAS: [180, 181] };
 const RAIO_BOTAO = 13;
 const MAX_PONTOS_BOLA = 420;      // resolução máxima da imagem da bola, em pontos
 
 const COR = {
   fundo: "#060a16", texto: "#f0f0f0", rotulo: "#8296c8", aro: "#16203c", borda: "#3c508c",
-  tracoFita: "#6e8cd2", cardealFita: "#ff5a50", vel: "#ebbe28", alt: "#e146c8", acel: "#5a78ff",
+  traco: "#6e8cd2", vel: "#ebbe28", alt: "#e146c8", acel: "#5a78ff",
   vvSobe: "#3cc85a", vvDesce: "#f0c828", vvDesceRapido: "#f03c28",
   botaoApagado: "#283250", botaoLigado: "#28aa50", bordaLigado: "#82f096",
-  nave: "#ff8c00", aviso: "#e63c28", cardeal: "#ffffff",
+  nave: "#ff8c00", aviso: "#e63c28",
+  numeroRumo: "#ffffff", numeroPitch: "#c8d7f0", sombraNumero: "#0a0f1e",
   pro: "#e6d228", nrm: "#c846ff", rdl: "#3cd2e6", tgt: "#ff8cc8", mnv: "#3c82ff",
 };
 
@@ -75,20 +74,28 @@ const PASSO_PITCH = 10, MEIA_LARGURA_PITCH = 0.5, MEIA_LARGURA_HORIZONTE = 1.2;
 const RUMOS_MERIDIANOS = [0, 30, 60, 90, 120, 150];
 const MEIA_LARGURA_MERIDIANO = 0.01, LATITUDE_MAX_MERIDIANO = 80, SOMBRA = 0.45;
 
-const CARDEAIS = [["N", 0], ["L", 90], ["S", 180], ["O", 270]];
+// Números pintados na navball: o rumo a cada 30°, logo acima do horizonte,
+// com letras nos pontos cardeais (L = leste, O = oeste); o pitch a cada 30°,
+// um pouco ao lado dos meridianos de N, L, S e O.
+const CARDEAIS = { 0: "N", 90: "L", 180: "S", 270: "O" };
+const NUMEROS_RUMO = [];
+for (let h = 0; h < 360; h += 30) NUMEROS_RUMO.push([CARDEAIS[h] || String(h), 4, h]);
+const NUMEROS_PITCH = [];
+for (const h of [0, 90, 180, 270]) for (const p of [60, 30, -30, -60]) NUMEROS_PITCH.push([String(p), p, h + 6]);
+const VISIVEL_MIN = 0.3;          // perto da borda da bola o número ficaria amassado
 const RAD = Math.PI / 180, GRAUS = 180 / Math.PI;
 
 // ---------- o que a tela sabe, só a partir das mensagens ----------
 
 const MARCADORES_DO_MODO = ["PRO", "NRM", "RDL"];
-const NUMEROS_DO_MODO = ["VEL", "VH", "AP", "PE", "TAP", "TPE", "DIST"];
+const NUMEROS_DO_MODO = ["VEL", "AP", "PE", "TAP", "TPE", "DIST"];
 const NUMEROS_OFF = ["AP", "PE", "TAP", "TPE", "DIST"];
 
 const estado = {
   atitude: null,                  // [pitch, rumo, rolagem] em graus
   marcadores: { PRO: null, NRM: null, RDL: null, TGT: null, MNV: null },  // [pitch, rumo]
   altitude: null,                 // ["ALT" ou "RAD", metros]
-  numeros: { VEL: null, VH: null, AP: null, PE: null, TAP: null, TPE: null, DIST: null, VV: null, ACEL: null },
+  numeros: { VEL: null, AP: null, PE: null, TAP: null, TPE: null, DIST: null, VV: null, ACEL: null },
   estados: { SAS: null, RCS: null, MODO: null },
   ultimaValida: -Infinity,
   toque: [null, -Infinity],
@@ -290,11 +297,6 @@ function retangulo(r, preenchimento, contorno, largura = 1, raio = 0) {
   if (contorno) { ctx.strokeStyle = contorno; ctx.lineWidth = largura; ctx.stroke(); }
 }
 
-function polar(raio, angulo) {
-  // 0° à direita, 90° em cima
-  return [BOLA.x + raio * Math.cos(angulo * RAD), BOLA.y - raio * Math.sin(angulo * RAD)];
-}
-
 function naBola(x, y) {
   return [BOLA.x + x * BOLA.r, BOLA.y - y * BOLA.r];
 }
@@ -326,40 +328,10 @@ function formatarTempo(s) {
   return `T-${dois(horas)}:${dois(Math.floor(resto / 60))}:${dois(resto % 60)}`;
 }
 
-const tres = (v) => String(v).padStart(3, "0");
-
 // ---------- desenho: as partes da tela ----------
 
-function desenharAro(comSinal) {
+function desenharAro() {
   circulo(BOLA.x, BOLA.y, ARO_RAIO, COR.aro, COR.borda, 1);
-
-  let textoRumo = "---";
-  if (comSinal && estado.atitude) {
-    const rumo = estado.atitude[1];
-    // Um traço a cada 10°; a cada 30°, o número no lugar do traço.
-    const primeiro = Math.ceil((rumo - FITA_ALCANCE) / 10) * 10;
-    for (let marca = primeiro; marca <= Math.floor(rumo + FITA_ALCANCE); marca += 10) {
-      const angulo = 90 - (marca - rumo);
-      if (marca % 30 !== 0) {
-        linha(COR.tracoFita, 1, polar(66, angulo), polar(71, angulo));
-        continue;
-      }
-      const m = ((marca % 360) + 360) % 360;
-      const cardeal = CARDEAIS.find(([, h]) => h === m);
-      const [px, py] = polar(71, angulo);
-      if (cardeal) textoCentro(cardeal[0], COR.cardealFita, px, py, 11);
-      else textoCentro(tres(m), COR.tracoFita, px, py, 11);
-    }
-    textoRumo = tres(((Math.round(rumo) % 360) + 360) % 360);
-  }
-
-  ctx.beginPath();
-  ctx.moveTo(BOLA.x - 4, 21); ctx.lineTo(BOLA.x + 4, 21); ctx.lineTo(BOLA.x, 27);
-  ctx.closePath();
-  ctx.fillStyle = COR.texto;
-  ctx.fill();
-  retangulo(CAIXA_RUMO, COR.fundo, COR.texto, 1, 3);
-  textoCentro(textoRumo, COR.texto, CAIXA_RUMO.x + CAIXA_RUMO.w / 2, CAIXA_RUMO.y + CAIXA_RUMO.h / 2);
 }
 
 function circuloComHastes([cx, cy], cor, angulos, de, ate) {
@@ -422,9 +394,16 @@ function desenharNavball(comSinal) {
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(bola.canvas, BOLA.x - BOLA.r, BOLA.y - BOLA.r, 2 * BOLA.r, 2 * BOLA.r);
 
-  for (const [letra, h] of CARDEAIS) {
-    const [x, y, z] = projetar(base, direcao(5, h));
-    if (z > 0.3) textoCentro(letra, COR.cardeal, ...naBola(x, y), 11);
+  // Os números ficam sempre de pé, sem girar com a bola, com uma sombra
+  // escura que os separa da grade.
+  for (const [numeros, cor] of [[NUMEROS_PITCH, COR.numeroPitch], [NUMEROS_RUMO, COR.numeroRumo]]) {
+    for (const [t, p, h] of numeros) {
+      const [x, y, z] = projetar(base, direcao(p, h));
+      if (z <= VISIVEL_MIN) continue;
+      const [cx, cy] = naBola(x, y);
+      textoCentro(t, COR.sombraNumero, cx + 0.6, cy + 0.6, 11);
+      textoCentro(t, cor, cx, cy, 11);
+    }
   }
 
   for (const [nome, desenho, oposto] of PARES) {
@@ -500,7 +479,7 @@ function desenharBarras(comSinal) {
   linha(COR.texto, 1, [b.x - 3, meio], [b.x + b.w, meio]);
   for (const mps of [100, 10, -10, -100]) {
     const y = yDaVv(mps);
-    linha(COR.tracoFita, 1, [b.x - 3, y], [b.x, y]);
+    linha(COR.traco, 1, [b.x - 3, y], [b.x, y]);
     texto(mps > 0 ? `+${mps}` : `${mps}`, COR.rotulo, b.x - 4, y, "right", "middle", 11);
   }
   texto("V VERT", COR.rotulo, LARGURA - 2, 4, "right", "top", 11);
@@ -520,10 +499,9 @@ function desenharBotoes(comSinal, agora) {
 function desenharPainel(comSinal) {
   const n = estado.numeros;
   const modo = estado.estados.MODO;
+  // No SUP o painel não aparece: a velocidade vertical já está na barra.
   let linhas = [];
-  if (comSinal && modo === "SUP") {
-    linhas = [["V VERT", formatarVelocidade(n.VV), ""], ["V HOR", formatarVelocidade(n.VH), ""]];
-  } else if (comSinal && modo === "ORB") {
+  if (comSinal && modo === "ORB") {
     linhas = [
       ["AP", formatarDistancia(n.AP), formatarTempo(n.TAP)],
       ["PE", formatarDistancia(n.PE), formatarTempo(n.TPE)],
@@ -531,6 +509,7 @@ function desenharPainel(comSinal) {
   } else if (comSinal && modo === "ALVO") {
     linhas = [["DIST", formatarDistancia(n.DIST), ""]];
   }
+  if (linhas.length === 0) return;
 
   retangulo(PAINEL, null, COR.borda, 1, 4);
   let y = PAINEL.y + 3;
@@ -549,7 +528,7 @@ function desenhar(agora) {
   ctx.setTransform(dpr * escala, 0, 0, dpr * escala, dpr * deslocX, dpr * deslocY);
 
   const comSinal = agora - estado.ultimaValida < SEM_SINAL;
-  desenharAro(comSinal);
+  desenharAro();
   desenharNavball(comSinal);
   desenharCaixas(comSinal, agora);
   desenharBarras(comSinal);
