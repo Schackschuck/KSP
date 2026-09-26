@@ -50,9 +50,13 @@ APAGADO = rgb565(55, 55, 55)
 LIGADO = rgb565(40, 170, 70)
 BOTAO_MODO = rgb565(40, 70, 120)
 MARCADOR = rgb565(225, 215, 40)
+MARCADOR_ALVO = rgb565(230, 70, 230)
 NAVE = rgb565(255, 140, 0)
 AVISO = rgb565(230, 60, 40)
 CARDEAL = rgb565(255, 255, 255)
+
+# Números que dependem do modo da navball: a tela os apaga quando o modo muda.
+DEPENDEM_DO_MODO = ("VEL", "VV", "VH", "AP", "PE", "DIST")
 
 # Pontos cardeais desenhados logo acima do horizonte. L = leste, O = oeste.
 CARDEAIS = (("N", 0), ("L", 90), ("S", 180), ("O", 270))
@@ -79,9 +83,11 @@ def formatar_distancia(metros):
 def formatar_velocidade(decimos):
     if decimos is None:
         return "---"
+    sinal = "-" if decimos < 0 else ""
+    decimos = abs(decimos)
     if decimos < 10_000:  # abaixo de 1000 m/s, com uma casa decimal
-        return f"{decimos // 10}.{decimos % 10} m/s"
-    return f"{decimos // 10} m/s"
+        return f"{sinal}{decimos // 10}.{decimos % 10} m/s"
+    return f"{sinal}{decimos // 10} m/s"
 
 
 class Simulador:
@@ -99,8 +105,9 @@ class Simulador:
 
         # O que a tela sabe, só a partir das mensagens. None = ainda não chegou.
         self._atitude = None       # (pitch, rumo, rolagem) em graus
-        self._progrado = None      # (pitch, rumo) em graus
-        self._numeros = {"ALT": None, "VEL": None, "AP": None, "PE": None}
+        self._marcadores = {"PRO": None, "TGT": None}   # (pitch, rumo) em graus
+        self._altitude = None      # ("ALT" ou "RAD", metros)
+        self._numeros = dict.fromkeys(DEPENDEM_DO_MODO)
         self._estados = {"SAS": None, "RCS": None, "MODO": None}
 
         self._ultima_valida = float("-inf")
@@ -158,17 +165,24 @@ class Simulador:
 
         if nome == "ATT" and len(partes) == 3 and tudo_numero:
             self._atitude = tuple(n / 10 for n in numeros)
-        elif nome == "PRO" and partes == ["OFF"]:
-            self._progrado = None
-        elif nome == "PRO" and len(partes) == 2 and tudo_numero:
-            self._progrado = tuple(n / 10 for n in numeros)
-        elif nome in ("AP", "PE") and partes == ["OFF"]:
+        elif nome in self._marcadores and partes == ["OFF"]:
+            self._marcadores[nome] = None
+        elif nome in self._marcadores and len(partes) == 2 and tudo_numero:
+            self._marcadores[nome] = tuple(n / 10 for n in numeros)
+        elif nome in ("ALT", "RAD") and len(partes) == 1 and tudo_numero:
+            self._altitude = (nome, numeros[0])
+        elif nome in ("AP", "PE", "DIST") and partes == ["OFF"]:
             self._numeros[nome] = None
         elif nome in self._numeros and len(partes) == 1 and tudo_numero:
             self._numeros[nome] = numeros[0]
         elif nome in ("SAS", "RCS") and partes in (["0"], ["1"]):
             self._estados[nome] = partes[0] == "1"
-        elif nome == "MODO" and partes in (["SUP"], ["ORB"]):
+        elif nome == "MODO" and partes in (["SUP"], ["ORB"], ["ALVO"]):
+            if partes[0] != self._estados["MODO"]:
+                # Os números e o pró-grado do modo antigo não valem mais; os
+                # do modo novo chegam logo em seguida.
+                self._numeros = dict.fromkeys(DEPENDEM_DO_MODO)
+                self._marcadores["PRO"] = None
             self._estados[nome] = partes[0]
         else:
             return False
@@ -225,17 +239,24 @@ class Simulador:
             if z > 0.3:  # perto da borda a letra ficaria em cima do aro
                 self._texto(letra, CARDEAL, centro=self._na_bola(x, y))
 
-        # Pró-grado (para onde a nave vai) e retrógrado (o oposto). Um marcador
-        # só aparece se estiver na metade visível da bola.
-        if self._progrado is not None:
-            p, r = self._progrado
-            for vetor, desenho in (
-                (navball.direcao(p, r), self._marcador_progrado),
-                (navball.direcao(-p, r + 180), self._marcador_retrogrado),
+        # Cada marcador tem um par do lado oposto da bola: alvo e anti-alvo,
+        # pró-grado (para onde a nave vai) e retrógrado. Um marcador só
+        # aparece se estiver na metade visível da bola.
+        pares = (
+            ("TGT", self._marcador_alvo, self._marcador_antialvo),
+            ("PRO", self._marcador_progrado, self._marcador_retrogrado),
+        )
+        for nome, desenho, desenho_oposto in pares:
+            if self._marcadores[nome] is None:
+                continue
+            p, r = self._marcadores[nome]
+            for vetor, desenhar in (
+                (navball.direcao(p, r), desenho),
+                (navball.direcao(-p, r + 180), desenho_oposto),
             ):
                 x, y, z = navball.projetar(base, vetor)
                 if z > 0:
-                    desenho(self._na_bola(x, y))
+                    desenhar(self._na_bola(x, y))
 
         self._simbolo_nave()
         self._texto(f"RUMO {round(rumo) % 360:03d}", TEXTO, centro=(BOLA_X, 12))
@@ -257,6 +278,21 @@ class Simulador:
         pygame.draw.line(self._tela, MARCADOR, (cx - 5, cy + 5), (cx - 10, cy + 10), 2)
         pygame.draw.line(self._tela, MARCADOR, (cx + 5, cy + 5), (cx + 10, cy + 10), 2)
 
+    def _marcador_alvo(self, centro):
+        cx, cy = centro
+        pygame.draw.circle(self._tela, MARCADOR_ALVO, centro, 7, 2)
+        pygame.draw.circle(self._tela, MARCADOR_ALVO, centro, 1)
+        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+            pygame.draw.line(
+                self._tela, MARCADOR_ALVO, (cx + 7 * dx, cy + 7 * dy), (cx + 12 * dx, cy + 12 * dy), 2
+            )
+
+    def _marcador_antialvo(self, centro):
+        cx, cy = centro
+        pygame.draw.circle(self._tela, MARCADOR_ALVO, centro, 7, 2)
+        pygame.draw.line(self._tela, MARCADOR_ALVO, (cx - 4, cy - 4), (cx + 4, cy + 4), 2)
+        pygame.draw.line(self._tela, MARCADOR_ALVO, (cx - 4, cy + 4), (cx + 4, cy - 4), 2)
+
     def _simbolo_nave(self):
         """O "W" laranja no centro: para onde o nariz aponta. Fica sempre parado."""
         cx, cy = BOLA_X, BOLA_Y
@@ -266,13 +302,20 @@ class Simulador:
         pygame.draw.circle(self._tela, NAVE, (cx, cy - 4), 2)
 
     def _desenhar_numeros(self, com_sinal):
-        modo = self._estados["MODO"] or "---"
-        linhas = (
-            ("ALT", formatar_distancia(self._numeros["ALT"])),
-            (f"VEL {modo}", formatar_velocidade(self._numeros["VEL"])),
-            ("AP", formatar_distancia(self._numeros["AP"])),
-            ("PE", formatar_distancia(self._numeros["PE"])),
-        )
+        """Altitude e velocidade sempre; o resto depende do modo."""
+        modo = self._estados["MODO"]
+        tipo, altitude = self._altitude or ("ALT", None)
+        n = self._numeros
+        linhas = [
+            ("RADAR" if tipo == "RAD" else "ALT", formatar_distancia(altitude)),
+            (f"VEL {modo or '---'}", formatar_velocidade(n["VEL"])),
+        ]
+        if modo == "SUP":
+            linhas += [("V VERT", formatar_velocidade(n["VV"])), ("V HOR", formatar_velocidade(n["VH"]))]
+        elif modo == "ORB":
+            linhas += [("AP", formatar_distancia(n["AP"])), ("PE", formatar_distancia(n["PE"]))]
+        elif modo == "ALVO":
+            linhas += [("DIST", formatar_distancia(n["DIST"]))]
         y = 4
         for rotulo, valor in linhas:
             self._texto(rotulo, ROTULO, canto=(COLUNA_X, y))

@@ -61,23 +61,34 @@ A camada física e o enquadramento são os mesmos do painel: 115200 baud, uma me
 
 ### Ponte → tela
 
-Ângulos vão em **décimos de grau**, como inteiros: 45,3° vira `453`.
+Ângulos e velocidades vão em **décimos**, como inteiros: 45,3° vira `453`, e 345,6 m/s vira `3456`.
 
 | Mensagem | Valores | Efeito na tela | Frequência |
 |---|---|---|---|
+| `MODO <SUP\|ORB\|ALVO>` | Velocidade em relação à superfície, à órbita ou ao alvo | Botão `MODO`, texto da `VEL` e quais números aparecem | Quando muda, e 1 vez por segundo. Vai **antes** dos números |
+| `SAS <0\|1>`, `RCS <0\|1>` | `1` = ligado no jogo | Cor do botão: verde = ligado | Quando muda, e 1 vez por segundo |
 | `ATT <pitch> <rumo> <rolagem>` | pitch de -900 a 900; rumo de 0 a 3599 (0 = norte, 900 = leste); rolagem de -1800 a 1800 | Navball e o `RUMO` acima dela | 20 por segundo |
-| `PRO <pitch> <rumo>` | Direção do movimento, no modo da navball | Marcadores pró-grado e retrógrado | 20 por segundo |
-| `PRO OFF` | Nave parada (menos de 0,5 m/s) | Esconde os marcadores | idem |
-| `ALT <metros>` | Inteiro com sinal, 32 bits; acima do nível do mar | `ALT` | 10 por segundo |
-| `VEL <décimos de m/s>` | `3456` = 345,6 m/s, no modo da navball | `VEL` | 10 por segundo |
-| `AP <metros>` ou `AP OFF` | `OFF` numa trajetória de escape, que não tem apoastro | `AP` | 2 por segundo |
-| `PE <metros>` ou `PE OFF` | Negativo quando a órbita passa por dentro do planeta | `PE` | 2 por segundo |
-| `SAS <0\|1>`, `RCS <0\|1>` | `1` = ligado no jogo | Cor do botão: verde = ligado | Quando muda, e todos 1 vez por segundo |
-| `MODO <SUP\|ORB>` | Velocidade em relação à superfície ou à órbita | Texto do botão `MODO` e da `VEL` | idem |
+| `PRO <pitch> <rumo>` ou `PRO OFF` | Direção do movimento, no modo da navball. `OFF` com a nave parada (menos de 0,5 m/s) | Marcadores pró-grado e retrógrado, em amarelo | 20 por segundo |
+| `TGT <pitch> <rumo>` ou `TGT OFF` | Direção do alvo. `OFF` sem alvo ou com o alvo a menos de 1 m | Marcadores do alvo e do anti-alvo, em roxo, em qualquer modo | 20 por segundo |
+| `ALT <metros>` | Acima do nível do mar | Linha `ALT` | 10 por segundo |
+| `RAD <metros>` | Acima do chão, ou do mar se ele estiver mais perto. Vai no lugar do `ALT` perto do chão | Linha `RADAR` | 10 por segundo |
+| `VEL <décimos de m/s>` | Velocidade no modo da navball | `VEL` | 10 por segundo |
+| `VV <décimos de m/s>` | Velocidade vertical: positiva subindo, negativa descendo. Só no modo `SUP` | `V VERT` | 10 por segundo |
+| `VH <décimos de m/s>` | Velocidade horizontal. Só no modo `SUP` | `V HOR` | 10 por segundo |
+| `DIST <metros>` ou `DIST OFF` | Distância até o alvo. Só no modo `ALVO` | `DIST` | 10 por segundo |
+| `AP <metros>` ou `AP OFF` | `OFF` numa trajetória de escape, que não tem apoastro. Só no modo `ORB` | `AP` | 2 por segundo |
+| `PE <metros>` ou `PE OFF` | Negativo quando a órbita passa por dentro do planeta. Só no modo `ORB` | `PE` | 2 por segundo |
+
+Distâncias são inteiros de 32 bits. Acima de 2,1 milhões de km, o que só acontece com planetas distantes, `DIST`, `AP` e `PE` vão como `OFF`, e a tela mostra `---`.
 
 ### Comportamento
 
 - **A tela só desenha.** Toda conta que envolve o jogo é feita na ponte, e a tela recebe os ângulos prontos. A imagem não vai pela serial: um quadro de 320x240 com 16 bits por ponto tem 150 KB, o que levaria 13 s a 115200 baud. A atitude inteira cabe numa linha de 20 caracteres.
-- **Sinal.** Se a tela passar **1 s** sem receber nenhuma mensagem válida, mostra `SEM SINAL` na navball, `---` nos números e apaga os botões. O `ALT`, que vai 10 vezes por segundo, serve de "estou vivo". Fora da cena de voo a ponte não manda nada, então a tela também mostra `SEM SINAL`.
+- **Sinal.** Se a tela passar **1 s** sem receber nenhuma mensagem válida, mostra `SEM SINAL` na navball, `---` nos números e apaga os botões. O `ALT` (ou o `RAD`), que vai 10 vezes por segundo, serve de "estou vivo". Fora da cena de voo a ponte não manda nada, então a tela também mostra `SEM SINAL`.
 - **O botão mostra o estado do jogo, não o toque**, como os LEDs do painel. `TOQUE SAS` faz a ponte inverter o SAS, e o botão só fica verde quando o jogo confirma. Se a nave não tem SAS, o botão continua apagado, e está certo.
-- **O modo é da ponte.** `TOQUE MODO` faz a ponte trocar entre `SUP` e `ORB`, o que muda o que ela manda em `VEL` e `PRO`. A tela só mostra o modo que recebe em `MODO`.
+- **Números por modo.** Altitude e `VEL` aparecem sempre. `SUP` mostra também `V VERT` e `V HOR`; `ORB`, `AP` e `PE`; `ALVO`, `DIST`. Quando o `MODO` muda, a tela apaga os números e o pró-grado do modo antigo, e a ponte manda os do modo novo na mesma hora, logo depois do `MODO`.
+- **Altitude pelo radar.** A ponte manda `RAD` no lugar de `ALT` quando o radar fica abaixo de 5 km, e só volta ao `ALT` acima de 5,5 km. Essa folga evita ficar trocando quando o terreno sobe e desce perto do limite.
+- **O modo é da ponte**, e ela troca sozinha como a navball do KSP:
+  - `ORB` quando a nave sobe acima de 6% do raio do planeta (36 km em Kerbin), e `SUP` quando desce abaixo de 5,5% (33 km);
+  - `ALVO` quando um alvo é escolhido no jogo (uma nave, uma porta de acoplamento ou um planeta), ou trocado por outro; sem alvo, volta para `SUP` ou `ORB` conforme a altitude;
+  - `TOQUE MODO` passa para o próximo modo: `SUP` → `ORB` → `ALVO` (se houver alvo) → `SUP`. A escolha vale até a próxima troca automática.
