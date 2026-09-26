@@ -23,8 +23,8 @@ rápido, e segurando a atitude no fim, quando a velocidade fica pequena e o
 retrógrado começa a pular de um lado para o outro.
 
 Uso:
-    python pouso.py                  # KSP neste computador
-    python pouso.py 192.168.1.10     # KSP em outro computador (ex.: a partir do Pi)
+    python scripts/pouso.py                  # KSP neste computador
+    python scripts/pouso.py 192.168.1.10     # KSP em outro computador (ex.: a partir do Pi)
 
 Rode com o motor já ativado (no estágio) e a nave caindo ou subindo num salto.
 O script desce na vertical, onde estiver: não escolhe o lugar do pouso.
@@ -85,7 +85,7 @@ class Guiagem:
     """Decide o acelerador e a direção a cada leitura.
 
     Não conhece o kRPC: recebe uma Leitura e devolve o acelerador e o modo
-    do SAS. Assim os testes (test_pouso.py) usam esta mesma guiagem com uma
+    do SAS. Assim os testes (tests/test_pouso.py) usam esta mesma guiagem com uma
     nave simulada.
     """
 
