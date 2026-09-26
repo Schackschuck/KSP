@@ -42,7 +42,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 
 ### Princípios
 
-- **O LED mostra o estado do jogo, não a posição da chave.** A chave só envia "mudei"; o computador de bordo decide o que fazer e o jogo confirma. Assim o painel nunca fica dessincronizado (ex.: SAS desligado pelo jogo).
+- **O LED mostra o estado do jogo, não a posição da chave.** A chave só avisa para onde foi ("SAS para cima"); o computador de bordo decide o que fazer e o jogo confirma. Assim o painel nunca fica dessincronizado (ex.: SAS desligado pelo jogo).
 - **Protocolo serial em duas versões:**
   - **v0 — texto**, uma mensagem por linha. Fácil de depurar no Serial Monitor.
     ```
@@ -120,7 +120,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 ### Fase 1 — Primeiro circuito fechado
 
-Roteiro passo a passo, montagem e testes: [docs/fase1.md](docs/fase1.md). Protocolo: [docs/protocolo.md](docs/protocolo.md).
+**Status: concluída**, no PC e no Pi. Roteiro passo a passo, montagem e testes: [docs/fase1.md](docs/fase1.md). Protocolo: [docs/protocolo.md](docs/protocolo.md).
 
 - Mega ligado no PC pela USB durante o desenvolvimento; no fim, no Pi.
 - 1 botão (STAGE), 1 LED (SAS) e a altitude num LCD 20x4 com módulo I2C.
@@ -131,10 +131,12 @@ Roteiro passo a passo, montagem e testes: [docs/fase1.md](docs/fase1.md). Protoc
 
 ### Fase 2 — Painel de controle
 
-- Chaves para SAS, RCS, trem de pouso, luzes, freios, action groups; STAGE e ABORT com capa de proteção.
-- LEDs de estado vindos do jogo.
-- Expandir I/O com shift registers (74HC165 para entradas, 74HC595 para LEDs) **ou** MCP23017 (I2C). Opcional: matriz de botões com diodos.
-- Joystick de 3 eixos + potenciômetro deslizante para o acelerador.
+**Status: em andamento.** Chaves, botões e LEDs estão prontos para montar: pinagem, código e testes em [docs/fase2.md](docs/fase2.md). Joystick e acelerador aguardam o hardware.
+
+- Chaves para SAS, RCS, trem de pouso, luzes e freios; STAGE e ABORT com capa de proteção. Depois, action groups.
+- A posição da chave é o estado desejado (para cima = ligado); o LED de cada sistema mostra o estado no jogo.
+- Tudo direto nos pinos do Mega, que sobram para esta fase. Shift registers (74HC165 para entradas, 74HC595 para LEDs) **ou** MCP23017 (I2C) ficam para quando os pinos acabarem. Opcional: matriz de botões com diodos.
+- Joystick de 3 eixos + potenciômetro deslizante para o acelerador (aguardando o hardware).
 
 **Pronto quando:** dá para lançar e colocar um foguete em órbita usando só o painel.
 
@@ -213,20 +215,20 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [x] Botões
 - [ ] Fonte para o Pi 4: 5,1V 3A USB-C de boa qualidade (fonte fraca causa travamentos)
 - [ ] Dissipador ou case com ventoinha (o Pi 4 esquenta, principalmente dentro de uma caixa fechada)
-- [ ] Cartão microSD de 16 GB ou mais (classe A1)
-- [ ] Cabo USB-B para ligar o Mega no Pi
-- [ ] 2× protoboard de 830 pontos
-- [ ] Jumpers macho-macho e macho-fêmea
-- [ ] Kit de LEDs 5 mm + kit de resistores (220 Ω–10 kΩ)
-- [ ] LCD 16x2 ou 20x4 com módulo I2C (só para a fase 1; opcional se já tiver)
+- [x] Cartão microSD de 16 GB ou mais (classe A1)
+- [x] Cabo USB-B para ligar o Mega no Pi
+- [x] 2× protoboard de 830 pontos
+- [x] Jumpers macho-macho e macho-fêmea
+- [x] Kit de LEDs 5 mm + kit de resistores (220 Ω–10 kΩ)
+- [x] LCD 16x2 ou 20x4 com módulo I2C (só para a fase 1; opcional se já tiver)
 
 ### Fase 2 — Painel de controle
 
-- [ ] 10–15× chaves alavanca (toggle) ON-OFF
-- [ ] 2–3× capas de proteção para chave ("missile switch cover")
-- [ ] 4–6× botões arcade (24 ou 30 mm), de preferência com LED
-- [ ] 3× 74HC165 + 3× 74HC595 **ou** 2× MCP23017
-- [ ] Capacitores cerâmicos de 100 nF (desacoplamento, um por CI)
+- [x] 10–15× chaves alavanca (toggle) ON-OFF
+- [x] 2–3× capas de proteção para chave ("missile switch cover")
+- [x] 4–6× botões arcade (24 ou 30 mm), de preferência com LED
+- [ ] 3× 74HC165 + 3× 74HC595 **ou** 2× MCP23017 (só quando os pinos do Mega acabarem)
+- [ ] Capacitores cerâmicos de 100 nF (desacoplamento, um por CI; junto com os CIs acima)
 - [ ] Diodos 1N4148 (se fizer matriz de botões)
 - [ ] 1× joystick de 3 eixos (ou módulo de 2 eixos KY-023 para começar)
 - [ ] 1× potenciômetro deslizante 10 kΩ linear, curso ≥ 60 mm

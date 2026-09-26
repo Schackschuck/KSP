@@ -1,41 +1,42 @@
 // Firmware do painel: Arduino Mega 2560, protocolo v0 (texto)
 //
-// Este é o passo 4 da fase 1 e o firmware "de verdade" do painel. Ele junta
-// o botão (passo 2), os comandos pela serial (passo 3) e o LCD 20x4.
+// Fase 2: botões STAGE e ABORT, chaves de SAS, RCS, trem de pouso, luzes e
+// freios, um LED de estado para cada chave, e o LCD 20x4 da fase 1.
 //
-// Montagem:
-//   Botão STAGE:  pino 2 ──[botão]── GND
-//   LED SAS:      pino 8 ──[220 Ω]──(+)LED(−)── GND
-//   LCD I2C:      SDA → pino 20   SCL → pino 21   VCC → 5V   GND → GND
+// Montagem (tudo direto nos pinos do Mega; a pinagem completa, com desenho,
+// está em docs/fase2.md):
+//   Botões e chaves:  pino ──[contato]── GND      sem resistor: usa o pull-up interno
+//     STAGE 2    ABORT 3    SAS 22    RCS 24    GEAR 26    LIGHTS 28    BRAKES 30
+//   LEDs:             pino ──[220 Ω]──(+)LED(−)── GND
+//     SAS 8      RCS 9      GEAR 10   LIGHTS 11   BRAKES 12
+//   LCD I2C:          SDA → pino 20   SCL → pino 21   VCC → 5V   GND → GND
 //
 // Biblioteca necessária (Arduino IDE → Library Manager):
 //   "LiquidCrystal I2C", de Frank de Brabander
 //
 // Protocolo v0: texto, 115200 baud, uma mensagem por linha terminada em '\n'.
 // A especificação completa está em docs/protocolo.md.
-//   Painel → ponte:  READY | BTN STAGE 1 | BTN STAGE 0 | ERR <linha>
-//   Ponte → painel:  SAS 0 | SAS 1 | ALT <metros>
+//   Painel → ponte:  READY | BTN <nome> <0|1> | SW <nome> <0|1> | ERR <linha>
+//   Ponte → painel:  <nome do LED> <0|1> (ex.: SAS 1, GEAR 0) | ALT <metros>
 //
 // Teste sem o KSP, pelo Serial Monitor (115200 baud, final de linha em
-// "Nova linha"): digite "SAS 1", "ALT 12345", "ALT -5"... e veja o LED e o
-// LCD. Sem mensagens por 1 segundo, o LCD mostra "sem sinal" e o LED apaga.
+// "Nova linha"): mexa nas chaves e botões e veja as mensagens; digite
+// "RCS 1", "ALT 12345"... e veja os LEDs e o LCD. Sem mensagens por 1 segundo,
+// o LCD mostra "sem sinal" e os LEDs apagam.
 //
 // Lembre do princípio do projeto: o painel NÃO SABE QUE O KSP EXISTE. Ele
-// lê um botão, acende um LED e mostra um número. Quem dá sentido a isso é a
-// ponte (bridge/ponte.py).
+// avisa que uma chave mudou, acende LEDs e mostra um número. Os nomes (SAS,
+// GEAR...) são só etiquetas; quem dá sentido a eles é a ponte (bridge/ponte.py).
 //
-// O que há de novo em relação ao passo 3:
-//   - o LCD, desenhado sem piscar e sem travar o laço;
-//   - o "sinal": o painel percebe quando a ponte parou de falar com ele e,
-//     nesse caso, não fica mostrando dado velho como se fosse atual.
+// O que mudou em relação à fase 1: os controles saíram de variáveis soltas e
+// viraram TABELAS (ENTRADAS e LEDS, logo abaixo). O código percorre as tabelas
+// e não conhece nenhum controle pelo nome. Para acrescentar uma chave ou um
+// LED, basta uma linha na tabela (e o tratamento correspondente na ponte).
 
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
 // ================================================================ config =====
-
-const uint8_t PINO_BOTAO_STAGE = 2;
-const uint8_t PINO_LED_SAS = 8;
 
 // Endereço I2C do LCD: rode o passo4_i2c_scanner para descobrir o seu.
 // Os mais comuns são 0x27 e 0x3F.
@@ -53,17 +54,81 @@ const unsigned long TIMEOUT_SINAL_MS = 1000;
 // atualizarLcd()).
 const unsigned long INTERVALO_LCD_MS = 200;
 
-// Estado "não sei" do SAS: antes da primeira mensagem ou sem sinal.
-const int8_t SAS_DESCONHECIDO = -1;
+// Estado "não sei" de um LED: antes da primeira mensagem ou sem sinal.
+const int8_t DESCONHECIDO = -1;
+
+// ======================================================== tabela: entradas ===
+//
+// Botões e chaves são lidos do mesmo jeito: contato entre o pino e o GND, com
+// o pull-up interno. Contato fechado (pino em LOW) vira 1 na mensagem.
+//   - Botão (BTN): 1 = apertado, 0 = solto.
+//   - Chave (SW): 1 = ligada, 0 = desligada. Monte a chave de modo que "para
+//     cima" feche o contato.
+// A única diferença entre os dois é a palavra na mensagem: é a ponte que decide
+// que um botão dispara uma ação e uma chave define um estado.
+
+struct Entrada {
+  const char *tipo;   // "BTN" ou "SW"
+  const char *nome;
+  uint8_t pino;
+};
+
+// Os pinos 0 e 1 (serial da USB), 20 e 21 (I2C do LCD) e 50 a 53 (SPI, para
+// os shift registers do futuro) ficam de fora. As chaves usam só pinos pares
+// da barra dupla (22, 24...) para ficarem todas na mesma fileira.
+const Entrada ENTRADAS[] = {
+  {"BTN", "STAGE", 2},
+  {"BTN", "ABORT", 3},
+  {"SW", "SAS", 22},
+  {"SW", "RCS", 24},
+  {"SW", "GEAR", 26},
+  {"SW", "LIGHTS", 28},
+  {"SW", "BRAKES", 30},
+};
+
+// sizeof(tabela) / sizeof(um item) = número de itens. Calculado pelo
+// compilador: acrescentar uma linha na tabela não exige mudar mais nada.
+const uint8_t NUM_ENTRADAS = sizeof(ENTRADAS) / sizeof(ENTRADAS[0]);
+
+// ============================================================ tabela: LEDs ===
+//
+// Cada LED mostra o estado de um sistema NO JOGO, não a posição da chave: se o
+// jogo desligar o SAS sozinho, o LED apaga, mesmo com a chave para cima.
+
+struct Led {
+  const char *nome;   // o mesmo nome da mensagem que vem da ponte ("SAS 1")
+  uint8_t pino;
+};
+
+const Led LEDS[] = {
+  {"SAS", 8},
+  {"RCS", 9},
+  {"GEAR", 10},
+  {"LIGHTS", 11},
+  {"BRAKES", 12},
+};
+
+const uint8_t NUM_LEDS = sizeof(LEDS) / sizeof(LEDS[0]);
+
+const int8_t NAO_ENCONTRADO = -1;
 
 // ================================================================ estado =====
 //
-// Tudo que o painel sabe sobre o mundo fica nestas variáveis. As funções de
-// entrada (botão, serial) só ALTERAM o estado; as funções de saída (LED, LCD)
-// só MOSTRAM o estado. Separar as duas coisas deixa o código fácil de seguir.
+// As tabelas acima são constantes: dizem o que existe e onde está ligado. O
+// que muda durante o funcionamento fica aqui, em vetores do mesmo tamanho: o
+// item i de cada vetor pertence ao item i da tabela.
 
-// Dados vindos da ponte.
-int8_t sas = SAS_DESCONHECIDO;   // -1 = desconhecido, 0 = desligado, 1 = ligado
+// Debounce de cada entrada (igual ao passo 2), preenchido no setup().
+bool entradaEstavel[NUM_ENTRADAS];
+bool entradaUltimaLeitura[NUM_ENTRADAS];
+unsigned long entradaInstanteMudanca[NUM_ENTRADAS];
+
+// Estado de cada LED: -1 = desconhecido, 0 = apagado, 1 = aceso.
+int8_t estadoLed[NUM_LEDS];
+
+// O LCD mostra o SAS na linha 2: posição dele na tabela LEDS (setup()).
+int8_t indiceSas = NAO_ENCONTRADO;
+
 long altitude = 0;               // em metros; long = inteiro de 32 bits com sinal
 bool altitudeConhecida = false;
 
@@ -77,11 +142,6 @@ bool redesenharSas = true;
 bool redesenharSinal = true;
 unsigned long ultimoDesenho = 0;
 
-// Debounce do botão (igual ao passo 2).
-bool estadoEstavel;
-bool ultimaLeitura;
-unsigned long instanteMudanca;
-
 // Linha da serial sendo montada (igual ao passo 3).
 const uint8_t TAMANHO_LINHA = 32;
 char linha[TAMANHO_LINHA];
@@ -91,23 +151,57 @@ bool linhaGrandeDemais = false;
 // O objeto que conversa com o LCD pelo I2C.
 LiquidCrystal_I2C lcd(LCD_ENDERECO, LCD_COLUNAS, LCD_LINHAS);
 
-// ================================================================= botão =====
+// ======================================================= botões e chaves =====
 
-void lerBotao() {
-  bool leitura = digitalRead(PINO_BOTAO_STAGE);
-  if (leitura != ultimaLeitura) {
-    ultimaLeitura = leitura;
-    instanteMudanca = millis();
+// Mesmo debounce do passo 2, agora para cada item da tabela. O painel só
+// avisa o que mudou; quem decide o que fazer é a ponte.
+void lerEntrada(uint8_t i) {
+  bool leitura = digitalRead(ENTRADAS[i].pino);
+  if (leitura != entradaUltimaLeitura[i]) {
+    entradaUltimaLeitura[i] = leitura;
+    entradaInstanteMudanca[i] = millis();
   }
-  if (leitura != estadoEstavel && millis() - instanteMudanca >= DEBOUNCE_MS) {
-    estadoEstavel = leitura;
-    // Pull-up: apertado = LOW. O painel só avisa; quem decide o que fazer é a ponte.
-    if (estadoEstavel == LOW) {
-      Serial.println(F("BTN STAGE 1"));
-    } else {
-      Serial.println(F("BTN STAGE 0"));
+  if (leitura != entradaEstavel[i] && millis() - entradaInstanteMudanca[i] >= DEBOUNCE_MS) {
+    entradaEstavel[i] = leitura;
+    // Ex.: "SW GEAR 1". Pull-up: contato fechado = LOW = 1.
+    Serial.print(ENTRADAS[i].tipo);
+    Serial.print(' ');
+    Serial.print(ENTRADAS[i].nome);
+    Serial.println(leitura == LOW ? F(" 1") : F(" 0"));
+  }
+}
+
+void lerEntradas() {
+  for (uint8_t i = 0; i < NUM_ENTRADAS; i++) {
+    lerEntrada(i);
+  }
+}
+
+// ================================================================== LEDs =====
+
+void mudarLed(uint8_t i, int8_t estado) {
+  if (estado == estadoLed[i]) {
+    return;
+  }
+  estadoLed[i] = estado;
+  // O LED é atualizado na hora: é só um pino, custa quase nada.
+  // Desconhecido fica apagado, igual a desligado.
+  digitalWrite(LEDS[i].pino, estado == 1 ? HIGH : LOW);
+  if (i == indiceSas) {
+    redesenharSas = true;   // o LCD fica para depois (é lento)
+  }
+}
+
+// Procura na tabela o LED com esse nome e devolve a posição dele, ou
+// NAO_ENCONTRADO. 'tamanho' = quantos caracteres do texto formam o nome (o
+// texto vem da linha recebida, e o nome termina no espaço, não num '\0').
+int8_t procurarLed(const char *nome, size_t tamanho) {
+  for (uint8_t i = 0; i < NUM_LEDS; i++) {
+    if (strlen(LEDS[i].nome) == tamanho && strncmp(LEDS[i].nome, nome, tamanho) == 0) {
+      return i;
     }
   }
+  return NAO_ENCONTRADO;
 }
 
 // ========================================================= serial → estado ===
@@ -127,30 +221,31 @@ void registrarMensagem() {
   }
 }
 
+// Toda mensagem da ponte tem a forma "NOME VALOR".
 void processarLinha(const char *texto) {
+  const char *espaco = strchr(texto, ' ');
   long valor;
 
-  if (strncmp(texto, "SAS ", 4) == 0 && lerInteiro(texto + 4, &valor) &&
-      (valor == 0 || valor == 1)) {
-    registrarMensagem();
-    if (valor != sas) {
-      sas = valor;
-      // O LED é atualizado na hora: é só um pino, custa quase nada.
-      digitalWrite(PINO_LED_SAS, sas == 1 ? HIGH : LOW);
-      redesenharSas = true;   // o LCD fica para depois (é lento)
-    }
-    return;
-  }
+  if (espaco != nullptr && lerInteiro(espaco + 1, &valor)) {
+    size_t tamanhoNome = espaco - texto;
 
-  if (strncmp(texto, "ALT ", 4) == 0 && lerInteiro(texto + 4, &valor)) {
-    registrarMensagem();
-    // Só marca para redesenhar se o número mudou de verdade.
-    if (!altitudeConhecida || valor != altitude) {
-      altitude = valor;
-      altitudeConhecida = true;
-      redesenharAltitude = true;
+    if (tamanhoNome == 3 && strncmp(texto, "ALT", 3) == 0) {
+      registrarMensagem();
+      // Só marca para redesenhar se o número mudou de verdade.
+      if (!altitudeConhecida || valor != altitude) {
+        altitude = valor;
+        altitudeConhecida = true;
+        redesenharAltitude = true;
+      }
+      return;
     }
-    return;
+
+    int8_t led = procurarLed(texto, tamanhoNome);
+    if (led != NAO_ENCONTRADO && (valor == 0 || valor == 1)) {
+      registrarMensagem();
+      mudarLed(led, valor);
+      return;
+    }
   }
 
   Serial.print(F("ERR "));
@@ -182,16 +277,16 @@ void lerSerial() {
 // ================================================================= sinal =====
 
 // Se a ponte ficou quieta por TIMEOUT_SINAL_MS, o que o painel sabe ficou
-// velho. Em vez de mostrar um SAS e uma altitude que talvez nem existam
+// velho. Em vez de mostrar estados e uma altitude que talvez nem existam
 // mais, o painel "esquece" os dados e mostra que está sem sinal.
 void verificarSinal() {
   if (comSinal && millis() - ultimaMensagem >= TIMEOUT_SINAL_MS) {
     comSinal = false;
-    sas = SAS_DESCONHECIDO;
+    for (uint8_t i = 0; i < NUM_LEDS; i++) {
+      mudarLed(i, DESCONHECIDO);
+    }
     altitudeConhecida = false;
-    digitalWrite(PINO_LED_SAS, LOW);
     redesenharSinal = true;
-    redesenharSas = true;
     redesenharAltitude = true;
   }
 }
@@ -269,9 +364,11 @@ void desenharAltitude() {
 }
 
 void desenharSas() {
-  if (sas == 1) {
+  // Se alguém tirar o SAS da tabela, a linha só mostra "--" em vez de travar.
+  int8_t estado = indiceSas != NAO_ENCONTRADO ? estadoLed[indiceSas] : DESCONHECIDO;
+  if (estado == 1) {
     escreverLinha(2, "SAS: ligado");
-  } else if (sas == 0) {
+  } else if (estado == 0) {
     escreverLinha(2, "SAS: desligado");
   } else {
     escreverLinha(2, "SAS: --");
@@ -286,10 +383,10 @@ void desenharSinal() {
 // Redesenha só as linhas marcadas, e no máximo a cada INTERVALO_LCD_MS.
 //
 // Por que limitar? Cada caractere enviado ao LCD pelo I2C leva em torno de
-// 1 ms, e uma linha inteira leva uns 20 ms. Nesse tempo o laço não lê o botão
-// nem a serial. Redesenhando só o que mudou, e no máximo 5 vezes por segundo,
-// o LCD ocupa uma fração pequena do tempo e o resto fica livre. Mais que isso
-// o olho nem acompanha.
+// 1 ms, e uma linha inteira leva uns 20 ms. Nesse tempo o laço não lê as
+// entradas nem a serial. Redesenhando só o que mudou, e no máximo 5 vezes por
+// segundo, o LCD ocupa uma fração pequena do tempo e o resto fica livre. Mais
+// que isso o olho nem acompanha.
 void atualizarLcd() {
   if (millis() - ultimoDesenho < INTERVALO_LCD_MS) {
     return;
@@ -315,13 +412,24 @@ void atualizarLcd() {
 void setup() {
   Serial.begin(115200);
 
-  pinMode(PINO_BOTAO_STAGE, INPUT_PULLUP);
-  estadoEstavel = digitalRead(PINO_BOTAO_STAGE);
-  ultimaLeitura = estadoEstavel;
-  instanteMudanca = millis();
+  // A posição inicial das chaves vira o estado "estável" SEM gerar mensagem:
+  // o painel só avisa quando alguém mexe. Assim, ligar o painel ou reiniciar
+  // a ponte nunca muda nada no jogo sozinho.
+  for (uint8_t i = 0; i < NUM_ENTRADAS; i++) {
+    pinMode(ENTRADAS[i].pino, INPUT_PULLUP);
+    entradaEstavel[i] = digitalRead(ENTRADAS[i].pino);
+    entradaUltimaLeitura[i] = entradaEstavel[i];
+    entradaInstanteMudanca[i] = millis();
+  }
 
-  pinMode(PINO_LED_SAS, OUTPUT);
-  digitalWrite(PINO_LED_SAS, LOW);
+  // Os LEDs começam apagados e em "desconhecido": o painel ainda não sabe
+  // nada do jogo.
+  for (uint8_t i = 0; i < NUM_LEDS; i++) {
+    pinMode(LEDS[i].pino, OUTPUT);
+    digitalWrite(LEDS[i].pino, LOW);
+    estadoLed[i] = DESCONHECIDO;
+  }
+  indiceSas = procurarLed("SAS", 3);
 
   lcd.init();        // inicializa o controlador do LCD (e o I2C)
   lcd.backlight();   // liga a luz de fundo
@@ -334,7 +442,7 @@ void setup() {
 // O laço inteiro: cada função faz um pedacinho e devolve o controle na hora.
 // Nenhuma espera por nada.
 void loop() {
-  lerBotao();         // entrada: botão → mensagem para a ponte
+  lerEntradas();      // entrada: botões e chaves → mensagens para a ponte
   lerSerial();        // entrada: mensagens da ponte → estado
   verificarSinal();   // a ponte ainda está falando?
   atualizarLcd();     // saída: estado → LCD

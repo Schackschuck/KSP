@@ -1,8 +1,9 @@
-"""Ponte kRPC ⇄ painel (fase 1, protocolo v0 em texto).
+"""Ponte kRPC ⇄ painel (fase 2, protocolo v0 em texto).
 
-Liga o jogo ao painel: o que o painel manda (botões) vira comando no KSP, e o
-estado do KSP (SAS, altitude) vira mensagem para o painel. O painel não sabe
-que o KSP existe; toda a "inteligência" fica aqui.
+Liga o jogo ao painel: o que o painel manda (botões e chaves) vira comando no
+KSP, e o estado do KSP (SAS, RCS, trem, luzes, freios, altitude) vira mensagem
+para o painel. O painel não sabe que o KSP existe; toda a "inteligência" fica
+aqui.
 
 Uso:
     python ponte.py                                 # KSP neste computador, painel detectado sozinho
@@ -21,10 +22,21 @@ from serial.tools import list_ports
 
 BAUD = 115200             # precisa ser igual ao Serial.begin() do firmware
 INTERVALO_ALT = 0.1       # s: altitude 10x por segundo; o painel acusa "sem sinal" após 1 s quieto
-REENVIO_SAS = 1.0         # s: reenvia o SAS mesmo sem mudança, por segurança
+REENVIO_ESTADOS = 1.0     # s: reenvia os estados mesmo sem mudança, por segurança
 VERIFICA_NAVE = 1.0       # s: de quanto em quanto tempo conferir se a nave ativa mudou
 ESPERA_READY = 4.0        # s: tempo máximo esperando o painel terminar de ligar
 ALT_MAX = 2**31 - 1       # o painel guarda a altitude num long de 32 bits
+
+# Sistemas liga/desliga: nome no protocolo → propriedade de vessel.control no
+# kRPC. Cada um tem uma chave no painel (SW <nome> <0|1>) e um LED (<nome> <0|1>).
+# Para acrescentar um sistema, uma linha aqui e uma em cada tabela do painel.ino.
+SISTEMAS = {
+    "SAS": "sas",
+    "RCS": "rcs",
+    "GEAR": "gear",
+    "LIGHTS": "lights",
+    "BRAKES": "brakes",
+}
 
 # Identificadores USB (VID) dos chips USB-serial mais comuns em placas Arduino.
 VIDS_ARDUINO = {
@@ -140,18 +152,77 @@ def ativar_estagio(nave):
         print(f"Não foi possível ativar o estágio: {e}")
 
 
+def abortar(nave):
+    try:
+        nave.control.abort = True
+        print("ABORT!")
+    except (ValueError, RuntimeError) as e:
+        print(f"Não foi possível abortar: {e}")
+
+
+# Botões: nome no protocolo → o que fazer quando é APERTADO (BTN <nome> 1).
+# Soltar (BTN <nome> 0) não faz nada por enquanto.
+BOTOES = {
+    "STAGE": ativar_estagio,
+    "ABORT": abortar,
+}
+
+
+def mudar_sistema(nave, nome, ligar):
+    """A chave mudou de posição: leva o sistema para a posição da chave.
+
+    A chave define o estado (para cima = ligado), mas quem mostra o resultado é
+    o LED, que segue o jogo. Se o sistema não puder ligar (ex.: SAS numa nave
+    sem controle de atitude), o LED continua apagado, e está certo.
+    """
+    try:
+        setattr(nave.control, SISTEMAS[nome], ligar)
+        print(f"{nome}: {'ligar' if ligar else 'desligar'}")
+    except (ValueError, RuntimeError) as e:
+        print(f"Não foi possível mudar {nome}: {e}")
+
+
+def tratar_mensagem(nave, linha):
+    """Executa no jogo uma mensagem do painel.
+
+    Devolve True se a mensagem foi READY (o painel reiniciou).
+    """
+    partes = linha.split(" ")
+    if len(partes) == 3 and partes[2] in ("0", "1"):
+        tipo, nome, valor = partes
+        if tipo == "BTN" and nome in BOTOES:
+            if valor == "1":
+                BOTOES[nome](nave)
+            return False
+        if tipo == "SW" and nome in SISTEMAS:
+            mudar_sistema(nave, nome, valor == "1")
+            return False
+
+    if linha == "READY":
+        print("O painel reiniciou.")
+        return True
+    if linha.startswith("ERR "):
+        print(f"O painel não entendeu a mensagem: {linha[4:]}")
+    else:
+        print(f"Mensagem desconhecida do painel: {linha}")
+    return False
+
+
 def voar(conn, painel, nave):
     """Mantém painel e nave sincronizados até a nave deixar de ser a ativa."""
     print(f"Nave: {nave.name}")
 
-    # Streams: o servidor manda os valores novos sozinho, e ler sas() ou
-    # altitude() só pega o último valor recebido, sem ir até o PC.
-    sas = conn.add_stream(getattr, nave.control, "sas")
+    # Streams: o servidor manda os valores novos sozinho, e ler estados["SAS"]()
+    # ou altitude() só pega o último valor recebido, sem ir até o PC.
+    estados = {
+        nome: conn.add_stream(getattr, nave.control, propriedade)
+        for nome, propriedade in SISTEMAS.items()
+    }
     altitude = conn.add_stream(getattr, nave.flight(), "mean_altitude")
 
-    ultimo_sas = None           # None = o painel ainda não sabe o SAS
+    enviados = {}               # último estado enviado de cada sistema; vazio = o painel não sabe nada
     proximo_alt = 0.0           # instantes (time.monotonic) das próximas tarefas
-    proximo_reenvio_sas = 0.0
+    proximo_reenvio = 0.0
     proxima_verificacao = 0.0
 
     try:
@@ -160,24 +231,22 @@ def voar(conn, painel, nave):
 
             # 1. Painel → jogo.
             for linha in painel.linhas():
-                if linha == "BTN STAGE 1":
-                    ativar_estagio(nave)
-                elif linha == "READY":
+                if tratar_mensagem(nave, linha):
                     # O painel reiniciou (ex.: cabo mexido) e esqueceu tudo.
-                    # Zerar ultimo_sas força o reenvio logo abaixo.
-                    print("O painel reiniciou.")
-                    ultimo_sas = None
-                elif linha.startswith("ERR "):
-                    print(f"O painel não entendeu a mensagem: {linha[4:]}")
-                # "BTN STAGE 0" (botão solto) não faz nada por enquanto.
+                    # Esvaziar 'enviados' força o reenvio logo abaixo.
+                    enviados = {}
 
-            # 2. Jogo → painel. O SAS vai quando muda (resposta rápida no LED)
-            # e também a cada REENVIO_SAS, caso alguma mensagem tenha se perdido.
-            estado_sas = sas()
-            if estado_sas != ultimo_sas or agora >= proximo_reenvio_sas:
-                painel.enviar(f"SAS {int(estado_sas)}")
-                ultimo_sas = estado_sas
-                proximo_reenvio_sas = agora + REENVIO_SAS
+            # 2. Jogo → painel. Cada estado vai quando muda (resposta rápida no
+            # LED) e todos vão a cada REENVIO_ESTADOS, caso alguma mensagem
+            # tenha se perdido.
+            reenviar = agora >= proximo_reenvio
+            if reenviar:
+                proximo_reenvio = agora + REENVIO_ESTADOS
+            for nome, stream in estados.items():
+                ligado = stream()
+                if reenviar or enviados.get(nome) != ligado:
+                    painel.enviar(f"{nome} {int(ligado)}")
+                    enviados[nome] = ligado
 
             # A altitude vai sempre, mesmo parada: ela também serve de
             # "estou vivo" para o painel, que acusa sem sinal após 1 s quieto.
@@ -201,7 +270,8 @@ def voar(conn, painel, nave):
         # saiu da cena de voo. Quem chamou volta a esperar uma nave.
         return
     finally:
-        sas.remove()
+        for stream in estados.values():
+            stream.remove()
         altitude.remove()
 
 
