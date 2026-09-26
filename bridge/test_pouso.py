@@ -218,16 +218,29 @@ class TestPouso(unittest.TestCase):
 
     def test_mira(self):
         # Parada: em pé.
-        self.assertEqual(mira((0.0, 0.0, 0.0)), (1.0, 0.0, 0.0))
+        self.assertEqual(mira((0.0, 0.0, 0.0), 500.0), (1.0, 0.0, 0.0))
         # Caindo e derivando para o norte: nariz inclinado para o sul.
-        cima, norte, leste = mira((-100.0, 10.0, 0.0))
+        cima, norte, leste = mira((-100.0, 10.0, 0.0), 500.0)
         self.assertGreater(cima, 0.99)
         self.assertLess(norte, 0.0)
-        # Deriva grande: no máximo INCLINACAO_MAX fora da vertical.
-        cima, norte, leste = mira((-10.0, 0.0, 50.0))
+        # Deriva grande lá em cima: no máximo INCLINACAO_MAX fora da vertical.
+        cima, norte, leste = mira((-10.0, 0.0, 50.0), 500.0)
         self.assertAlmostEqual(math.degrees(math.acos(cima)), pouso.INCLINACAO_MAX)
         # Subindo: continua apontando para cima, nunca para baixo.
-        self.assertGreater(mira((30.0, 0.0, 0.0))[0], 0.99)
+        self.assertGreater(mira((30.0, 0.0, 0.0), 500.0)[0], 0.99)
+
+    def test_mira_em_pe_perto_do_chao(self):
+        """Perto do chão a nave fica em pé, mesmo derivando para o lado."""
+        for altura in (0.0, 5.0, pouso.ALTURA_TOQUE):
+            cima, _, _ = mira((-2.0, 3.0, 0.0), altura)
+            self.assertAlmostEqual(math.degrees(math.acos(cima)), pouso.INCLINACAO_TOQUE)
+        # O limite cresce aos poucos com a altura, sem saltos.
+        anterior = pouso.inclinacao_permitida(0.0)
+        for altura in range(0, 200, 5):
+            limite = pouso.inclinacao_permitida(altura)
+            self.assertGreaterEqual(limite, anterior)
+            self.assertLessEqual(limite - anterior, 1.0)
+            anterior = limite
 
 
 if __name__ == "__main__":

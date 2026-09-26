@@ -40,6 +40,8 @@ ALTURA_FOLGA = 2.0      # m: a freada mira terminar aqui; o resto desce em V_TOQ
 ALTURA_TOQUE = 10.0     # m: abaixo disso, com a descida já lenta, não desliga mais o motor
 GANHO_TOQUE = 2.0       # 1/s: quanto o motor corrige a velocidade na descida final
 INCLINACAO_MAX = 20.0   # graus: o máximo que o nariz sai da vertical para anular a deriva
+INCLINACAO_TOQUE = 3.0  # graus: o máximo perto do chão, onde a nave tem que tocar em pé
+ALTURA_EM_PE = 100.0    # m: daqui para baixo, o limite cai de INCLINACAO_MAX para INCLINACAO_TOQUE
 VIES_VERTICAL = 5.0     # m/s: puxa a mira para cima quando a nave está quase parada
 CIMA_MIN = 0.5          # nariz a mais de 60° da vertical: motor desligado até a nave virar
 Q_MIN = 20.0            # Pa: com menos pressão dinâmica que isso, o arrasto medido é só ruído
@@ -50,6 +52,7 @@ AMOSTRAS_ATMOSFERA = 100  # pontos da tabela de densidade do ar
 INTERVALO = 0.05        # s: 20 voltas por segundo
 INTERVALO_LENTO = 1.0   # s: altura do pé e empuxo no chão, que mudam devagar
 INTERVALO_STATUS = 1.0  # s: uma linha de situação no terminal
+INTERVALO_STATUS_PERTO = 0.25  # s: idem, nos últimos ALTURA_EM_PE metros
 PASCAL_POR_ATM = 101_325
 
 QUEDA = "QUEDA"         # motor desligado, esperando a hora de acender
@@ -72,18 +75,31 @@ class Leitura:
     pousada: bool
 
 
-def mira(velocidade):
+def inclinacao_permitida(altura):
+    """Quanto o nariz pode sair da vertical, em graus, a esta altura do chão.
+
+    Lá em cima, INCLINACAO_MAX, para anular a deriva enquanto a freada é
+    forte. Abaixo de ALTURA_EM_PE o limite vai caindo até INCLINACAO_TOQUE em
+    ALTURA_TOQUE: uma nave alta que toca o chão inclinada, ainda derivando
+    para o lado, tomba.
+    """
+    fracao = (altura - ALTURA_TOQUE) / (ALTURA_EM_PE - ALTURA_TOQUE)
+    fracao = min(max(fracao, 0.0), 1.0)
+    return INCLINACAO_TOQUE + (INCLINACAO_MAX - INCLINACAO_TOQUE) * fracao
+
+
+def mira(velocidade, altura):
     """Direção para o nariz, nos eixos (cima, norte, leste).
 
     Contra o movimento (retrógrado), para o motor frear também a deriva para
-    os lados. Mas sempre para cima, e no máximo INCLINACAO_MAX fora da
-    vertical: com a nave quase parada, o retrógrado puro fica girando à toa,
-    e perto do chão a nave tem que estar em pé.
+    os lados. Mas sempre para cima, e dentro de inclinacao_permitida(altura):
+    com a nave quase parada, o retrógrado puro fica girando à toa, e perto do
+    chão a nave tem que estar em pé.
     """
     vc, vn, ve = velocidade
     cima = max(-vc, 0.0) + VIES_VERTICAL
     lado = math.hypot(vn, ve)
-    limite = cima * math.tan(math.radians(INCLINACAO_MAX))
+    limite = cima * math.tan(math.radians(inclinacao_permitida(altura)))
     escala = limite / lado if lado > limite else 1.0
     norte, leste = -vn * escala, -ve * escala
     tamanho = math.sqrt(cima * cima + norte * norte + leste * leste)
@@ -131,7 +147,7 @@ class Guiagem:
             aceleracao = l.g + GANHO_TOQUE * (-V_TOQUE - vc)
         else:
             aceleracao = 0.0
-        return self._acelerador(aceleracao, l), mira(l.velocidade)
+        return self._acelerador(aceleracao, l), mira(l.velocidade, l.altura)
 
     def _acelerador(self, aceleracao, l):
         """Converte a aceleração vertical desejada em posição do acelerador.
@@ -275,24 +291,38 @@ class NaveKrpc:
             "empuxo": stream(getattr, nave, "available_thrust"),
             "direcao": stream(nave.direction, self.referencial),
             "situacao": stream(getattr, nave, "situation"),
+            "trem": stream(getattr, nave.control, "gear"),
         }
+        self.pernas = [perna.part for perna in nave.parts.legs]
         self._proxima_lenta = 0.0
-        self._fundo = 0.0       # m: do centro de massa até o ponto mais baixo da nave (negativo)
+        self._trem_medido = None  # posição do trem na última medida do pé
+        self._fundo = 0.0       # m: do centro de massa até o pé da nave (negativo)
         self._fator_chao = 1.0  # empuxo com a pressão do chão / empuxo agora
 
-    def _atualizar_lento(self, terreno):
-        """O que muda devagar, relido uma vez por segundo.
+    def _atualizar_lento(self, terreno, trem):
+        """O que muda devagar, relido uma vez por segundo e quando o trem muda.
 
-        A altitude do jogo é medida do centro de massa, não do pé: o ponto
-        mais baixo da nave vem da caixa que a envolve, nos eixos do horizonte
-        (x = cima). Ela muda quando o trem de pouso desce.
+        A altitude do jogo é medida do centro de massa, não do pé. O pé vem
+        da caixa que envolve as peças, nos eixos do horizonte (x = cima).
+
+        Com o trem baixado, o pé é a ponta da perna mais baixa, e só as pernas
+        entram na conta. Nas versões lançadas do kRPC (até a 0.6.0), a caixa
+        de uma peça junta tudo o que está pendurado nela, como o efeito da
+        chama do motor ligado. Aí a caixa da nave inteira desce metros abaixo
+        do pé de verdade, e a freada termina alta demais. Com o trem
+        recolhido (ou sem trem), fica a caixa da nave inteira: se ela errar,
+        erra para baixo, e a ignição só sai um pouco mais cedo.
 
         O empuxo cai quando o ar engrossa (depende do motor: os de vácuo
         perdem muito). A previsão usa o empuxo com a pressão do chão, o menor
         do caminho.
         """
-        minimo, _ = self._nave.bounding_box(self._nave.surface_reference_frame)
-        self._fundo = minimo[0]
+        referencial = self._nave.surface_reference_frame
+        if trem and self.pernas:
+            self._fundo = min(peca.bounding_box(referencial)[0][0] for peca in self.pernas)
+        else:
+            self._fundo = self._nave.bounding_box(referencial)[0][0]
+        self._trem_medido = trem
         agora = self._nave.available_thrust
         if agora > 0:
             pressao = self.corpo.pressure_at(max(terreno, 0.0)) if self._atmosfera else 0.0
@@ -302,8 +332,8 @@ class NaveKrpc:
         s = {nome: stream() for nome, stream in self._streams.items()}
         terreno = s["altitude"] - s["radar"]  # altitude do chão (ou do mar) abaixo da nave
         agora = time.monotonic()
-        if agora >= self._proxima_lenta:
-            self._atualizar_lento(terreno)
+        if agora >= self._proxima_lenta or s["trem"] != self._trem_medido:
+            self._atualizar_lento(terreno, s["trem"])
             self._proxima_lenta = agora + INTERVALO_LENTO
         return Leitura(
             altura=s["radar"] + self._fundo,
@@ -337,6 +367,11 @@ class Avisos:
             self._ativos.discard(chave)
 
 
+def inclinacao(l):
+    """Graus entre o nariz e a vertical."""
+    return math.degrees(math.acos(min(max(l.cima, -1.0), 1.0)))
+
+
 def status(l, guiagem, acelerador):
     maxima = l.empuxo_chao / l.massa
     if maxima <= 0 or math.isinf(guiagem.necessaria):
@@ -347,8 +382,9 @@ def status(l, guiagem, acelerador):
         precisa += f" (acende em {IGNICAO:.0%})"
     arrasto = f"  area de arrasto {guiagem.area:5.2f} m2" if guiagem.area else ""
     return (
-        f"{guiagem.fase:7} altura {l.altura:8.0f} m  descida {-l.velocidade[0]:6.1f} m/s  "
-        f"motor {acelerador * 100:3.0f}%  freada precisa {precisa}{arrasto}"
+        f"{guiagem.fase:7} altura {l.altura:8.1f} m  descida {-l.velocidade[0]:6.1f} m/s  "
+        f"inclinacao {inclinacao(l):2.0f} graus  motor {acelerador * 100:3.0f}%  "
+        f"freada precisa {precisa}{arrasto}"
     )
 
 
@@ -377,11 +413,14 @@ def pousar(conn, nave):
             print(f"AVISO: {horizontal:.0f} m/s de velocidade horizontal; o script supõe descida vertical.")
         if 0 < twr < 1:
             print("AVISO: o motor não segura o peso da nave no chão; não vai dar para pousar.")
+        if not fonte.pernas:
+            print("AVISO: a nave não tem trem de pouso; o pé vem da caixa da nave inteira, "
+                  "que no kRPC pode ficar metros abaixo do real (a freada termina alta).")
 
         controle.sas = False  # o SAS brigaria com o piloto automático
         controle.throttle = 0.0
         piloto.reference_frame = fonte.referencial  # primeiro o referencial, depois a direção
-        piloto.target_direction = mira(l.velocidade)
+        piloto.target_direction = mira(l.velocidade, l.altura)
         piloto.engage()
 
         avisos = Avisos()
@@ -392,6 +431,11 @@ def pousar(conn, nave):
             l = fonte.ler()
             acelerador, direcao = guiagem.passo(l)
             if guiagem.fase == POUSADA:
+                # A altura estimada no toque mostra o erro da medida do pé: o
+                # certo é perto de zero.
+                print(f"Pousou! Descia a {descida:.1f} m/s, com o nariz a "
+                      f"{inclinacao(l):.0f}° da vertical. No toque, o script achava "
+                      f"que o pé estava a {l.altura:.1f} m do chão.")
                 break
             controle.throttle = acelerador
             piloto.target_direction = direcao
@@ -399,7 +443,7 @@ def pousar(conn, nave):
 
             if guiagem.fase != fase:
                 fase = guiagem.fase
-                print(f"--> {fase}")
+                print(f"--> {fase} a {l.altura:.0f} m do chão")
                 if fase in (QUEIMA, TOQUE):
                     controle.gear = True
             ligado = fase in (QUEIMA, TOQUE)
@@ -416,10 +460,9 @@ def pousar(conn, nave):
             agora = time.monotonic()
             if agora >= proximo_status:
                 print(status(l, guiagem, acelerador))
-                proximo_status = agora + INTERVALO_STATUS
+                perto = l.altura < ALTURA_EM_PE
+                proximo_status = agora + (INTERVALO_STATUS_PERTO if perto else INTERVALO_STATUS)
             time.sleep(INTERVALO)
-
-        print(f"Pousou! Descia a {descida:.1f} m/s no toque.")
     finally:
         try:
             controle.throttle = 0.0

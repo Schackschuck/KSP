@@ -79,6 +79,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Celular como tela**, por uma página web | Funciona já, sem firmware e sem o cabo, em qualquer celular e sem instalar nada. A ponte serve a página e fala com ela por HTTP (Server-Sent Events e POST), só com a biblioteca padrão do Python. O protocolo é o mesmo da placa, então a ponte não muda. |
 | **pygame-ce** no lugar do pygame | O pygame original não tem pacote para o Python 3.14; o pygame-ce, mantido pela comunidade, tem e é usado do mesmo jeito (`import pygame`). |
 | **Pouso por previsão**: simula a freada até o chão e acha o acelerador por bisseção | Com arrasto, a freada não tem conta fechada. Simular funciona igual em qualquer planeta, com ou sem atmosfera, e refazer a conta 20 vezes por segundo corrige os erros da previsão. O arrasto é medido em voo, e a previsão só usa parte dele, porque ele cai quando a nave fica mais lenta que o som. A guiagem não conhece o kRPC, então é testada numa nave simulada. |
+| **Pé da nave medido pelas pernas do trem**, não pela caixa da nave inteira | Nas versões lançadas do kRPC (até a 0.6.0), a caixa de uma peça junta tudo o que está pendurado nela, como a chama do motor ligado. A caixa da nave inteira descia metros abaixo do pé, e a freada terminava alta. |
 | **ESP32** fica para depois | Candidato a painel sem fio ou módulo extra (fase 8). |
 
 ### Estrutura planejada do repositório
@@ -187,7 +188,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 ### Fase 5 — Protocolo v1 + scripts de voo
 
-**Status: script de pouso escrito, falta testar no jogo.** [`bridge/pouso.py`](bridge/pouso.py) faz a queima de suicídio numa descida vertical, em qualquer planeta, contando o arrasto do ar; roda pela linha de comando enquanto o botão não existe. [`bridge/test_pouso.py`](bridge/test_pouso.py) testa a mesma guiagem numa nave simulada, sem o KSP, em planetas com e sem atmosfera.
+**Status: script de pouso escrito, em teste no jogo.** No primeiro teste, em Kerbin, a freada terminou alta e a nave tocou o chão inclinada e tombou. Corrigido: o pé agora é medido pelas pernas do trem, e a nave fica em pé nos últimos metros (falta testar de novo). [`bridge/pouso.py`](bridge/pouso.py) faz a queima de suicídio numa descida vertical, em qualquer planeta, contando o arrasto do ar; roda pela linha de comando enquanto o botão não existe. [`bridge/test_pouso.py`](bridge/test_pouso.py) testa a mesma guiagem numa nave simulada, sem o KSP, em planetas com e sem atmosfera.
 
 - Migrar para o protocolo binário (COBS + CRC).
 - Chave "ARM" + botão "SUICIDE BURN" que dispara o script de pouso autônomo no computador de bordo.
