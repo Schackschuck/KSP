@@ -1,8 +1,32 @@
-# Tela multifunção: simulador e navball
+# Tela multifunção: navball, simulador e celular
 
-**Pronto quando:** a navball da janela acompanha a do jogo, os números batem com os do KSP e os botões de toque ligam e desligam o SAS e o RCS.
+**Pronto quando:** a navball da tela acompanha a do jogo, os números batem com os do KSP e os botões de toque ligam e desligam o SAS e o RCS.
 
-A mikromedia for ARM ainda não tem firmware: é a fase 6 do [roteiro](../README.md#fase-6--tela-multifunção-mikromedia-for-arm). Enquanto isso, a tela roda num **simulador**, uma janela de 320x240 no PC que fala exatamente o protocolo que a placa vai falar. A ponte (`mfd.py`) não sabe se do outro lado está o simulador ou a placa. Quando o firmware existir, basta trocar a janela pela porta serial, e o simulador vira a referência do que o firmware tem que desenhar.
+A tela multifunção mostra uma navball no estilo do KSP2, velocidade, altitude, acelerador, velocidade vertical e os dados da órbita ou do alvo, com botões de toque. Ela vai morar na mikromedia for ARM, mas a placa ainda não tem firmware: é a fase 6 do [roteiro](../README.md#fase-6--tela-multifunção-mikromedia-for-arm). Enquanto isso, a mesma tela roda em dois lugares, e os três falam o mesmo [protocolo](protocolo.md#tela-multifunção-mikromedia):
+
+```
+ KSP + kRPC (PC)
+      │ streams do kRPC
+      ▼
+ bridge/mfd.py: a ponte. Lê o jogo, escolhe o modo da navball,
+      │         manda as mensagens e executa os toques
+      │ protocolo em texto, uma mensagem por linha
+      ├─────────────────────┬──────────────────────────┐
+      ▼                     ▼                          ▼
+ simulador             celular, pelo Wi-Fi         mikromedia, pela serial
+ mfd_simulador.py      mfd_celular.py e            firmware/mfd/
+ janela no PC          celular/index.html          (ainda não existe)
+ (padrão)              (--celular)                 (--porta COMx)
+```
+
+A ponte não sabe qual tela está do outro lado. Quando o firmware existir, basta trocar a janela pela porta serial. O **simulador** desenha ponto a ponto na resolução da placa (320x240, 16 bits por ponto) e é a referência do que o firmware tem que desenhar. A **página do celular** segue as mesmas posições, só que na resolução do celular.
+
+**Onde estamos:**
+
+- Testado com o jogo: navball (pitch, yaw e roll), pró-grado, SAS e RCS pelo toque, e a volta automática ao trocar de nave. Estão marcados na lista de [Testar com o KSP](#testar-com-o-ksp).
+- Ainda sem teste com o jogo: radar, troca automática de modo, modo ALVO, normal e radial, nó de manobra, acelerador, tempos até AP e PE, e os números na bola.
+- Ainda sem teste num celular de verdade: a página foi testada num navegador simulando um celular.
+- A placa ainda não conversa com o PC: o cabo mini-USB antigo falha nos dados (ver abaixo).
 
 ![O simulador em órbita: navball no centro com os números do rumo e do pitch e os marcadores, velocidade e altitude nas laterais, acelerador e velocidade vertical nas bordas, AP e PE embaixo](img/mfd_simulador.png)
 
@@ -116,6 +140,14 @@ Outros detalhes:
 - Se a conexão cair, a página reconecta sozinha e pede tudo de novo à ponte.
 - A janela do simulador continua sendo a referência do que a placa vai mostrar, ponto por ponto. A página segue as mesmas posições, só que com mais detalhe.
 
+**Pronto quando:**
+
+- [ ] Com `python mfd.py --demo --celular`, a página abre no celular e a navball se mexe.
+- [ ] Tocar em SAS deixa o botão verde e mostra `SAS: ligar` no terminal.
+- [ ] O primeiro toque põe a página em tela cheia (Android), ou ela abre sem a barra pelo ícone da Tela de Início (iPhone).
+- [ ] Desligar o Wi-Fi do celular por alguns segundos mostra `SEM SINAL`; ao religar, a tela volta sozinha.
+- [ ] Com o KSP, os mesmos itens de [Testar com o KSP](#testar-com-o-ksp) valem no celular.
+
 ## Testar com o KSP
 
 Com o jogo na cena de voo e o servidor kRPC iniciado:
@@ -160,6 +192,60 @@ A ponte do painel (`ponte.py`) pode rodar ao mesmo tempo, em outro terminal: o k
 | `Não foi possível abrir a porta 8000 para o celular` | Outro programa já usa a porta | `python mfd.py --celular 8080` e abrir com `:8080` no fim |
 | `DIST`, `AP` ou `PE` mostram `---` longe de casa | A distância passou de 2,1 milhões de km, o limite de um inteiro de 32 bits | Normal com planetas distantes |
 
+## Como o código funciona por dentro
+
+A cada volta do laço principal (`voar()` no `mfd.py`, a cada ~10 ms):
+
+1. **A fonte lê o jogo** e devolve uma `Telemetria`: atitude, velocidades nos três modos, altitude e radar, posição, órbita, acelerador, alvo, nó de manobra e o estado do SAS e do RCS. A fonte é a `NaveKrpc` (streams do kRPC) ou a `Demo` (a nave de mentira).
+2. **As linhas da tela são tratadas:** `READY` faz a ponte reenviar tudo; `TOQUE SAS` e `TOQUE RCS` invertem o sistema no jogo; `TOQUE MODO` passa para o próximo modo.
+3. **O `ModoNavball` escolhe o modo** (`SUP`, `ORB` ou `ALVO`), com as trocas automáticas pela altitude e pelo alvo.
+4. **O `Transmissor` decide o que mandar e quando:**
+
+   | O quê | Frequência |
+   |---|---|
+   | `MODO`, `SAS` e `RCS` | Quando mudam, e todos 1 vez por segundo. O `MODO` vai antes dos números |
+   | `ATT` | 20 por segundo |
+   | Marcadores: `PRO`, `NRM`, `RDL`, `TGT` e `MNV` | 10 por segundo |
+   | Números: `ALT` ou `RAD`, `VEL`, `VV`, `ACEL` e `DIST` | 10 por segundo |
+   | Órbita: `AP`, `PE`, `TAP` e `TPE`, só no modo `ORB` | 2 por segundo |
+
+As peças:
+
+| Peça | Arquivo | Papel |
+|---|---|---|
+| `NaveKrpc` e `Demo` | `mfd.py` | Fontes de dados: o jogo, pelo kRPC, ou uma nave de mentira |
+| `Telemetria` | `mfd.py` | Tudo o que a ponte precisa saber da nave numa volta do laço |
+| `ModoNavball` | `mfd.py` | O modo da navball e as trocas automáticas |
+| `Transmissor` | `mfd.py` | Transforma a telemetria em mensagens, cada uma na sua frequência |
+| `Simulador` | `mfd_simulador.py` | Tela: janela no PC, na resolução da placa |
+| `TelaCelular` | `mfd_celular.py` | Tela: servidor HTTP que liga a ponte à página do celular |
+| página | `celular/index.html` | O "firmware" do navegador: interpreta o protocolo e desenha |
+| `Painel` | `ponte.py` | Tela: a serial, para a mikromedia quando o firmware existir |
+| funções da navball | `navball.py` | A conta da bola, usada pelo simulador e copiada no JavaScript |
+
+Toda tela tem a mesma interface: `enviar(linha)` manda uma linha para a tela, `linhas()` devolve as linhas que a tela mandou, e ainda `esperar_ready()` e `fechar()`.
+
+**Referenciais.** As velocidades e direções saem do kRPC já nos eixos do horizonte local da nave (cima, norte, leste), por referenciais "híbridos": posição e velocidade medidas em relação ao planeta, mas com os eixos da superfície. Em relação ao chão, que gira, no modo `SUP`; em relação ao centro do planeta, sem girar, no `ORB`. A velocidade relativa ao alvo é a diferença entre a velocidade orbital da nave e a do alvo, as duas no mesmo referencial.
+
+### Acrescentar um número ou um marcador
+
+1. **`Telemetria`:** um campo novo, preenchido pela `NaveKrpc.ler()` (um stream novo no `__init__`) e pela `Demo.ler()`.
+2. **`Transmissor.enviar()`:** a mensagem nova, na frequência certa. Para um marcador, use `mensagem_direcao()` com um vetor (cima, norte, leste).
+3. **`docs/protocolo.md`:** uma linha na tabela.
+4. **`mfd_simulador.py`:** aceitar a mensagem em `_interpretar()` e desenhar. Um marcador também entra em `_marcadores` e em `pares`, com a função que o desenha.
+5. **`celular/index.html`:** o mesmo, em `interpretar()` e no desenho, nas mesmas posições.
+
+Depois, confira com `python mfd.py --demo`, na janela e com `--celular`.
+
+### Armadilhas
+
+- **O layout está em dois lugares:** `mfd_simulador.py` e `celular/index.html`, e as cores e larguras da navball também estão em `navball.py`. Mudou um, mude o outro. O simulador é a referência da placa.
+- **Linhas de no máximo 31 caracteres.** Um texto livre, como o nome de um alvo, teria que ser cortado antes de ir para a tela.
+- **Os referenciais do kRPC são "canhotos"** (eixos da mão esquerda). O produto vetorial só dá o sentido certo em eixos da mão direita, então `normal_e_radial()` troca a ordem para (leste, norte, cima) antes da conta.
+- **No navegador, os pedidos HTTP podem chegar fora de ordem.** A página manda uma linha de cada vez, esperando a anterior terminar, para funcionar como uma serial.
+- **Página sem HTTPS:** o navegador não deixa manter a tela do celular acesa, e o iPhone não deixa pôr uma página em tela cheia (só pelo ícone da Tela de Início).
+- **pygame no Python 3.14:** só o `pygame-ce` tem pacote; os dois não podem ser instalados juntos.
+
 ## Como a navball é desenhada
 
 A conta está em [`navball.py`](../bridge/navball.py), escrita para caber num ARM7 a 60 MHz sem ponto flutuante, e sem memória para guardar a tela inteira (320x240x2 = 150 KB contra 32 KB de RAM).
@@ -172,9 +258,9 @@ A conta está em [`navball.py`](../bridge/navball.py), escrita para caber num AR
    - **Linhas de pitch:** a latitude é o arco-seno do componente vertical, lido de uma tabela.
    - **Meridianos:** o meridiano de cada rumo fica num plano vertical, e a distância do ponto ao plano sai de um produto escalar, sem arco-tangente. São 2 multiplicações por plano, com 6 planos.
    - **Sombra e cor:** escurece a borda e arredonda para 16 bits por ponto (RGB565).
-3. **Marcadores e letras:** cada um é um vetor projetado na bola por 3 produtos escalares, e só aparece se estiver na metade visível. As direções chegam prontas da ponte: normal e radial saem de produtos vetoriais da posição e da velocidade, feitos no PC.
+3. **Marcadores e números:** cada um é um vetor projetado na bola por 3 produtos escalares, e só aparece se estiver na metade visível. As direções dos marcadores chegam prontas da ponte: normal e radial saem de produtos vetoriais da posição e da velocidade, feitos no PC. Os números do rumo e do pitch são escritos de pé no ponto projetado, com a fonte normal e uma sombra escura, então a placa não precisa girar texto.
 
-Com raio de 64 pontos, são cerca de 13 mil pontos por quadro, cada um com umas 30 operações de inteiros. Na placa, a bola vai ser desenhada linha a linha, direto na memória do controlador da tela. Os números só são redesenhados quando mudam. A velocidade de verdade só dá para saber medindo na placa.
+Com raio de 72 pontos, são cerca de 16 mil pontos por quadro, cada um com umas 30 operações de inteiros. Na placa, a bola vai ser desenhada linha a linha, direto na memória do controlador da tela. Os números só são redesenhados quando mudam. A velocidade de verdade só dá para saber medindo na placa.
 
 ## Próximos passos
 
@@ -183,3 +269,16 @@ Com raio de 64 pontos, são cerca de 13 mil pontos por quadro, cada um com umas 
 3. **Firmware, fase 6:** piscar um LED, depois a serial (eco, e em seguida este protocolo), depois a tela (pintar, texto), a navball e o touch. Quando a placa responder `READY`, rodar `python mfd.py --porta COMx`.
 4. **Manobras pela tela** (ideia para depois): informações do próximo nó (Δv, tempo de queima, T− até o nó) e um editor de manobras pelo toque, junto com o editor de encoders da fase 4.
 5. **Roda de modos do SAS** (ideia para depois): uma segunda página com botões grandes para estabilidade, pró e retrógrado, normal, radial, alvo e manobra.
+
+## Histórico
+
+A tela foi feita aos poucos, testando no jogo entre uma etapa e outra:
+
+| PR | O que entrou |
+|---|---|
+| [#10](https://github.com/Schackschuck/KSP/pull/10) | Descoberta das duas USB da placa (a PROG tem um FT232RL); o simulador de 320x240, a ponte com o kRPC, o modo `--demo` e a navball 3D feita só com multiplicações e somas |
+| [#11](https://github.com/Schackschuck/KSP/pull/11) | Instalação com o `pygame-ce`, porque o pygame não tem pacote para o Python 3.14 |
+| [#12](https://github.com/Schackschuck/KSP/pull/12) | Altitude pelo radar perto do chão, troca automática SUP ⇄ ORB como no KSP, e o modo ALVO |
+| [#13](https://github.com/Schackschuck/KSP/pull/13) | Marcadores normal, radial e de manobra; visual inspirado no KSP2, com barras do acelerador e da velocidade vertical e botões redondos |
+| [#14](https://github.com/Schackschuck/KSP/pull/14) | A tela no celular, pelo Wi-Fi |
+| [#15](https://github.com/Schackschuck/KSP/pull/15) | Números do rumo e do pitch na própria navball; sai a fita de rumo, e o modo SUP fica sem o painel de baixo |
