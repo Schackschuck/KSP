@@ -153,19 +153,25 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 - Displays de 7 segmentos com MAX7219 para os números mais importantes.
 - Encoder rotativo para escolher o que cada display mostra.
+- **Editor de nós de manobra** (pelo kRPC: `control.add_node`, `node.prograde` etc.):
+  - 4 encoders: pró-grado, normal, radial e tempo (mover o nó ao longo da órbita). Apertar o encoder troca o passo: 0,1 / 1 / 10 / 100 m/s por clique.
+  - Botões NOVO, APAGAR, AP e PE (levar o nó ao apoastro ou ao periastro) e CIRC (nó de circularização no apoastro, com o Δv calculado pela ponte).
+  - O LCD mostra Δv, tempo de queima, T− até o nó e o Ap/Pe resultante.
+  - Encoders lidos **por interrupção** (externa ou *pin change*): redesenhar o LCD trava o laço por ~20 ms, e o *polling* perderia cliques. O painel acumula os cliques e manda `ENC <nome> <cliques>`.
 - Barra de combustível com LEDs WS2812.
 - Ponteiro analógico com motor de passo X27.168.
 - Fonte 5V externa (a USB não aguenta muitos LEDs).
 
-**Pronto quando:** um voo inteiro (lançamento → órbita → reentrada) é feito sem olhar para o monitor do PC.
+**Pronto quando:** um voo inteiro (lançamento → órbita → reentrada) é feito sem olhar para o monitor do PC, inclusive planejar a circularização pelo editor de manobras.
 
 ### Fase 5 — Protocolo v1 + scripts de voo
 
 - Migrar para o protocolo binário (COBS + CRC).
 - Chave "ARM" + botão "SUICIDE BURN" que dispara o script de pouso autônomo no computador de bordo.
+- Chave "ARM" + botão "EXEC" que executa o nó de manobra da fase 4: aponta a nave para o nó, acelera o tempo até perto dele, queima e corta quando o Δv restante chega a zero.
 - Painel e tela mostram o estado do script (armado, queimando, pousado, abortado).
 
-**Pronto quando:** um booster pousa sozinho a partir de um botão no painel.
+**Pronto quando:** um booster pousa sozinho a partir de um botão no painel, e um nó de manobra é executado pelo botão EXEC.
 
 ### Fase 6 — Tela multifunção (mikromedia for ARM)
 
@@ -242,7 +248,8 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 ### Fase 4 — Instrumentos físicos
 
 - [ ] 3–4× módulos MAX7219 com 8 dígitos de 7 segmentos
-- [ ] 2× encoders rotativos (KY-040)
+- [ ] 6× encoders rotativos (KY-040): 4 para o editor de manobras, 2 para escolher o que os displays mostram
+- [ ] 5× botões para o editor de manobras (NOVO, APAGAR, AP, PE, CIRC), se não sobrarem da fase 2
 - [ ] 1 m de fita WS2812B (60 LEDs/m) + resistor 330 Ω + capacitor 1000 µF
 - [ ] 2–4× motores de passo X27.168 (ponteiros)
 - [ ] 1× fonte 5V 3A + conector/borne
