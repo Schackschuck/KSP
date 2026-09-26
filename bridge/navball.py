@@ -21,10 +21,11 @@ import math
 import numpy as np
 
 # Cores (R, G, B). A tela usa 16 bits por ponto; desenhar() já arredonda.
-CEU = (40, 125, 205)
-CHAO = (175, 100, 40)
-LINHA_CEU = (200, 225, 250)
-LINHA_CHAO = (235, 200, 160)
+# Grade azul no céu e laranja no chão, como na navball do KSP2.
+CEU = (40, 105, 200)
+CHAO = (150, 70, 25)
+LINHA_CEU = (150, 195, 250)
+LINHA_CHAO = (250, 150, 60)
 HORIZONTE = (255, 255, 255)
 
 PASSO_PITCH = 10              # graus entre as linhas de pitch

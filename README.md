@@ -200,7 +200,7 @@ Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de fla
   2. Serial: eco de caracteres; depois, receber o protocolo da tela ([docs/protocolo.md](docs/protocolo.md#tela-multifunção-mikromedia)), em texto como o simulador, e mais tarde o v1.
   3. Driver da tela: inicializar o controlador, desenhar pixels, retângulos e texto com fonte bitmap. Com 32 KB de RAM não cabe um *framebuffer* (320×240×2 = 150 KB), então o desenho vai direto para a memória do controlador da tela, atualizando só o que mudou.
   4. Touch: leitura pelo ADC e calibração.
-  5. Páginas: a navball do simulador primeiro (a conta está em `bridge/navball.py`, pronta para virar C); depois mapa da órbita e dados de pouso; troca de página pelo touch.
+  5. Páginas: a navball do simulador primeiro (a conta está em `bridge/navball.py`, pronta para virar C); depois mapa da órbita, dados de pouso, informações e editor de nós de manobra pelo toque, e uma roda de modos do SAS; troca de página pelo touch.
   6. Áudio: alarmes e avisos gravados no microSD (combustível baixo, contagem de altitude no pouso).
 
 **Pronto quando:** a mikromedia mostra telemetria ao vivo recebida do Pi e toca um alarme de combustível baixo.
