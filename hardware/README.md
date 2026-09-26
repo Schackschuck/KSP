@@ -2,10 +2,32 @@
 
 Esquemáticos do painel, feitos no KiCad. Cada pasta tem também um PDF do esquema, que dá para ver sem instalar nada.
 
-| Pasta | Placa | Quantas |
+| Pasta | Placa | CIs |
 |---|---|---|
-| [`modulo/`](modulo/) | Módulo genérico: 24 entradas e 16 saídas para LED ([PDF](modulo/modulo.pdf)) | Uma por seção do painel |
-| [`backplane/`](backplane/) | Backplane: liga até 12 módulos ao Mega ([PDF](backplane/backplane.pdf)) | Uma |
+| [`modulo_pequeno/`](modulo_pequeno/) | Módulo pequeno: 8 entradas e 8 LEDs ([PDF](modulo_pequeno/modulo_pequeno.pdf)) | 1 × 74HC165, 1 × 74HC595 |
+| [`modulo_grande/`](modulo_grande/) | Módulo grande: 24 entradas e 16 LEDs ([PDF](modulo_grande/modulo_grande.pdf)) | 3 × 74HC165, 2 × 74HC595 |
+| [`backplane/`](backplane/) | Backplane: liga até 12 módulos ao Mega ([PDF](backplane/backplane.pdf)) | — |
+
+As duas placas de módulo usam o mesmo cabo flat e encaixam em qualquer slot.
+
+## Qual placa em cada seção
+
+| Seção do painel | Entradas | LEDs | Placa |
+|---|---|---|---|
+| Ação executiva (STAGE, ABORT) + scripts (ARM, SUICIDE BURN, EXEC) | 5 | 8 | pequena |
+| Tempo | 8 | 1 | pequena |
+| Analógicos: rotação | 8 | 3 | pequena, slots 1 a 5 |
+| Analógicos: translação | 5 | 1 | pequena, slots 1 a 5 |
+| Acelerador | 4 | 2 | pequena, slots 1 a 5 |
+| Telemetria | 4 | 0 | pequena |
+| Sistemas de controle | 12 | 12 | grande |
+| Action groups 1 a 10 | 10 | 10 | grande |
+| EVA | 11 | 12 | grande |
+| Navegação | 10 | 0 | grande |
+| Câmera | 10 | 0 | grande |
+| Editor de manobras | 17 | 0 | grande (o único que usa o terceiro 74HC165) |
+
+São 6 pequenas e 6 grandes, que ocupam os 12 slots. As seções da primeira linha ficam longe uma da outra no painel, mas podem dividir uma placa: os fios dos botões até a placa podem ter uns 30 cm.
 
 ## Como abrir
 
@@ -22,7 +44,7 @@ Mega ──(fios)── Backplane ── slot 1 ──(cabo flat)── módulo
                           └─ ... até o slot 12
 ```
 
-Todos os módulos usam a mesma placa, sempre com todos os CIs montados. As entradas de todos eles formam uma única cadeia de 74HC165 e as saídas, uma única cadeia de 74HC595, as duas no SPI do Mega.
+As entradas de todos os módulos formam uma única cadeia de 74HC165 e as saídas, uma única cadeia de 74HC595, as duas no SPI do Mega. Monte sempre todos os CIs da placa escolhida: a posição de cada byte na cadeia depende disso.
 
 ### Cabo flat (IDC 2x8, igual no módulo e no slot)
 
@@ -63,32 +85,55 @@ Não use o D53 (SS) como entrada: se ele for a 0, o SPI do Mega sai do modo mest
 
 ## No módulo
 
-| Conector | O que liga | Como |
-|---|---|---|
-| J2, J3, J4 | Botões e chaves (IN0 a IN23) | Entre o INn e o GND do próprio conector. Apertado ou ligado lê **0** (pull-up de 10 kΩ). |
-| J5, J6 | LEDs (LED0 a LED15) | Anodo no LEDn, catodo no GND. O resistor de 1 kΩ já está na placa: uns 3 mA por LED, para os 8 LEDs de um 74HC595 ficarem abaixo de 70 mA. |
-| J7 | Joystick ou acelerador | Pontas do potenciômetro em +5V e GND, cursor em AN_A, AN_B ou AN_C. |
+| O que liga | Pequeno | Grande | Como |
+|---|---|---|---|
+| Botões e chaves | J2 (IN0–IN7) | J2, J3, J4 (IN0–IN23) | Entre o INn e o GND do próprio conector. Apertado ou ligado lê **0** (pull-up de 10 kΩ). |
+| LEDs | J3 (LED0–LED7) | J5, J6 (LED0–LED15) | Anodo no LEDn, catodo no GND. O resistor de 1 kΩ já está na placa: uns 3 mA por LED, para os 8 LEDs de um 74HC595 ficarem abaixo de 70 mA. |
+| Joystick ou acelerador | J4 | J7 | Pontas do potenciômetro em +5V e GND, cursor em AN_A, AN_B ou AN_C. |
+
+**Os LEDs mostram o estado do jogo.** Nenhum LED é ligado a um botão: o Mega acende cada LED com o que a ponte manda do kRPC. Até o LED de um botão iluminado vai numa saída LEDn, separado do contato do botão.
+
+**Botão com LED de 5 V** (como os botões arcade) já tem resistor interno. Com o 1 kΩ da placa em série, ele fica mais fraco. Se ficar fraco demais, troque o resistor daquela saída por um de menor valor, ou por um fio.
 
 ## Ordem dos bits (para o firmware)
 
+O firmware precisa de uma tabela dizendo qual placa está em cada slot, porque cada uma ocupa um número diferente de bytes na cadeia:
+
+| Placa | Bytes de entrada | Bytes de saída |
+|---|---|---|
+| Pequena | 1: U1 (IN0–IN7) | 1: U2 (LED0–LED7) |
+| Grande | 3: U1 (IN0–IN7), U2 (IN8–IN15), U3 (IN16–IN23) | 2: U4 (LED0–LED7), U5 (LED8–LED15) |
+
 **Entradas:**
 1. Um pulso baixo em PL copia todas as entradas para os 74HC165.
-2. Em seguida, o SPI lê 3 bytes por módulo, a começar pelo slot 1.
-3. Em cada módulo chega primeiro o U1 (IN0–IN7), depois o U2 (IN8–IN15), depois o U3 (IN16–IN23).
-4. Em cada byte, o bit n é o INn do respectivo CI.
+2. Em seguida, o SPI lê os bytes de entrada a começar pelo slot 1, na ordem da tabela acima.
+3. Em cada byte, o bit n é o INn do respectivo CI.
 
 **Saídas:**
-1. O SPI envia 2 bytes por módulo, **do último slot para o primeiro**. O último byte enviado fica no U4 do slot 1 (LED0–LED7).
+1. O SPI envia os bytes de saída **do último slot para o primeiro**, e em cada slot do último CI para o primeiro. O último byte enviado fica no primeiro 74HC595 do slot 1.
 2. Um pulso em RCLK acende o que foi enviado.
 
 **Uma varredura em uma transferência só:**
-- Como as duas cadeias compartilham o SCK, dá para ler e escrever junto: transferir 3 bytes por módulo e mandar os bytes de saída no fim da transferência.
-- Com 12 módulos a 2 MHz, isso leva uns 150 µs.
+- Como as duas cadeias compartilham o SCK, dá para ler e escrever junto.
+- Cada placa tem pelo menos tantos bytes de entrada quanto de saída. Então basta transferir o total de bytes de entrada, com os bytes de saída no fim da transferência.
+- Com as 12 placas da tabela, são 24 bytes: uns 100 µs a 2 MHz.
 - Feito mil vezes por segundo numa interrupção de timer, dá tempo de ler até os encoders.
 
 ## Lista de peças por placa
 
-**Módulo:**
+**Módulo pequeno:**
+- U1: 74HC165.
+- U2: 74HC595.
+- RN1: rede resistiva 10 kΩ SIP 9 pinos.
+- R1–R8: 1 kΩ.
+- C1–C2: 100 nF.
+- C3: 10 µF.
+- J1: conector IDC 2x8 macho com trava.
+- J2–J3: barra de pinos 1x10.
+- J4: barra de pinos 1x5.
+- 2 soquetes DIP-16.
+
+**Módulo grande:**
 - U1–U3: 74HC165.
 - U4–U5: 74HC595.
 - RN1–RN3: rede resistiva 10 kΩ SIP 9 pinos.
@@ -115,4 +160,4 @@ Não use o D53 (SS) como entrada: se ele for a 0, o SPI do Mega sai do modo mest
 
 1. Revisar os esquemas no KiCad e rodar o ERC.
 2. Firmware do Mega lendo a cadeia de CIs.
-3. Montar o backplane e o primeiro módulo em placa perfurada. A PCB fica para a fase 7.
+3. Montar o backplane e o primeiro módulo em placa perfurada. A PCB fica para a fase 7: são duas placas de módulo diferentes, e cada uma é fabricada em quantidade.

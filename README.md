@@ -29,8 +29,9 @@ O objetivo principal é **aprender firmware/embarcados e eletrônica**, e de que
           ▲
           │  um cabo flat de 16 vias por módulo
           ▼
- Módulos do painel, um por seção .................... hardware/modulo/
-   cada um: 24 entradas (3 × 74HC165) + 16 LEDs (2 × 74HC595)
+ Módulos do painel, um por seção .......... hardware/modulo_pequeno/ e modulo_grande/
+   pequeno: 8 entradas + 8 LEDs (1 × 74HC165 + 1 × 74HC595)
+   grande: 24 entradas + 16 LEDs (3 × 74HC165 + 2 × 74HC595)
    chaves, botões, LEDs, joysticks, acelerador
 
  Instrumentos (fase 4): displays, ponteiros e fita de LED, direto no Mega
@@ -68,7 +69,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Python** na ponte | Já usado com kRPC antes; o mesmo código roda no PC e no Pi. |
 | **Raspberry Pi 4** como computador de bordo | Deixa o cockpit independente do PC (só um cabo de rede) e pode ligar uma tela colorida grande. A compra dessa tela foi adiada — decidir depois. |
 | **Arduino Mega** para o I/O | O Pi não tem entradas analógicas e o Linux não é tempo real; o Mega tem muitos pinos, trabalha em 5V e é compatível com praticamente todo módulo. |
-| **Painel em módulos** com 74HC165 e 74HC595, ligados ao Mega por um backplane | Cada seção do painel é uma placa igual, montada e testada uma de cada vez. Os CIs custam poucos reais por módulo, o firmware continua um só e o protocolo com a ponte não muda. Um micro em cada módulo fica para a fase 8. |
+| **Painel em módulos** com 74HC165 e 74HC595, ligados ao Mega por um backplane | Cada seção do painel é uma placa, montada e testada uma de cada vez. Há dois tamanhos (8 entradas e 8 LEDs, ou 24 e 16), para não montar CI à toa. Os CIs custam poucos reais por módulo, o firmware continua um só e o protocolo com a ponte não muda. Um micro em cada módulo fica para a fase 8. |
 | Pinos do Raspberry Pi **não** substituem o Mega | O Pi não tem entradas analógicas, o Linux não é tempo real para encoders e ponteiros, e os pinos de 3,3 V vão direto ao processador: um fio errado nos 5 V queima o Pi. |
 | **mikromedia for ARM (LPC2148)** como tela multifunção | Já está na bancada. ARM programado sem framework, com tela touch, microSD e áudio. Entra depois do protocolo v1, que ela também usa. |
 | **ESP32** fica para depois | Candidato a painel sem fio ou módulo extra (fase 8). |
@@ -144,7 +145,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 - Chaves para SAS, RCS, trem de pouso, luzes e freios; STAGE e ABORT com capa de proteção. Depois, action groups.
 - A posição da chave é o estado desejado (para cima = ligado); o LED de cada sistema mostra o estado no jogo.
-- **Painel em módulos:** cada seção vira uma placa igual, com 24 entradas (3 × 74HC165) e 16 LEDs (2 × 74HC595), ligada por cabo flat a um backplane de 12 slots no Mega. Esquemáticos em [hardware/](hardware/README.md).
+- **Painel em módulos:** cada seção vira uma placa, ligada por cabo flat a um backplane de 12 slots no Mega. A placa pequena tem 8 entradas e 8 LEDs (1 × 74HC165 + 1 × 74HC595); a grande, 24 entradas e 16 LEDs (3 × 74HC165 + 2 × 74HC595). Os LEDs só mostram o que vem do jogo: nenhum é ligado a um botão. Esquemáticos e qual placa vai em cada seção em [hardware/](hardware/README.md).
 - Enquanto o primeiro módulo não fica pronto, os controles básicos continuam direto nos pinos do Mega, como em [docs/fase2.md](docs/fase2.md).
 - Próximo passo: o firmware do Mega lendo a cadeia de CIs, e montar o backplane com o primeiro módulo.
 - Joystick de 3 eixos + potenciômetro deslizante para o acelerador (aguardando o hardware).
@@ -244,7 +245,8 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [x] 10–15× chaves alavanca (toggle) ON-OFF
 - [x] 2–3× capas de proteção para chave ("missile switch cover")
 - [x] 4–6× botões arcade (24 ou 30 mm), de preferência com LED
-- [ ] Por módulo: 3× 74HC165, 2× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 16× resistor 1 kΩ, 5× capacitor 100 nF, 1× capacitor 10 µF, soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
+- [ ] Por módulo pequeno (6 no painel): 1× 74HC165, 1× 74HC595, 1× rede resistiva 10 kΩ SIP 9 pinos, 8× resistor 1 kΩ, 2× capacitor 100 nF, 1× capacitor 10 µF, 2 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
+- [ ] Por módulo grande (6 no painel): 3× 74HC165, 2× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 16× resistor 1 kΩ, 5× capacitor 100 nF, 1× capacitor 10 µF, 5 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
 - [ ] Backplane: 12× conector IDC 2x8, 5× resistor 47 Ω, 12× resistor 10 kΩ, capacitores de 470 µF e 100 nF, borne de 2 vias e jumper de 3 pinos
 - [ ] 1× joystick de 3 eixos (ou módulo de 2 eixos KY-023 para começar)
 - [ ] 1× potenciômetro deslizante 10 kΩ linear, curso ≥ 60 mm
