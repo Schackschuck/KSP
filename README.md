@@ -16,6 +16,7 @@ O objetivo principal é **aprender firmware/embarcados e eletrônica**, e de que
  Raspberry Pi 4 = computador de bordo ............... bridge/
    • ponte kRPC ⇄ placas
    • tela de telemetria (pygame)
+   • tela multifunção no navegador do celular, pelo Wi-Fi (enquanto a placa não fica pronta)
           ▲                              ▲
           │ USB/serial                   │ USB/serial
           │ (protocolo próprio)          │ (mesmo protocolo)
@@ -45,6 +46,7 @@ Cada parte tem um papel bem definido:
 | **KSP + kRPC** (PC) | Expõe o estado da nave e aceita comandos. | — |
 | **Computador de bordo** (Raspberry Pi 4, Python) | Conecta no kRPC pela rede, abre *streams* de telemetria, traduz eventos do painel em comandos do jogo e telemetria em mensagens para o painel. Desenha a tela de telemetria. Dispara scripts (ex.: pouso autônomo). | Não lê pino nenhum. |
 | **Painel** (Arduino Mega, C++) | Lê entradas (com debounce), envia eventos; recebe valores e atualiza LEDs, displays e ponteiros. | **Não sabe que o KSP existe.** É um painel de I/O genérico. |
+| **Celular** (opcional, página no navegador) | Mostra a tela multifunção pelo Wi-Fi, com o mesmo protocolo e o mesmo layout, enquanto a mikromedia não tem firmware. | Não fala com o kRPC nem guarda estado: só desenha o que a ponte manda. |
 | **Tela multifunção** (mikromedia for ARM, LPC2148, C sem framework) | Recebe telemetria pelo mesmo protocolo serial, desenha páginas (atitude, órbita, pouso), troca de página pelo touch e toca alarmes sonoros. | Não fala com o kRPC; só mostra o que o computador de bordo manda. |
 
 Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o endereço do servidor kRPC e a porta serial.
@@ -74,12 +76,15 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | Pinos do Raspberry Pi **não** substituem o Mega | O Pi não tem entradas analógicas, o Linux não é tempo real para encoders e ponteiros, e os pinos de 3,3 V vão direto ao processador: um fio errado nos 5 V queima o Pi. |
 | **mikromedia for ARM (LPC2148)** como tela multifunção | Já está na bancada. ARM programado sem framework, com tela touch, microSD e áudio. Entra depois do protocolo v1, que ela também usa. |
 | **Simulador da tela multifunção** no PC antes do firmware | A ponte, o protocolo e o desenho (navball, números, botões) ficam prontos e testados com o jogo antes da placa; o firmware só precisa copiar o simulador. A placa desenha a partir dos ângulos, porque a imagem pronta não cabe na serial (150 KB por quadro). |
+| **Celular como tela**, por uma página web | Funciona já, sem firmware e sem o cabo, em qualquer celular e sem instalar nada. A ponte serve a página e fala com ela por HTTP (Server-Sent Events e POST), só com a biblioteca padrão do Python. O protocolo é o mesmo da placa, então a ponte não muda. |
+| **pygame-ce** no lugar do pygame | O pygame original não tem pacote para o Python 3.14; o pygame-ce, mantido pela comunidade, tem e é usado do mesmo jeito (`import pygame`). |
 | **ESP32** fica para depois | Candidato a painel sem fio ou módulo extra (fase 8). |
 
 ### Estrutura planejada do repositório
 
 ```
-bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de telemetria, simulador da tela multifunção, scripts de voo
+bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de telemetria, scripts de voo;
+                  tela multifunção: ponte (mfd.py), simulador, navball e a página do celular (celular/)
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
 firmware/passos/  sketches de aprendizado, um por passo da fase 1
 firmware/mfd/     mikromedia for ARM / LPC2148 (C, GCC e make)
@@ -160,6 +165,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - Depois: gráfico de altitude × tempo, desenho simples da órbita, indicador de atitude.
 - O Pi 4 tem folga de desempenho, mas vale o bom hábito: redesenhar só o que mudou e limitar a taxa de quadros.
 - A tela definitiva do Pi foi adiada. Enquanto isso, desenvolver com qualquer monitor ou TV HDMI (ou rodando a interface no PC).
+- A tela multifunção ([docs/mfd.md](docs/mfd.md)) já mostra navball, velocidades, altitude e Ap/Pe numa página web. Uma tela HDMI com touch no Pi pode abri-la em tela cheia, no navegador, sem programar nada novo.
 
 **Pronto quando:** dá para circularizar uma órbita olhando só para a tela.
 
