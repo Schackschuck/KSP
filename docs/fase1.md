@@ -36,6 +36,8 @@ LCD I2C:      SDA → pino 20   SCL → pino 21   VCC → 5V   GND → GND
 | [`bridge/ponte.py`](../bridge/ponte.py) | Passo 5: a ponte kRPC ⇄ painel |
 | [`docs/protocolo.md`](protocolo.md) | O protocolo v0, mensagem por mensagem |
 
+> Desde a fase 2, o `painel.ino` também lê as chaves e o ABORT e acende mais LEDs ([docs/fase2.md](fase2.md)). Ele continua funcionando com a montagem desta fase: entradas sem nada ligado ficam quietas, e os testes abaixo valem do mesmo jeito.
+
 Os passos são cumulativos: cada sketch acrescenta uma ideia ao anterior, e os comentários explicam o porquê de cada escolha. Leia o código antes de gravar.
 
 ## Passo 0: preparar a Arduino IDE
