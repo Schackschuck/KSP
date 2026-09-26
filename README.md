@@ -80,6 +80,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **pygame-ce** no lugar do pygame | O pygame original não tem pacote para o Python 3.14; o pygame-ce, mantido pela comunidade, tem e é usado do mesmo jeito (`import pygame`). |
 | **Pouso por previsão**: simula a freada até o chão e acha o acelerador por bisseção | Com arrasto, a freada não tem conta fechada. Simular funciona igual em qualquer planeta, com ou sem atmosfera, e refazer a conta 20 vezes por segundo corrige os erros da previsão. O arrasto é medido em voo, e a previsão só usa parte dele, porque ele cai quando a nave fica mais lenta que o som. A guiagem não conhece o kRPC, então é testada numa nave simulada. |
 | **Pé da nave medido pelas pernas do trem**, não pela caixa da nave inteira | Nas versões lançadas do kRPC (até a 0.6.0), a caixa de uma peça junta tudo o que está pendurado nela, como a chama do motor ligado. A caixa da nave inteira descia metros abaixo do pé, e a freada terminava alta. |
+| **SAS do KSP aponta a nave no pouso**, não o piloto automático do kRPC | O piloto automático do kRPC vem ajustado para levar 3 s até o ângulo pedido e não conta a força do ar. No segundo teste, a nave caindo de ré balançou até 31° na freada. O SAS o jogo ajusta para cada nave. Retrógrado enquanto a nave desce rápido; devagar, perto do chão, o retrógrado pula de um lado para o outro, então no fim o SAS só segura a atitude. |
 | **ESP32** fica para depois | Candidato a painel sem fio ou módulo extra (fase 8). |
 
 ### Estrutura planejada do repositório
@@ -188,7 +189,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 ### Fase 5 — Protocolo v1 + scripts de voo
 
-**Status: script de pouso escrito, em teste no jogo.** No primeiro teste, em Kerbin, a freada terminou alta e a nave tocou o chão inclinada e tombou. Corrigido: o pé agora é medido pelas pernas do trem, e a nave fica em pé nos últimos metros (falta testar de novo). [`bridge/pouso.py`](bridge/pouso.py) faz a queima de suicídio numa descida vertical, em qualquer planeta, contando o arrasto do ar; roda pela linha de comando enquanto o botão não existe. [`bridge/test_pouso.py`](bridge/test_pouso.py) testa a mesma guiagem numa nave simulada, sem o KSP, em planetas com e sem atmosfera.
+**Status: script de pouso escrito, em teste no jogo.** No primeiro teste, em Kerbin, a freada terminou alta e a nave tocou o chão inclinada e tombou. Corrigido: o pé agora é medido pelas pernas do trem. No segundo teste o pé ficou certo (0,4 m de erro no toque), mas a nave balançou até 31° na freada: o piloto automático do kRPC não segurava a nave. Agora quem aponta a nave é o SAS do KSP (falta testar de novo). [`bridge/pouso.py`](bridge/pouso.py) faz a queima de suicídio numa descida vertical, em qualquer planeta, contando o arrasto do ar; roda pela linha de comando enquanto o botão não existe. [`bridge/test_pouso.py`](bridge/test_pouso.py) testa a mesma guiagem numa nave simulada, sem o KSP, em planetas com e sem atmosfera.
 
 - Migrar para o protocolo binário (COBS + CRC).
 - Chave "ARM" + botão "SUICIDE BURN" que dispara o script de pouso autônomo no computador de bordo.
@@ -259,7 +260,7 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
 - **Por dentro:** controladores PID em duas camadas:
   - a de fora transforma a altitude e o rumo desejados em pitch e inclinação das asas;
   - a de dentro mexe no pitch, roll e yaw da nave (`control.pitch` etc.) para chegar nesse pitch e nessa inclinação.
-  - A decidir: a camada de dentro pode ser o piloto automático do próprio kRPC (`vessel.auto_pilot`) ou um PID próprio.
+  - A decidir: a camada de dentro pode ser o piloto automático do próprio kRPC (`vessel.auto_pilot`) ou um PID próprio. No pouso, o do kRPC não segurou a nave na freada (ver as decisões).
 - **Precisa de:** 4 encoders e displays como os da fase 4. Para começar, só o celular.
 
 **Pronto quando:** um avião decola na mão, e o piloto automático leva ele até a altitude e o rumo escolhidos no painel e segura lá.

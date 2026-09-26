@@ -18,12 +18,17 @@ A cada volta do laço (20 vezes por segundo):
     cada volta: os erros da previsão se corrigem sozinhos no caminho.
  5. Perto do chão, segura a descida em V_TOQUE até a nave pousar.
 
+Quem aponta a nave é o SAS do próprio KSP: retrógrado enquanto a nave desce
+rápido, e segurando a atitude no fim, quando a velocidade fica pequena e o
+retrógrado começa a pular de um lado para o outro.
+
 Uso:
     python pouso.py                  # KSP neste computador
     python pouso.py 192.168.1.10     # KSP em outro computador (ex.: a partir do Pi)
 
 Rode com o motor já ativado (no estágio) e a nave caindo ou subindo num salto.
 O script desce na vertical, onde estiver: não escolhe o lugar do pouso.
+A nave precisa de SAS com o modo retrógrado (piloto ou sonda de nível 1).
 Ctrl+C corta o motor e devolve o controle ao piloto.
 """
 
@@ -39,10 +44,7 @@ V_TOQUE = 2.0           # m/s: velocidade de descida no toque
 ALTURA_FOLGA = 2.0      # m: a freada mira terminar aqui; o resto desce em V_TOQUE
 ALTURA_TOQUE = 10.0     # m: abaixo disso, com a descida já lenta, não desliga mais o motor
 GANHO_TOQUE = 2.0       # 1/s: quanto o motor corrige a velocidade na descida final
-INCLINACAO_MAX = 20.0   # graus: o máximo que o nariz sai da vertical para anular a deriva
-INCLINACAO_TOQUE = 3.0  # graus: o máximo perto do chão, onde a nave tem que tocar em pé
-ALTURA_EM_PE = 100.0    # m: daqui para baixo, o limite cai de INCLINACAO_MAX para INCLINACAO_TOQUE
-VIES_VERTICAL = 5.0     # m/s: puxa a mira para cima quando a nave está quase parada
+V_RETROGRADO = 10.0     # m/s: descendo mais devagar que isso, o SAS para de seguir o retrógrado
 CIMA_MIN = 0.5          # nariz a mais de 60° da vertical: motor desligado até a nave virar
 Q_MIN = 20.0            # Pa: com menos pressão dinâmica que isso, o arrasto medido é só ruído
 SUAVIZACAO = 0.2        # peso de cada medida nova na média da área de arrasto
@@ -52,13 +54,17 @@ AMOSTRAS_ATMOSFERA = 100  # pontos da tabela de densidade do ar
 INTERVALO = 0.05        # s: 20 voltas por segundo
 INTERVALO_LENTO = 1.0   # s: altura do pé e empuxo no chão, que mudam devagar
 INTERVALO_STATUS = 1.0  # s: uma linha de situação no terminal
-INTERVALO_STATUS_PERTO = 0.25  # s: idem, nos últimos ALTURA_EM_PE metros
+INTERVALO_STATUS_PERTO = 0.25  # s: idem, nos últimos ALTURA_PERTO metros
+ALTURA_PERTO = 100.0    # m
 PASCAL_POR_ATM = 101_325
 
 QUEDA = "QUEDA"         # motor desligado, esperando a hora de acender
 QUEIMA = "QUEIMA"       # freando
 TOQUE = "TOQUE"         # descida final, em V_TOQUE
 POUSADA = "POUSADA"
+
+RETROGRADO = "retrógrado"          # modos do SAS pedidos pela guiagem
+ATITUDE = "segurar a atitude"
 
 
 @dataclass
@@ -75,42 +81,12 @@ class Leitura:
     pousada: bool
 
 
-def inclinacao_permitida(altura):
-    """Quanto o nariz pode sair da vertical, em graus, a esta altura do chão.
-
-    Lá em cima, INCLINACAO_MAX, para anular a deriva enquanto a freada é
-    forte. Abaixo de ALTURA_EM_PE o limite vai caindo até INCLINACAO_TOQUE em
-    ALTURA_TOQUE: uma nave alta que toca o chão inclinada, ainda derivando
-    para o lado, tomba.
-    """
-    fracao = (altura - ALTURA_TOQUE) / (ALTURA_EM_PE - ALTURA_TOQUE)
-    fracao = min(max(fracao, 0.0), 1.0)
-    return INCLINACAO_TOQUE + (INCLINACAO_MAX - INCLINACAO_TOQUE) * fracao
-
-
-def mira(velocidade, altura):
-    """Direção para o nariz, nos eixos (cima, norte, leste).
-
-    Contra o movimento (retrógrado), para o motor frear também a deriva para
-    os lados. Mas sempre para cima, e dentro de inclinacao_permitida(altura):
-    com a nave quase parada, o retrógrado puro fica girando à toa, e perto do
-    chão a nave tem que estar em pé.
-    """
-    vc, vn, ve = velocidade
-    cima = max(-vc, 0.0) + VIES_VERTICAL
-    lado = math.hypot(vn, ve)
-    limite = cima * math.tan(math.radians(inclinacao_permitida(altura)))
-    escala = limite / lado if lado > limite else 1.0
-    norte, leste = -vn * escala, -ve * escala
-    tamanho = math.sqrt(cima * cima + norte * norte + leste * leste)
-    return (cima / tamanho, norte / tamanho, leste / tamanho)
-
-
 class Guiagem:
     """Decide o acelerador e a direção a cada leitura.
 
-    Não conhece o kRPC: recebe uma Leitura e devolve números. Assim os testes
-    (test_pouso.py) usam esta mesma guiagem com uma nave simulada.
+    Não conhece o kRPC: recebe uma Leitura e devolve o acelerador e o modo
+    do SAS. Assim os testes (test_pouso.py) usam esta mesma guiagem com uma
+    nave simulada.
     """
 
     def __init__(self, densidade):
@@ -118,9 +94,10 @@ class Guiagem:
         self.fase = QUEDA
         self.area = 0.0              # m²: arrasto / (densidade · v²), medida em voo
         self.necessaria = 0.0        # m/s²: aceleração do motor que a freada precisa agora
+        self._freou = False          # a freada já trouxe a descida abaixo de V_RETROGRADO
 
     def passo(self, l):
-        """Devolve (acelerador de 0 a 1, direção do nariz em (cima, norte, leste))."""
+        """Devolve (acelerador de 0 a 1, modo do SAS: RETROGRADO ou ATITUDE)."""
         self._medir_arrasto(l)
         vc = l.velocidade[0]
         self.necessaria = self._aceleracao_necessaria(l)
@@ -147,7 +124,26 @@ class Guiagem:
             aceleracao = l.g + GANHO_TOQUE * (-V_TOQUE - vc)
         else:
             aceleracao = 0.0
-        return self._acelerador(aceleracao, l), mira(l.velocidade, l.altura)
+        return self._acelerador(aceleracao, l), self._modo(l)
+
+    def _modo(self, l):
+        """Para onde o SAS aponta a nave.
+
+        Descendo rápido, retrógrado: o motor freia contra o movimento e a
+        deriva para os lados some junto. Devagar, o retrógrado fica instável:
+        a 2 m/s de descida, meio metro por segundo de deriva já inclina a mira
+        14°, e o SAS, correndo atrás dela com o motor ligado, cria mais deriva
+        e começa a balançar a nave. Aí o SAS só segura a atitude que a nave
+        tem, quase em pé depois da freada retrógrada.
+
+        Antes da freada (ex.: no alto de um salto, quase parada) também segura
+        a atitude. Depois que a freada deixa a nave devagar, não volta mais ao
+        retrógrado.
+        """
+        descendo_rapido = -l.velocidade[0] >= V_RETROGRADO
+        if self.fase in (QUEIMA, TOQUE) and not descendo_rapido:
+            self._freou = True
+        return RETROGRADO if descendo_rapido and not self._freou else ATITUDE
 
     def _acelerador(self, aceleracao, l):
         """Converte a aceleração vertical desejada em posição do acelerador.
@@ -276,7 +272,7 @@ class NaveKrpc:
 
         # Referencial "híbrido": velocidade em relação ao chão, que gira com o
         # planeta, escrita nos eixos do horizonte local (x = cima, y = norte,
-        # z = leste). O piloto automático recebe a direção nos mesmos eixos.
+        # z = leste). A direção do nariz vem nos mesmos eixos.
         self.referencial = space_center.ReferenceFrame.create_hybrid(
             position=corpo.reference_frame, rotation=nave.surface_reference_frame
         )
@@ -367,6 +363,41 @@ class Avisos:
             self._ativos.discard(chave)
 
 
+class Sas:
+    """O SAS do KSP, que aponta a nave. Só troca o modo quando a guiagem pede outro."""
+
+    def __init__(self, conn, controle):
+        space_center = conn.space_center
+        self._controle = controle
+        self._modos = {
+            RETROGRADO: space_center.SASMode.retrograde,
+            ATITUDE: space_center.SASMode.stability_assist,
+        }
+        self._faltando = set()  # modos que o SAS desta nave não tem
+        self.modo = None
+        controle.sas = True
+        controle.speed_mode = space_center.SpeedMode.surface  # retrógrado em relação ao chão
+
+    def pedir(self, modo):
+        """Troca o modo do SAS. Se a nave não tiver o modo, fica segurando a atitude."""
+        if modo in self._faltando:
+            modo = ATITUDE
+        if modo == self.modo:
+            return
+        try:
+            self._controle.sas_mode = self._modos[modo]
+        except RuntimeError:
+            # O kRPC recusa um modo que a nave não tem. Segurar a atitude
+            # existe em todo SAS.
+            self._faltando.add(modo)
+            print(f"AVISO: o SAS desta nave não tem o modo {modo} (precisa de piloto "
+                  "ou sonda de nível 1); a nave fica segurando a atitude.")
+            self._controle.sas_mode = self._modos[ATITUDE]
+            modo = ATITUDE
+        self.modo = modo
+        print(f"SAS: {modo}")
+
+
 def inclinacao(l):
     """Graus entre o nariz e a vertical."""
     return math.degrees(math.acos(min(max(l.cima, -1.0), 1.0)))
@@ -399,7 +430,6 @@ def pousar(conn, nave):
     guiagem = Guiagem(ler_atmosfera(corpo))
     fonte = NaveKrpc(conn, nave)
     controle = nave.control
-    piloto = nave.auto_pilot
     try:
         l = fonte.ler()
         if l.pousada:
@@ -417,11 +447,8 @@ def pousar(conn, nave):
             print("AVISO: a nave não tem trem de pouso; o pé vem da caixa da nave inteira, "
                   "que no kRPC pode ficar metros abaixo do real (a freada termina alta).")
 
-        controle.sas = False  # o SAS brigaria com o piloto automático
         controle.throttle = 0.0
-        piloto.reference_frame = fonte.referencial  # primeiro o referencial, depois a direção
-        piloto.target_direction = mira(l.velocidade, l.altura)
-        piloto.engage()
+        sas = Sas(conn, controle)
 
         avisos = Avisos()
         fase = None
@@ -429,7 +456,7 @@ def pousar(conn, nave):
         descida = 0.0
         while True:
             l = fonte.ler()
-            acelerador, direcao = guiagem.passo(l)
+            acelerador, modo = guiagem.passo(l)
             if guiagem.fase == POUSADA:
                 # A altura estimada no toque mostra o erro da medida do pé: o
                 # certo é perto de zero.
@@ -438,7 +465,7 @@ def pousar(conn, nave):
                       f"que o pé estava a {l.altura:.1f} m do chão.")
                 break
             controle.throttle = acelerador
-            piloto.target_direction = direcao
+            sas.pedir(modo)
             descida = -l.velocidade[0]
 
             if guiagem.fase != fase:
@@ -460,14 +487,14 @@ def pousar(conn, nave):
             agora = time.monotonic()
             if agora >= proximo_status:
                 print(status(l, guiagem, acelerador))
-                perto = l.altura < ALTURA_EM_PE
+                perto = l.altura < ALTURA_PERTO
                 proximo_status = agora + (INTERVALO_STATUS_PERTO if perto else INTERVALO_STATUS)
             time.sleep(INTERVALO)
     finally:
         try:
             controle.throttle = 0.0
-            piloto.disengage()
             controle.sas = True
+            controle.sas_mode = conn.space_center.SASMode.stability_assist
             fonte.remover()
         except (ValueError, RuntimeError):
             pass  # a nave pode não existir mais

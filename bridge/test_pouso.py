@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from unittest import mock
 
 import pouso
-from pouso import POUSADA, QUEDA, QUEIMA, V_TOQUE, Guiagem, Leitura, mira
+from pouso import ATITUDE, POUSADA, QUEDA, QUEIMA, RETROGRADO, V_TOQUE, Guiagem, Leitura
 
 G0 = 9.80665          # m/s²: a do Isp
 VEL_SOM = 330.0       # m/s
@@ -110,6 +110,7 @@ class Resultado:
     ignicao: float     # m: altura em que o motor acendeu pela primeira vez
     combustivel: float  # kg
     tempo: float       # s
+    modos: list        # modos do SAS pedidos, na ordem em que foram trocados
 
 
 def simular(nave, atraso=1, tempo_max=900.0):
@@ -122,20 +123,23 @@ def simular(nave, atraso=1, tempo_max=900.0):
     fila = []
     acelerador = 0.0
     ignicao = None
+    modos = []
     t = 0.0
     proxima_volta = 0.0
     while t < tempo_max:
         if t >= proxima_volta:
             fila.append(nave.leitura())
             if len(fila) > atraso:
-                acelerador, _ = guiagem.passo(fila.pop(0))
+                acelerador, modo = guiagem.passo(fila.pop(0))
+                if not modos or modos[-1] != modo:
+                    modos.append(modo)
                 if guiagem.fase == QUEIMA and ignicao is None:
                     ignicao = nave.altura
             proxima_volta += pouso.INTERVALO
         nave.avancar(acelerador, PASSO_FISICA)
         t += PASSO_FISICA
         if nave.altura <= 0:
-            return Resultado(-nave.v, ignicao, massa_inicial - nave.massa, t)
+            return Resultado(-nave.v, ignicao, massa_inicial - nave.massa, t, modos)
     raise AssertionError(f"não pousou em {tempo_max:.0f} s (altura {nave.altura:.0f} m)")
 
 
@@ -216,31 +220,27 @@ class TestPouso(unittest.TestCase):
         self.assertEqual(guiagem.fase, POUSADA)
         self.assertEqual(acelerador, 0.0)
 
-    def test_mira(self):
-        # Parada: em pé.
-        self.assertEqual(mira((0.0, 0.0, 0.0), 500.0), (1.0, 0.0, 0.0))
-        # Caindo e derivando para o norte: nariz inclinado para o sul.
-        cima, norte, leste = mira((-100.0, 10.0, 0.0), 500.0)
-        self.assertGreater(cima, 0.99)
-        self.assertLess(norte, 0.0)
-        # Deriva grande lá em cima: no máximo INCLINACAO_MAX fora da vertical.
-        cima, norte, leste = mira((-10.0, 0.0, 50.0), 500.0)
-        self.assertAlmostEqual(math.degrees(math.acos(cima)), pouso.INCLINACAO_MAX)
-        # Subindo: continua apontando para cima, nunca para baixo.
-        self.assertGreater(mira((30.0, 0.0, 0.0), 500.0)[0], 0.99)
+    def test_sas_retrogrado_so_descendo_rapido(self):
+        casos = [
+            (-100.0, RETROGRADO),  # caindo rápido
+            (-1.0, ATITUDE),       # no alto de um salto, quase parada: o retrógrado pula
+            (50.0, ATITUDE),       # subindo: o retrógrado apontaria para baixo
+        ]
+        for velocidade, esperado in casos:
+            with self.subTest(velocidade=velocidade):
+                nave = NaveSimulada(KERBIN, 3_000, velocidade)
+                _, modo = Guiagem(KERBIN.densidade).passo(nave.leitura())
+                self.assertEqual(modo, esperado)
 
-    def test_mira_em_pe_perto_do_chao(self):
-        """Perto do chão a nave fica em pé, mesmo derivando para o lado."""
-        for altura in (0.0, 5.0, pouso.ALTURA_TOQUE):
-            cima, _, _ = mira((-2.0, 3.0, 0.0), altura)
-            self.assertAlmostEqual(math.degrees(math.acos(cima)), pouso.INCLINACAO_TOQUE)
-        # O limite cresce aos poucos com a altura, sem saltos.
-        anterior = pouso.inclinacao_permitida(0.0)
-        for altura in range(0, 200, 5):
-            limite = pouso.inclinacao_permitida(altura)
-            self.assertGreaterEqual(limite, anterior)
-            self.assertLessEqual(limite - anterior, 1.0)
-            anterior = limite
+    def test_sas_nao_volta_ao_retrogrado_depois_da_freada(self):
+        """Depois que a freada deixa a nave devagar, o SAS só segura a atitude até o chão."""
+        for corpo, altura, velocidade, extras in CENARIOS:
+            with self.subTest(corpo=corpo.nome, altura=altura, v=velocidade, **extras):
+                r = simular(NaveSimulada(corpo, altura, velocidade, **extras))
+                self.assertEqual(r.modos[-1], ATITUDE)
+                if RETROGRADO in r.modos:
+                    depois = r.modos[r.modos.index(RETROGRADO):]
+                    self.assertEqual(depois, [RETROGRADO, ATITUDE])
 
 
 if __name__ == "__main__":
