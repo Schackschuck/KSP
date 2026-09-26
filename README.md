@@ -15,6 +15,7 @@ O objetivo principal é **aprender firmware/embarcados e eletrônica**, e de que
           ▼
  Raspberry Pi 4 = computador de bordo ............... bridge/
    • ponte kRPC ⇄ placas
+   • lê o joystick (Logitech Extreme 3D Pro) pela USB
    • tela de telemetria (pygame)
    • tela multifunção no navegador do celular, pelo Wi-Fi (enquanto a placa não fica pronta)
    • dispara os scripts de voo ....................... scripts/
@@ -46,6 +47,7 @@ Cada parte tem um papel bem definido:
 |---|---|---|
 | **KSP + kRPC** (PC) | Expõe o estado da nave e aceita comandos. | — |
 | **Computador de bordo** (Raspberry Pi 4, Python) | Conecta no kRPC pela rede, abre *streams* de telemetria, traduz eventos do painel em comandos do jogo e telemetria em mensagens para o painel. Desenha a tela de telemetria. Dispara os scripts de voo de `scripts/` (ex.: pouso autônomo). | Não lê pino nenhum. |
+| **Joystick** (Logitech Extreme 3D Pro, USB no Pi) | Manda eixos e botões para o computador de bordo, que os traduz em comandos do kRPC. | O KSP não enxerga o joystick: tudo passa pela ponte. |
 | **Painel** (Arduino Mega, C++) | Lê entradas (com debounce), envia eventos; recebe valores e atualiza LEDs, displays e ponteiros. | **Não sabe que o KSP existe.** É um painel de I/O genérico. |
 | **Celular** (opcional, página no navegador) | Mostra a tela multifunção pelo Wi-Fi, com o mesmo protocolo e o mesmo layout, enquanto a mikromedia não tem firmware. | Não fala com o kRPC nem guarda estado: só desenha o que a ponte manda. |
 | **Tela multifunção** (mikromedia for ARM, LPC2148, C sem framework) | Recebe telemetria pelo mesmo protocolo serial, desenha páginas (atitude, órbita, pouso), troca de página pelo touch e toca alarmes sonoros. | Não fala com o kRPC; só mostra o que o computador de bordo manda. |
@@ -83,6 +85,9 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Pé da nave medido pelas pernas do trem**, não pela caixa da nave inteira | Nas versões lançadas do kRPC (até a 0.6.0), a caixa de uma peça junta tudo o que está pendurado nela, como a chama do motor ligado. A caixa da nave inteira descia metros abaixo do pé, e a freada terminava alta. |
 | **SAS do KSP aponta a nave no pouso**, não o piloto automático do kRPC | O piloto automático do kRPC vem ajustado para levar 3 s até o ângulo pedido e não conta a força do ar. No segundo teste, a nave caindo de ré balançou até 31° na freada. O SAS o jogo ajusta para cada nave. Retrógrado enquanto a nave desce rápido; devagar, perto do chão, o retrógrado pula de um lado para o outro, então no fim o SAS só segura a atitude. |
 | **Scripts de voo numa pasta própria** (`scripts/`), fora da ponte | Cada script roda sozinho pela linha de comando, no PC ou no Pi, com ou sem o cockpit. A ponte só dispara o script quando o botão do painel é apertado; o script não depende dela nem do painel. |
+| **Joystick Logitech Extreme 3D Pro** na USB do Pi, lido pela ponte | Já está em casa e tem 3 eixos, acelerador, 12 botões e um chapéu. Passando pela ponte, dá para ter zona morta, troca entre girar e transladar, e saber quando o piloto mexe no manche para tirar o controle de um script. Não precisa abrir o joystick. |
+| **Korry switches** (botões iluminados com legenda, de avião) nos sistemas que o jogo também muda | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: corpo impresso em 3D e tampa de acrílico cortada a laser. Quais chaves viram korry: a decidir. |
+| **Caixa em MDF cortado a laser, com peças impressas em 3D** | A laser do colégio faz as peças planas e grandes (paredes, painéis com legendas); a impressora de casa, as pequenas e complicadas (korry, knobs, suportes). Cada seção é um painel removível com o seu módulo atrás. |
 | **ESP32** fica para depois | Candidato a painel sem fio ou módulo extra (fase 8). |
 
 ### Estrutura planejada do repositório
@@ -95,6 +100,7 @@ firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
 firmware/passos/  sketches de aprendizado, um por passo da fase 1
 firmware/mfd/     mikromedia for ARM / LPC2148 (C, GCC e make)
 hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa; ver hardware/README.md
+                  e hardware/construcao.md (carcaça, aparência, korry switches, joystick)
 docs/             protocolo serial, pinagem, anotações
 ```
 
@@ -154,14 +160,15 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 ### Fase 2 — Painel de controle
 
-**Status: em andamento.** Chaves, botões e LEDs estão prontos para montar: pinagem, código e testes em [docs/fase2.md](docs/fase2.md). Joystick e acelerador aguardam o hardware.
+**Status: em andamento.** Chaves, botões e LEDs estão prontos para montar: pinagem, código e testes em [docs/fase2.md](docs/fase2.md). O joystick e o acelerador serão o Logitech Extreme 3D Pro, que já está em casa; falta o código na ponte.
 
 - Chaves para SAS, RCS, trem de pouso, luzes e freios; STAGE e ABORT com capa de proteção. Depois, action groups.
 - A posição da chave é o estado desejado (para cima = ligado); o LED de cada sistema mostra o estado no jogo.
 - **Painel em módulos:** cada seção vira uma placa, ligada por cabo flat a um backplane de 12 slots no Mega. A placa pequena tem 8 entradas e 8 LEDs (1 × 74HC165 + 1 × 74HC595); a média, 16 e 16 (2 + 2); a grande, 24 e 16 (3 + 2). Os LEDs só mostram o que vem do jogo: nenhum é ligado a um botão. Cada módulo tem uma etiqueta numa chave DIP, e o Mega descobre sozinho o que está encaixado. Esquemáticos, etiquetas e qual placa vai em cada seção em [hardware/](hardware/README.md).
 - Enquanto o primeiro módulo não fica pronto, os controles básicos continuam direto nos pinos do Mega, como em [docs/fase2.md](docs/fase2.md).
 - Próximo passo: o firmware do Mega lendo a fila de módulos pelas etiquetas, e testar o primeiro módulo direto no Mega.
-- Joystick de 3 eixos + potenciômetro deslizante para o acelerador (aguardando o hardware).
+- **Joystick:** o Logitech Extreme 3D Pro, na USB do Pi, lido pela ponte e mandado ao jogo pelo kRPC. O acelerador é a alavanca da base dele. Mapeamento proposto em [hardware/construcao.md](hardware/construcao.md#joystick-logitech-extreme-3d-pro).
+- **Korry switches** (ideia): botões iluminados com legenda, como nos aviões, para SAS, RCS, luzes e outros sistemas. Um primeiro korry pode ser testado direto no Mega. Como fazer em [hardware/construcao.md](hardware/construcao.md#korry-switches).
 
 **Pronto quando:** dá para lançar e colocar um foguete em órbita usando só o painel.
 
@@ -223,7 +230,7 @@ Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de fla
 ### Fase 7 — Hardware definitivo
 
 - PCB no **KiCad** a partir dos esquemáticos de [hardware/](hardware/README.md): uma placa de módulo, fabricada em quantidade, e o backplane. Fabricação na JLCPCB, PCBWay…
-- Caixa impressa em 3D ou MDF cortado a laser, painel com legendas, Pi e mikromedia embutidos.
+- Caixa em MDF cortado a laser (no colégio), com peças impressas em 3D (em casa): um painel removível por seção, legendas gravadas, korry switches, Pi e mikromedia embutidos. Formato, aparência e ordem para construir em [hardware/construcao.md](hardware/construcao.md).
 
 ### Fase 8 — Embarcados avançado (opcional)
 
@@ -334,6 +341,9 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [ ] Ferro de solda com controle de temperatura + estanho + malha dessoldadora
 - [ ] Multímetro
 - [ ] Alicate de corte e decapador de fios
+- [x] Impressora 3D (em casa)
+- Corte a laser: no colégio
+- [ ] Paquímetro (para medir as peças antes de desenhar os furos dos painéis)
 
 ### Fases 0–1 — Kit inicial
 
@@ -358,8 +368,9 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [ ] Por módulo médio (5 no painel): 3× 74HC165, 2× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 16× resistor 1 kΩ, 5× capacitor 100 nF, 1× capacitor 10 µF, 5 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
 - [ ] Por módulo grande (1 no painel): 4× 74HC165, 2× 74HC595, 4× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 16× resistor 1 kΩ, 6× capacitor 100 nF, 1× capacitor 10 µF, 6 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
 - [ ] Backplane: 12× conector IDC 2x8, 5× resistor 47 Ω, 13× resistor 10 kΩ, capacitores de 470 µF e 100 nF, borne de 2 vias e jumper de 3 pinos
-- [ ] 1× joystick de 3 eixos (ou módulo de 2 eixos KY-023 para começar)
-- [ ] 1× potenciômetro deslizante 10 kΩ linear, curso ≥ 60 mm
+- [x] Joystick: Logitech Extreme 3D Pro (3 eixos + acelerador, na USB do Pi)
+- [ ] 1× potenciômetro deslizante 10 kΩ linear, curso ≥ 60 mm (opcional: só para uma alavanca de acelerador própria)
+- [ ] Por korry switch: 1 botão tátil 12 × 12 mm ou microswitch e 2 LEDs de alto brilho de 3 mm (verde e âmbar); corpo impresso, tampa de acrílico leitoso de 3 mm
 - [ ] Placas perfuradas + barras de pinos (headers)
 
 ### Fase 3 — Tela de telemetria
@@ -388,7 +399,9 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 
 - [ ] PCBs fabricadas
 - [ ] Conectores JST/dupont, parafusos e espaçadores M3
-- [ ] Material da caixa (filamento ou MDF 3 mm)
+- [ ] Material da caixa: MDF 3 mm e acrílico 3 mm (preto ou branco leitoso) para a laser, filamento PLA, primer e tinta spray fosca
+- [ ] Insertos roscados M3 (colocados a quente nas peças impressas) e pés de borracha
+- [ ] Extensão USB de painel (para o joystick) e ventoinha 5 V de 40 mm (para o Pi dentro da caixa)
 
 ---
 

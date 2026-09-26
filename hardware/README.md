@@ -9,6 +9,8 @@ Esquemáticos do painel, feitos no KiCad. Cada pasta tem também um PDF do esque
 | [`modulo_grande/`](modulo_grande/) | Módulo grande: 24 entradas e 16 LEDs ([PDF](modulo_grande/modulo_grande.pdf)) | etiqueta + 3 × 74HC165, 2 × 74HC595 |
 | [`backplane/`](backplane/) | Backplane: liga até 12 módulos ao Mega ([PDF](backplane/backplane.pdf)) | — |
 
+A parte física (carcaça, aparência, korry switches e o lugar do joystick) está em [construcao.md](construcao.md).
+
 As três placas de módulo usam o mesmo cabo flat e encaixam em qualquer slot. Cada uma tem uma **etiqueta**, um 74HC165 a mais ligado a uma chave DIP de 8 vias: é por ela que o Mega descobre sozinho qual módulo está em cada slot.
 
 ## Como abrir
@@ -127,6 +129,8 @@ Assim, não existe tabela de slots no firmware. O Mega avisa a ponte qual módul
 | Editor de manobras | 17 | 0 | grande | 12 | 3, 4, 7, 8 |
 
 São 6 pequenas, 5 médias e 1 grande, que ocupam os 12 slots. As seções da primeira linha ficam longe uma da outra no painel, mas podem dividir uma placa: os fios dos botões até a placa podem ter uns 30 cm.
+
+A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e as seções analógicas podem ficar só com botões e LEDs. Os korry switches também gastam mais LEDs que entradas. Ver [construcao.md](construcao.md#a-decidir).
 
 ## No módulo
 
