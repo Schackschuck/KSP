@@ -80,7 +80,7 @@ No **celular** (`bridge/mfd_celular.py`), as mesmas linhas vão por HTTP, pelo W
 
 | Mensagem | Direção | Marcadores | Frequência |
 |---|---|---|---|
-| `ATT <pitch> <rumo> <rolagem>` | pitch de -900 a 900; rumo de 0 a 3599 (0 = norte, 900 = leste); rolagem de -1800 a 1800 | A bola, a fita de rumo e a caixa com o rumo | 20 por segundo |
+| `ATT <pitch> <rumo> <rolagem>` | pitch de -900 a 900; rumo de 0 a 3599 (0 = norte, 900 = leste); rolagem de -1800 a 1800 | A bola e os números do rumo e do pitch pintados nela | 20 por segundo |
 | `PRO <p> <r>` ou `PRO OFF` | Do movimento, no modo da navball. `OFF` com a nave parada (menos de 0,5 m/s) | Pró-grado e retrógrado, em amarelo | 10 por segundo |
 | `NRM <p> <r>` ou `NRM OFF` | Normal à órbita (numa órbita para leste, aponta para o norte). `OFF` no modo `ALVO`, parado ou andando na vertical | Normal e antinormal, em roxo | 10 por segundo |
 | `RDL <p> <r>` ou `RDL OFF` | Radial para fora: perpendicular ao movimento, do lado de fora do planeta. `OFF` como o `NRM` | Radial para fora e para dentro, em ciano | 10 por segundo |
@@ -94,9 +94,8 @@ No **celular** (`bridge/mfd_celular.py`), as mesmas linhas vão por HTTP, pelo W
 | `ALT <metros>` | Acima do nível do mar | Caixa `ALT` | 10 por segundo |
 | `RAD <metros>` | Acima do chão, ou do mar se ele estiver mais perto. Vai no lugar do `ALT` perto do chão | Caixa `RADAR` | 10 por segundo |
 | `VEL <décimos de m/s>` | Velocidade no modo da navball | Caixa da velocidade | 10 por segundo |
-| `VV <décimos de m/s>` | Velocidade vertical: positiva subindo, negativa descendo. Em todo modo | Barra da direita; número no painel, no modo `SUP` | 10 por segundo |
+| `VV <décimos de m/s>` | Velocidade vertical: positiva subindo, negativa descendo. Em todo modo | Barra da direita | 10 por segundo |
 | `ACEL <0 a 100>` | Acelerador, em % | Barra da esquerda | 10 por segundo |
-| `VH <décimos de m/s>` | Velocidade horizontal. Só no modo `SUP` | Painel: `V HOR` | 10 por segundo |
 | `DIST <metros>` ou `DIST OFF` | Distância até o alvo. Só no modo `ALVO` | Painel: `DIST` | 10 por segundo |
 | `AP <metros>` ou `AP OFF` | `OFF` numa trajetória de escape, que não tem apoastro. Só no modo `ORB` | Painel: `AP` | 2 por segundo |
 | `PE <metros>` ou `PE OFF` | Negativo quando a órbita passa por dentro do planeta. Só no modo `ORB` | Painel: `PE` | 2 por segundo |
@@ -111,7 +110,7 @@ Distâncias e tempos são inteiros de 32 bits. Acima de 2,1 milhões de km, o qu
 - **Marcadores a 10 por segundo, atitude a 20.** Os marcadores são direções fixas no mundo, que mudam devagar; quem faz eles andarem na bola é a atitude da nave. A tela reprojeta todos a cada `ATT`.
 - **Sinal.** Se a tela passar **1 s** sem receber nenhuma mensagem válida, mostra `SEM SINAL` na navball, `---` nos números, esvazia as barras e apaga os botões. O `ALT` (ou o `RAD`), que vai 10 vezes por segundo, serve de "estou vivo". Fora da cena de voo a ponte não manda nada, então a tela também mostra `SEM SINAL`.
 - **O botão mostra o estado do jogo, não o toque**, como os LEDs do painel. `TOQUE SAS` faz a ponte inverter o SAS, e o botão só fica verde quando o jogo confirma. Se a nave não tem SAS, o botão continua apagado, e está certo.
-- **O que depende do modo.** Altitude, `VEL`, as duas barras e os marcadores aparecem sempre. O painel de baixo mostra `V VERT` e `V HOR` no `SUP`; `AP` e `PE` com o tempo até cada um no `ORB`; `DIST` no `ALVO`. Normal e radial não existem no `ALVO`. Quando o `MODO` muda, a tela apaga os números do modo antigo e os marcadores pró-grado, normal e radial, e a ponte manda os novos na mesma hora, logo depois do `MODO`.
+- **O que depende do modo.** Altitude, `VEL`, as duas barras e os marcadores aparecem sempre. O painel de baixo mostra `AP` e `PE` com o tempo até cada um no `ORB` e `DIST` no `ALVO`; no `SUP` ele não aparece, porque a velocidade vertical já está na barra. Normal e radial não existem no `ALVO`. Quando o `MODO` muda, a tela apaga os números do modo antigo e os marcadores pró-grado, normal e radial, e a ponte manda os novos na mesma hora, logo depois do `MODO`.
 - **Altitude pelo radar.** A ponte manda `RAD` no lugar de `ALT` quando o radar fica abaixo de 5 km, e só volta ao `ALT` acima de 5,5 km. Essa folga evita ficar trocando quando o terreno sobe e desce perto do limite.
 - **O modo é da ponte**, e ela troca sozinha como a navball do KSP:
   - `ORB` quando a nave sobe acima de 6% do raio do planeta (36 km em Kerbin), e `SUP` quando desce abaixo de 5,5% (33 km);

@@ -4,7 +4,7 @@
 
 A mikromedia for ARM ainda não tem firmware: é a fase 6 do [roteiro](../README.md#fase-6--tela-multifunção-mikromedia-for-arm). Enquanto isso, a tela roda num **simulador**, uma janela de 320x240 no PC que fala exatamente o protocolo que a placa vai falar. A ponte (`mfd.py`) não sabe se do outro lado está o simulador ou a placa. Quando o firmware existir, basta trocar a janela pela porta serial, e o simulador vira a referência do que o firmware tem que desenhar.
 
-![O simulador em órbita: navball no centro com a fita de rumo no aro e os marcadores, velocidade e altitude nas laterais, acelerador e velocidade vertical nas bordas, AP e PE embaixo](img/mfd_simulador.png)
+![O simulador em órbita: navball no centro com os números do rumo e do pitch e os marcadores, velocidade e altitude nas laterais, acelerador e velocidade vertical nas bordas, AP e PE embaixo](img/mfd_simulador.png)
 
 ## O que já se sabe da placa
 
@@ -39,9 +39,9 @@ O **pygame-ce** é a versão do pygame mantida pela comunidade, e o código usa 
 
 ## O que a tela mostra
 
-O layout se inspira na navball do KSP2: a bola no centro, cercada por um aro com a fita de rumo.
+O layout se inspira na navball do KSP2: a bola no centro, cercada por um aro escuro.
 
-- **Em cima:** o rumo numa caixa e, no aro, a fita de rumo com traços a cada 10° e números a cada 30°. N, L, S e O ficam em vermelho.
+- **Números na navball:** o rumo a cada 30°, logo acima do horizonte (N, 30, 60, L, 120...), e o pitch a cada 30° (60, 30, -30, -60), ao lado dos meridianos de N, L, S e O. Eles ficam sempre de pé, sem girar com a bola, e somem perto da borda.
 - **Navball:** o "W" laranja no centro é para onde o nariz aponta. Os marcadores têm as cores do KSP, e cada um tem o seu oposto do outro lado da bola:
 
   | Cor | Marcador | Oposto |
@@ -57,11 +57,11 @@ O layout se inspira na navball do KSP2: a bola no centro, cercada por um aro com
 - **Barra da esquerda:** o acelerador, de 0 a 100%.
 - **Barra da direita:** a velocidade vertical, com o zero no meio e escala logarítmica (±10, ±100 e ±1000 m/s nas marcas e nas pontas). Verde subindo, amarela descendo devagar e vermelha descendo a mais de 10 m/s.
 - **Botões redondos RCS e SAS**, embaixo da bola: verde quando o sistema está ligado **no jogo**. Tocar liga ou desliga.
-- **Painel de baixo:** muda com o modo.
+- **Painel de baixo:** muda com o modo, e no `SUP` não aparece, porque a velocidade vertical já está na barra.
 
   | Modo | Velocidade, pró-grado, normal e radial em relação a | Painel de baixo |
   |---|---|---|
-  | `SUP` | Superfície | `V VERT` e `V HOR` |
+  | `SUP` | Superfície | — |
   | `ORB` | Órbita | `AP` e `PE`, com o tempo até cada um |
   | `ALVO` | Alvo (normal e radial não aparecem) | `DIST`, a distância até o alvo |
 
@@ -78,7 +78,7 @@ A nave de mentira desce até perto do chão e sobe até 55 km a cada 2 minutos. 
 
 | Você faz | Resultado esperado |
 |---|---|
-| Roda o comando | A janela abre. A navball gira devagar, sobe, desce e rola, a fita de rumo corre no aro, e os números e as barras mudam. |
+| Roda o comando | A janela abre. A navball gira devagar, sobe, desce e rola, com os números do rumo e do pitch andando junto, e os números das caixas e as barras mudam. |
 | Espera | `ALT` vira `RADAR` perto do chão. O modo passa sozinho para `ORB` acima de 36 km e volta para `SUP` abaixo de 33 km, e o painel de baixo muda junto. Quando o alvo aparece, vai para `ALVO`, com `DIST` e os marcadores rosa; quando o alvo some, volta. O marcador azul da manobra aparece e some. O terminal mostra cada troca. |
 | Clica em **SAS** | O terminal mostra `SAS: ligar` e o botão fica verde. Outro clique apaga. |
 | Clica em **RCS** | Igual ao SAS |
@@ -130,7 +130,7 @@ A ponte do painel (`ponte.py`) pode rodar ao mesmo tempo, em outro terminal: o k
 **Pronto quando:**
 
 - [x] Na plataforma, a navball da janela fica igual à do jogo: o centro no azul, olhando para cima.
-- [x] **Pitch** (W/S), **yaw** (A/D) e **roll** (Q/E): a navball da janela gira igual à do jogo, e o `RUMO` bate com o rumo do jogo.
+- [x] **Pitch** (W/S), **yaw** (A/D) e **roll** (Q/E): a navball da janela gira igual à do jogo.
 - [x] O pró-grado da janela fica no mesmo lugar que o do jogo.
 - [x] **SAS** e **RCS:** tocar o botão liga e desliga no jogo, e as teclas **T** e **R** mudam a cor do botão.
 - [x] Voltar ao KSC mostra `SEM SINAL`. Lançar outra nave faz a tela voltar sozinha.
@@ -144,7 +144,7 @@ A ponte do painel (`ponte.py`) pode rodar ao mesmo tempo, em outro terminal: o k
 - [ ] A barra do **acelerador** acompanha as teclas **Shift** e **Ctrl** (e **Z** e **X**).
 - [ ] A barra da **velocidade vertical** fica verde na subida e amarela ou vermelha na descida.
 - [ ] O tempo até o `AP` e o `PE` bate com o do mapa.
-- [ ] A **fita de rumo** mostra o rumo maior à direita, e a caixa em cima bate com o rumo do jogo.
+- [ ] Os **números na navball** (rumo e pitch) ficam nos mesmos lugares que os da navball do jogo.
 
 ## Problemas comuns
 
