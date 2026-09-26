@@ -23,10 +23,17 @@ O objetivo principal é **aprender firmware/embarcados e eletrônica**, e de que
  Arduino Mega = I/O do painel     mikromedia (LPC2148) = tela multifunção
  firmware/painel/                 firmware/mfd/
           ▲
-          │  pinos, I2C, SPI
+          │  SPI + linhas analógicas
           ▼
- Painel: chaves, LEDs, joystick,
- displays de 7 segmentos, ponteiros
+ Backplane: 12 slots ................................ hardware/backplane/
+          ▲
+          │  um cabo flat de 16 vias por módulo
+          ▼
+ Módulos do painel, um por seção .................... hardware/modulo/
+   cada um: 24 entradas (3 × 74HC165) + 16 LEDs (2 × 74HC595)
+   chaves, botões, LEDs, joysticks, acelerador
+
+ Instrumentos (fase 4): displays, ponteiros e fita de LED, direto no Mega
 ```
 
 Cada parte tem um papel bem definido:
@@ -61,6 +68,8 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Python** na ponte | Já usado com kRPC antes; o mesmo código roda no PC e no Pi. |
 | **Raspberry Pi 4** como computador de bordo | Deixa o cockpit independente do PC (só um cabo de rede) e pode ligar uma tela colorida grande. A compra dessa tela foi adiada — decidir depois. |
 | **Arduino Mega** para o I/O | O Pi não tem entradas analógicas e o Linux não é tempo real; o Mega tem muitos pinos, trabalha em 5V e é compatível com praticamente todo módulo. |
+| **Painel em módulos** com 74HC165 e 74HC595, ligados ao Mega por um backplane | Cada seção do painel é uma placa igual, montada e testada uma de cada vez. Os CIs custam poucos reais por módulo, o firmware continua um só e o protocolo com a ponte não muda. Um micro em cada módulo fica para a fase 8. |
+| Pinos do Raspberry Pi **não** substituem o Mega | O Pi não tem entradas analógicas, o Linux não é tempo real para encoders e ponteiros, e os pinos de 3,3 V vão direto ao processador: um fio errado nos 5 V queima o Pi. |
 | **mikromedia for ARM (LPC2148)** como tela multifunção | Já está na bancada. ARM programado sem framework, com tela touch, microSD e áudio. Entra depois do protocolo v1, que ela também usa. |
 | **ESP32** fica para depois | Candidato a painel sem fio ou módulo extra (fase 8). |
 
@@ -71,7 +80,7 @@ bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de 
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
 firmware/passos/  sketches de aprendizado, um por passo da fase 1
 firmware/mfd/     mikromedia for ARM / LPC2148 (C, GCC e make)
-hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa
+hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa; ver hardware/README.md
 docs/             protocolo serial, pinagem, anotações
 ```
 
@@ -135,7 +144,9 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 - Chaves para SAS, RCS, trem de pouso, luzes e freios; STAGE e ABORT com capa de proteção. Depois, action groups.
 - A posição da chave é o estado desejado (para cima = ligado); o LED de cada sistema mostra o estado no jogo.
-- Tudo direto nos pinos do Mega, que sobram para esta fase. Shift registers (74HC165 para entradas, 74HC595 para LEDs) **ou** MCP23017 (I2C) ficam para quando os pinos acabarem. Opcional: matriz de botões com diodos.
+- **Painel em módulos:** cada seção vira uma placa igual, com 24 entradas (3 × 74HC165) e 16 LEDs (2 × 74HC595), ligada por cabo flat a um backplane de 12 slots no Mega. Esquemáticos em [hardware/](hardware/README.md).
+- Enquanto o primeiro módulo não fica pronto, os controles básicos continuam direto nos pinos do Mega, como em [docs/fase2.md](docs/fase2.md).
+- Próximo passo: o firmware do Mega lendo a cadeia de CIs, e montar o backplane com o primeiro módulo.
 - Joystick de 3 eixos + potenciômetro deslizante para o acelerador (aguardando o hardware).
 
 **Pronto quando:** dá para lançar e colocar um foguete em órbita usando só o painel.
@@ -157,7 +168,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
   - 4 encoders: pró-grado, normal, radial e tempo (mover o nó ao longo da órbita). Apertar o encoder troca o passo: 0,1 / 1 / 10 / 100 m/s por clique.
   - Botões NOVO, APAGAR, AP e PE (levar o nó ao apoastro ou ao periastro) e CIRC (nó de circularização no apoastro, com o Δv calculado pela ponte).
   - O LCD mostra Δv, tempo de queima, T− até o nó e o Ap/Pe resultante.
-  - Encoders lidos **por interrupção** (externa ou *pin change*): redesenhar o LCD trava o laço por ~20 ms, e o *polling* perderia cliques. O painel acumula os cliques e manda `ENC <nome> <cliques>`.
+  - Encoders lidos pela mesma cadeia de 74HC165 dos módulos: o Mega lê a cadeia inteira mil vezes por segundo numa **interrupção de timer**, e assim o redesenho do LCD (~20 ms) não faz perder cliques. O painel acumula os cliques e manda `ENC <nome> <cliques>`.
 - Barra de combustível com LEDs WS2812.
 - Ponteiro analógico com motor de passo X27.168.
 - Fonte 5V externa (a USB não aguenta muitos LEDs).
@@ -191,7 +202,7 @@ Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de fla
 
 ### Fase 7 — Hardware definitivo
 
-- Esquemático e PCB no **KiCad**; fabricação (JLCPCB, PCBWay…).
+- PCB no **KiCad** a partir dos esquemáticos de [hardware/](hardware/README.md): uma placa de módulo, fabricada em quantidade, e o backplane. Fabricação na JLCPCB, PCBWay…
 - Caixa impressa em 3D ou MDF cortado a laser, painel com legendas, Pi e mikromedia embutidos.
 
 ### Fase 8 — Embarcados avançado (opcional)
@@ -233,9 +244,8 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [x] 10–15× chaves alavanca (toggle) ON-OFF
 - [x] 2–3× capas de proteção para chave ("missile switch cover")
 - [x] 4–6× botões arcade (24 ou 30 mm), de preferência com LED
-- [ ] 3× 74HC165 + 3× 74HC595 **ou** 2× MCP23017 (só quando os pinos do Mega acabarem)
-- [ ] Capacitores cerâmicos de 100 nF (desacoplamento, um por CI; junto com os CIs acima)
-- [ ] Diodos 1N4148 (se fizer matriz de botões)
+- [ ] Por módulo: 3× 74HC165, 2× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 16× resistor 1 kΩ, 5× capacitor 100 nF, 1× capacitor 10 µF, soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
+- [ ] Backplane: 12× conector IDC 2x8, 5× resistor 47 Ω, 12× resistor 10 kΩ, capacitores de 470 µF e 100 nF, borne de 2 vias e jumper de 3 pinos
 - [ ] 1× joystick de 3 eixos (ou módulo de 2 eixos KY-023 para começar)
 - [ ] 1× potenciômetro deslizante 10 kΩ linear, curso ≥ 60 mm
 - [ ] Placas perfuradas + barras de pinos (headers)
