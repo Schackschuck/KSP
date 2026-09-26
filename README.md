@@ -82,11 +82,14 @@ Cada fase termina com algo funcionando de ponta a ponta. Não pule o critério d
 
 ### Fase 0 — Ambiente
 
+**Status: concluída.** Passo a passo detalhado e problemas encontrados em [docs/setup-pi.md](docs/setup-pi.md).
+
 **No PC:**
 
 - Instalar KSP 1.12.x e o **kRPC** (via CKAN ou manualmente).
 - No jogo, abrir a janela do kRPC e iniciar o servidor (dica: ativar *auto-start* e *auto-accept* nas configurações).
-- Nas configurações do servidor, trocar o endereço de `localhost` para aceitar conexões da rede, e liberar no firewall do Windows as portas do kRPC (padrão: 50000 e 50001).
+- Nas configurações do servidor, trocar o endereço de `localhost` para **Any** (aceitar conexões da rede), e liberar no firewall do Windows as portas do kRPC (padrão: 50000 e 50001).
+- Marcar a rede do Windows como **Privada**; em rede Pública o Windows bloqueia a conexão do Pi.
 - Instalar Python 3, `pip install krpc pyserial` e a Arduino IDE 2 (ou PlatformIO no VS Code).
 - Se a placa for clone com chip CH340, instalar o driver CH340 no Windows.
 
@@ -109,6 +112,8 @@ while True:
     print(f"{altitude():,.0f} m")
     time.sleep(0.1)
 ```
+
+Versão completa, que recebe o IP como argumento, espera a cena de voo e explica os erros de conexão: [`bridge/fase0_altitude.py`](bridge/fase0_altitude.py).
 
 **Pronto quando:** o script roda **no Pi** e imprime a altitude ao vivo enquanto o foguete sobe no PC.
 
