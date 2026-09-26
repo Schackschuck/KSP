@@ -1,6 +1,6 @@
 # Fase 2: painel de controle
 
-**Esta etapa:** chaves de SAS, RCS, trem de pouso, luzes e freios, botões STAGE e ABORT, e um LED de estado por chave, tudo direto nos pinos do Mega. Joystick e acelerador entram numa próxima etapa, quando o hardware chegar.
+**Esta etapa:** chaves de SAS, RCS, trem de pouso, luzes e freios, botões STAGE e ABORT, e um LED de estado por chave, tudo direto nos pinos do Mega. Joystick e acelerador entram numa próxima etapa: serão o Logitech Extreme 3D Pro, na USB do Pi ([hardware/construcao.md](../hardware/construcao.md#joystick-logitech-extreme-3d-pro)).
 
 **Pronto quando:** cada chave comanda o seu sistema no jogo, os LEDs acompanham o jogo (inclusive quando algo muda pelo teclado) e STAGE e ABORT funcionam pelo painel.
 
