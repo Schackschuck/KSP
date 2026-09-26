@@ -69,6 +69,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 ```
 bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de telemetria, scripts de voo
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
+firmware/passos/  sketches de aprendizado, um por passo da fase 1
 firmware/mfd/     mikromedia for ARM / LPC2148 (C, GCC e make)
 hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa
 docs/             protocolo serial, pinagem, anotações
@@ -119,8 +120,10 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 ### Fase 1 — Primeiro circuito fechado
 
-- Mega ligado no Pi (ou no PC) pela USB.
-- 1 botão (STAGE), 1 LED (SAS) e a altitude num LCD 16x2/20x4 que você já tenha (é só para o teste).
+Roteiro passo a passo, montagem e testes: [docs/fase1.md](docs/fase1.md). Protocolo: [docs/protocolo.md](docs/protocolo.md).
+
+- Mega ligado no PC pela USB durante o desenvolvimento; no fim, no Pi.
+- 1 botão (STAGE), 1 LED (SAS) e a altitude num LCD 20x4 com módulo I2C.
 - Protocolo **v0 (texto)**.
 - Aprende: pull-up, debounce, leitura/escrita serial, laço principal sem `delay()`.
 
