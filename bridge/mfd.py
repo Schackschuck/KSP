@@ -24,12 +24,15 @@ import serial
 from ponte import Painel, conectar_krpc, esperar_nave
 
 INTERVALO_ATITUDE = 0.05  # s: navball 20 vezes por segundo
+INTERVALO_MARCADORES = 0.1  # s: as direções dos marcadores no mundo mudam devagar
 INTERVALO_NUMEROS = 0.1   # s: altitude e velocidade; também servem de "estou vivo"
 INTERVALO_ORBITA = 0.5    # s: apoastro e periastro mudam devagar
 REENVIO_ESTADOS = 1.0     # s: reenvia os estados mesmo sem mudança, por segurança
 VERIFICA_NAVE = 1.0       # s: de quanto em quanto tempo conferir se a nave ou o planeta mudou
 VEL_MIN_MARCADOR = 0.5    # m/s: abaixo disso a direção do movimento é só ruído
 DIST_MIN_MARCADOR = 1.0   # m: mais perto que isso (acoplado), o marcador do alvo não faz sentido
+QUEIMA_MIN_MARCADOR = 0.1  # m/s: queima do nó de manobra que já acabou
+SENO_MIN_MARCADOR = 0.01  # normal e radial somem quando a nave anda na vertical (0,6°)
 INT32_MAX = 2**31 - 1     # a placa guarda os números em inteiros de 32 bits
 
 # Perto do chão, a altitude passa a ser a do radar (acima do chão, ou do mar).
@@ -60,10 +63,15 @@ class Telemetria:
     altitude: float       # m acima do nível do mar
     radar: float          # m acima do chão, ou do mar se ele estiver mais perto
     raio_planeta: float   # m
+    posicao: tuple        # (cima, norte, leste) da nave em relação ao centro do planeta, em m
     apoastro: float       # m; None numa trajetória de escape
     periastro: float      # m
+    tempo_apoastro: float   # s até o apoastro; None numa trajetória de escape
+    tempo_periastro: float  # s até o periastro
+    acelerador: float     # de 0 a 1
     alvo: str             # nome do alvo escolhido no jogo; None sem alvo
     posicao_alvo: tuple   # (cima, norte, leste) do alvo em relação à nave, em m
+    manobra: tuple        # (cima, norte, leste) da queima que falta no próximo nó, em m/s; None sem nó
     sistemas: dict        # {"SAS": True, "RCS": False}
 
 
@@ -84,8 +92,46 @@ def metros(valor):
     return str(round(valor))
 
 
+def segundos(valor):
+    if valor is None or not math.isfinite(valor):
+        return "OFF"
+    return str(inteiro32(max(0.0, valor)))
+
+
 def modulo(vetor):
     return math.sqrt(sum(c * c for c in vetor))
+
+
+def _vetorial(a, b):
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+def normal_e_radial(posicao, velocidade):
+    """Direções normal e radial para fora, em (cima, norte, leste), unitárias
+    vezes o seno do ângulo entre a posição e a velocidade.
+
+    Normal: perpendicular ao plano da órbita, do lado de onde a nave parece
+    girar no sentido anti-horário. Numa órbita para leste, aponta para o norte.
+    Radial para fora: no plano da órbita, perpendicular ao movimento, do lado
+    de fora do planeta.
+
+    O produto vetorial só dá o sentido certo em eixos "destros", e
+    (cima, norte, leste) não é: a conta é feita em (leste, norte, cima).
+    Quando a nave anda na vertical, posição e velocidade ficam alinhadas e o
+    resultado tende a zero: não existe plano da órbita.
+    """
+    tamanho = modulo(posicao) * modulo(velocidade)
+    if tamanho == 0:
+        return (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
+    r = (posicao[2], posicao[1], posicao[0])
+    v = (velocidade[2], velocidade[1], velocidade[0])
+    normal = tuple(c / tamanho for c in _vetorial(r, v))
+    radial = tuple(c / modulo(velocidade) for c in _vetorial(v, normal))
+    return (normal[2], normal[1], normal[0]), (radial[2], radial[1], radial[0])
 
 
 def mensagem_direcao(nome, vetor, minimo):
@@ -151,7 +197,7 @@ class Transmissor:
     def esquecer(self):
         """A tela reiniciou ou a nave mudou: tudo vai de novo na próxima volta."""
         self._enviados = {}
-        self._proximo = dict.fromkeys(("atitude", "numeros", "orbita", "estados"), 0.0)
+        self._proximo = dict.fromkeys(("atitude", "marcadores", "numeros", "orbita", "estados"), 0.0)
         self._radar = False
 
     def _chegou_a_vez(self, tarefa, intervalo, agora):
@@ -178,12 +224,23 @@ class Transmissor:
 
         velocidade = t.velocidades[modo]
 
-        # 2. Navball: atitude e marcadores.
+        # 2. Navball: a atitude muda rápido; os marcadores são direções fixas
+        # no mundo, que a tela reprojeta a cada ATT.
         if self._chegou_a_vez("atitude", INTERVALO_ATITUDE, agora):
             enviar(f"ATT {decimos(t.pitch)} {decimos(t.rumo) % 3600} {decimos(t.rolagem)}")
+
+        if self._chegou_a_vez("marcadores", INTERVALO_MARCADORES, agora):
             enviar(mensagem_direcao("PRO", velocidade, VEL_MIN_MARCADOR))
+            # Normal e radial não existem no modo ALVO, como no jogo.
+            if modo == "ALVO" or modulo(velocidade) < VEL_MIN_MARCADOR:
+                normal = radial = (0.0, 0.0, 0.0)
+            else:
+                normal, radial = normal_e_radial(t.posicao, velocidade)
+            enviar(mensagem_direcao("NRM", normal, SENO_MIN_MARCADOR))
+            enviar(mensagem_direcao("RDL", radial, SENO_MIN_MARCADOR))
             posicao_alvo = t.posicao_alvo if t.alvo is not None else (0.0, 0.0, 0.0)
             enviar(mensagem_direcao("TGT", posicao_alvo, DIST_MIN_MARCADOR))
+            enviar(mensagem_direcao("MNV", t.manobra or (0.0, 0.0, 0.0), QUEIMA_MIN_MARCADOR))
 
         # 3. Números. A altitude vai sempre: ela também serve de "estou vivo".
         if self._chegou_a_vez("numeros", INTERVALO_NUMEROS, agora):
@@ -193,9 +250,10 @@ class Transmissor:
             else:
                 enviar(f"ALT {inteiro32(t.altitude)}")
             enviar(f"VEL {decimos(modulo(velocidade))}")
+            cima, norte, leste = t.velocidades["SUP"]
+            enviar(f"VV {decimos(cima)}")   # a barra da velocidade vertical aparece em todo modo
+            enviar(f"ACEL {round(100 * max(0.0, min(1.0, t.acelerador)))}")
             if modo == "SUP":
-                cima, norte, leste = t.velocidades["SUP"]
-                enviar(f"VV {decimos(cima)}")
                 enviar(f"VH {decimos(math.hypot(norte, leste))}")
             elif modo == "ALVO":
                 enviar(f"DIST {metros(modulo(t.posicao_alvo))}")
@@ -204,6 +262,8 @@ class Transmissor:
         if modo == "ORB" and self._chegou_a_vez("orbita", INTERVALO_ORBITA, agora):
             enviar(f"AP {metros(t.apoastro)}")
             enviar(f"PE {metros(t.periastro)}")
+            enviar(f"TAP {segundos(t.tempo_apoastro)}")
+            enviar(f"TPE {segundos(t.tempo_periastro)}")
 
 
 class NaveKrpc:
@@ -244,7 +304,11 @@ class NaveKrpc:
             "posicao": stream(nave.position, self._ref_orb),
             "apoastro": stream(getattr, nave.orbit, "apoapsis_altitude"),
             "periastro": stream(getattr, nave.orbit, "periapsis_altitude"),
+            "tempo_apoastro": stream(getattr, nave.orbit, "time_to_apoapsis"),
+            "tempo_periastro": stream(getattr, nave.orbit, "time_to_periapsis"),
             "excentricidade": stream(getattr, nave.orbit, "eccentricity"),
+            "acelerador": stream(getattr, nave.control, "throttle"),
+            "nos": stream(getattr, nave.control, "nodes"),
             # O alvo do jogo pode ser uma porta de acoplamento, uma nave ou um
             # planeta; só um deles fica diferente de None.
             "porta_alvo": stream(getattr, space_center, "target_docking_port"),
@@ -254,9 +318,12 @@ class NaveKrpc:
         for nome, propriedade in SISTEMAS.items():
             self._streams[nome] = stream(getattr, nave.control, propriedade)
 
+        self._superficie = superficie
         self._alvo = None          # o alvo atual, como objeto do kRPC
         self._nome_alvo = None
         self._streams_alvo = {}    # posição e velocidade do alvo atual
+        self._no = None            # o próximo nó de manobra
+        self._stream_no = None     # a queima que falta nele
 
     def _acompanhar_alvo(self):
         """Se o alvo mudou no jogo, troca os streams de posição e velocidade."""
@@ -288,18 +355,46 @@ class NaveKrpc:
         }
         print(f"Alvo: {self._nome_alvo}")
 
+    def _acompanhar_manobra(self):
+        """Se o próximo nó de manobra mudou, troca o stream da queima."""
+        nos = self._streams["nos"]()
+        no = nos[0] if nos else None
+        if no == self._no:
+            return
+        if self._stream_no is not None:
+            self._stream_no.remove()
+            self._stream_no = None
+        self._no = no
+        if no is not None:
+            # A queima que FALTA: durante a queima o marcador continua certo.
+            self._stream_no = self._conn.add_stream(no.remaining_burn_vector, self._superficie)
+
     def ler(self):
         self._acompanhar_alvo()
+        self._acompanhar_manobra()
         s = self._streams
         velocidades = {"SUP": s["SUP"](), "ORB": s["ORB"]()}
+        nome_alvo = self._nome_alvo
         posicao_alvo = None
         if self._alvo is not None:
-            posicao_alvo = tuple(
-                a - n for a, n in zip(self._streams_alvo["posicao"](), s["posicao"]())
-            )
-            velocidades["ALVO"] = tuple(
-                n - a for n, a in zip(velocidades["ORB"], self._streams_alvo["velocidade"]())
-            )
+            try:
+                posicao_alvo = tuple(
+                    a - n for a, n in zip(self._streams_alvo["posicao"](), s["posicao"]())
+                )
+                velocidades["ALVO"] = tuple(
+                    n - a for n, a in zip(velocidades["ORB"], self._streams_alvo["velocidade"]())
+                )
+            except (ValueError, RuntimeError):
+                # O alvo acabou de sumir (ex.: destruído), e o jogo ainda não
+                # avisou. Nesta volta, é como se não houvesse alvo.
+                nome_alvo, posicao_alvo = None, None
+                velocidades.pop("ALVO", None)
+        manobra = None
+        if self._stream_no is not None:
+            try:
+                manobra = self._stream_no()
+            except (ValueError, RuntimeError):
+                pass  # o nó acabou de ser apagado; a lista de nós avisa na próxima volta
         # Numa trajetória de escape (excentricidade >= 1) não há apoastro.
         escape = s["excentricidade"]() >= 1
         return Telemetria(
@@ -310,10 +405,15 @@ class NaveKrpc:
             altitude=s["altitude"](),
             radar=s["radar"](),
             raio_planeta=self._raio,
+            posicao=s["posicao"](),
             apoastro=None if escape else s["apoastro"](),
             periastro=s["periastro"](),
-            alvo=self._nome_alvo,
+            tempo_apoastro=None if escape else s["tempo_apoastro"](),
+            tempo_periastro=s["tempo_periastro"](),
+            acelerador=s["acelerador"](),
+            alvo=nome_alvo,
             posicao_alvo=posicao_alvo,
+            manobra=manobra,
             sistemas={nome: s[nome]() for nome in SISTEMAS},
         )
 
@@ -330,13 +430,15 @@ class NaveKrpc:
     def remover(self):
         for s in (*self._streams.values(), *self._streams_alvo.values()):
             s.remove()
+        if self._stream_no is not None:
+            self._stream_no.remove()
 
 
 class Demo:
     """Uma nave de mentira que se mexe sozinha, para testar a tela sem o KSP.
 
-    Ela passa pelos 5 km do radar e pelos 33 e 36 km da troca SUP ⇄ ORB, e
-    a cada minuto ganha um alvo por 30 s.
+    Ela passa pelos 5 km do radar e pelos 33 e 36 km da troca SUP ⇄ ORB, a
+    cada minuto ganha um alvo por 30 s e, a cada 90 s, um nó de manobra por 30 s.
     """
 
     RAIO_KERBIN = 600_000  # m
@@ -376,6 +478,10 @@ class Demo:
             )
             velocidades["ALVO"] = (1.5, 4 * math.sin(t * 0.3), -6.0)
 
+        manobra = None
+        if t % 90 >= 60:
+            manobra = (30.0, 20.0 * math.cos(t * 0.1), 80.0 * (90 - t % 90) / 30)
+
         altitude = 30_000 + 25_000 * math.sin(t * 0.05)
         return Telemetria(
             pitch=pitch,
@@ -385,10 +491,15 @@ class Demo:
             altitude=altitude,
             radar=altitude - self.TERRENO,
             raio_planeta=self.RAIO_KERBIN,
+            posicao=(self.RAIO_KERBIN + altitude, 0.0, 0.0),
             apoastro=80_000 + 20_000 * math.sin(t * 0.07),
             periastro=-250_000 + 200_000 * math.sin(t * 0.07),
+            tempo_apoastro=1_700 - (t * 10) % 1_700,
+            tempo_periastro=3_400 - (t * 10) % 3_400,
+            acelerador=0.5 + 0.5 * math.sin(t * 0.15),
             alvo=alvo,
             posicao_alvo=posicao_alvo,
+            manobra=manobra,
             sistemas=dict(self._sistemas),
         )
 
