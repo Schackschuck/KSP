@@ -30,8 +30,10 @@ A mikromedia for ARM ainda não tem firmware: é a fase 6 do [roteiro](../README
 No PC, além do que a ponte do painel já usa:
 
 ```
-pip install krpc pyserial pygame numpy
+pip install krpc pyserial pygame-ce numpy
 ```
+
+O **pygame-ce** é a versão do pygame mantida pela comunidade, e o código usa do mesmo jeito (`import pygame`). O pygame original não tem pacote para o Python 3.14. Não instale os dois juntos: se o pygame original já estiver instalado, rode `pip uninstall pygame` antes.
 
 ## Testar sem o KSP
 
@@ -77,7 +79,8 @@ A ponte do painel (`ponte.py`) pode rodar ao mesmo tempo, em outro terminal: o k
 
 | Sintoma | Causa provável | Solução |
 |---|---|---|
-| `No module named 'pygame'` (ou `numpy`) | Faltou instalar | `pip install pygame numpy` |
+| `No module named 'pygame'` (ou `numpy`) | Faltou instalar | `pip install pygame-ce numpy` |
+| O `pip install pygame` falha dizendo que não há versão para o Python 3.14 | O pygame original parou no Python 3.13 | Instalar o `pygame-ce` no lugar |
 | Fica parado em `Conectando ao kRPC...` | O jogo está esperando você aceitar a conexão | Aceitar na janela do kRPC, dentro do jogo |
 | A navball rola ao contrário da do jogo | Sinal da rolagem do kRPC | `SINAL_ROLAGEM = -1` no `mfd.py` |
 | Tocar em SAS não deixa o botão verde | A nave não tem SAS (sem piloto nem núcleo de sonda com SAS) | É o comportamento certo: o botão mostra o jogo |
