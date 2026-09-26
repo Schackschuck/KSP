@@ -2,14 +2,17 @@
 
 A tela (a mikromedia for ARM, 320x240 com touch) só desenha o que recebe;
 toda a conta que envolve o jogo fica aqui. Enquanto o firmware da placa não
-existe, a tela é um simulador numa janela do PC (mfd_simulador.py), que fala o
-mesmo protocolo. Protocolo em docs/protocolo.md; roteiro em docs/mfd.md.
+existe, a tela é um simulador numa janela do PC (mfd_simulador.py) ou uma
+página no navegador do celular (mfd_celular.py). As três falam o mesmo
+protocolo. Protocolo em docs/protocolo.md; roteiro em docs/mfd.md.
 
 Uso:
     python mfd.py                    # KSP neste computador, tela simulada
     python mfd.py --demo             # sem o KSP: a nave se mexe sozinha
     python mfd.py 192.168.1.10       # KSP em outro computador
     python mfd.py --zoom 3           # janela do simulador maior
+    python mfd.py --celular          # a tela no navegador do celular, pelo Wi-Fi
+    python mfd.py --celular 8080     # idem, noutra porta (padrão: 8000)
     python mfd.py --porta COM7       # a mikromedia de verdade, quando o firmware existir
 """
 
@@ -575,6 +578,13 @@ def acompanhar_nave(conn, tela, transmissor, nave):
 
 
 def abrir_tela(args):
+    if args.celular:
+        from mfd_celular import TelaCelular
+        try:
+            return TelaCelular(args.celular)
+        except OSError as e:
+            sys.exit(f"Não foi possível abrir a porta {args.celular} para o celular: {e}")
+
     if not args.porta:
         # Só o simulador precisa do pygame; importar aqui evita exigir o
         # pygame de quem usa a placa de verdade.
@@ -606,9 +616,18 @@ def main():
         action="store_true",
         help="não conecta no KSP: uma nave de mentira se mexe sozinha",
     )
-    parser.add_argument(
+    telas = parser.add_mutually_exclusive_group()
+    telas.add_argument(
         "--porta",
         help="porta serial da mikromedia, ex.: COM7 (padrão: simulador numa janela)",
+    )
+    telas.add_argument(
+        "--celular",
+        nargs="?",
+        type=int,
+        const=8000,
+        metavar="PORTA",
+        help="mostra a tela no navegador do celular; PORTA de rede, padrão 8000",
     )
     parser.add_argument(
         "--zoom",

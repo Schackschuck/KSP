@@ -191,7 +191,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de flash, 32 KB de RAM), tela 320x240 com touch resistivo, microSD, saída de áudio e carregador de Li-Po. Aqui o firmware é escrito **sem framework**: C, registradores, script de linker e código de inicialização próprios.
 
-**Status: simulador pronto, firmware não começado.** A tela já roda num simulador no PC, com navball, números e botões de toque, falando o protocolo que a placa vai usar: [docs/mfd.md](docs/mfd.md). A placa ainda não conversa com o PC: o cabo mini-USB antigo falha nos dados.
+**Status: simulador pronto, firmware não começado.** A tela já roda num simulador no PC e no navegador do celular, pelo Wi-Fi, com navball, números e botões de toque, falando o protocolo que a placa vai usar: [docs/mfd.md](docs/mfd.md). A placa ainda não conversa com o PC: o cabo mini-USB antigo falha nos dados.
 
 - **Antes de começar:** achar o manual e o esquemático da placa (site da MikroE) para confirmar o controlador da tela, os pinos da tela e do touch e o chip de áudio. Já se sabe que a placa tem duas mini-USB: a **USB** vai direto no LPC2148, e a **PROG** tem um conversor USB-serial **FT232RL**. É pela PROG que o PC conversa com a placa.
 - **Ferramentas:** `arm-none-eabi-gcc` + `make`. Gravação pelo bootloader serial de fábrica do LPC2148, com `lpc21isp` ou Flash Magic — provavelmente pela PROG (FT232RL), sem precisar de gravador. Antes de gravar, guardar o `.hex` do demo de fábrica, se a MikroE oferecer: gravar um programa novo apaga o demo.
