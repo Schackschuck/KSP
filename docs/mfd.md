@@ -22,6 +22,8 @@ A mikromedia for ARM ainda não tem firmware: é a fase 6 do [roteiro](../README
 |---|---|
 | [`bridge/mfd.py`](../bridge/mfd.py) | A ponte kRPC ⇄ tela: lê o jogo, manda as mensagens e executa os toques |
 | [`bridge/mfd_simulador.py`](../bridge/mfd_simulador.py) | O simulador: faz o papel do firmware da mikromedia |
+| [`bridge/mfd_celular.py`](../bridge/mfd_celular.py) | O servidor da tela no celular: serve a página e troca as mensagens pelo Wi-Fi |
+| [`bridge/celular/index.html`](../bridge/celular/index.html) | A página do celular: o "firmware" do navegador, com a mesma navball e o mesmo layout |
 | [`bridge/navball.py`](../bridge/navball.py) | A conta da navball, escrita para ser passada para C |
 | [`docs/protocolo.md`](protocolo.md#tela-multifunção-mikromedia) | O protocolo da tela, mensagem por mensagem |
 
@@ -86,6 +88,34 @@ A nave de mentira desce até perto do chão e sobe até 55 km a cada 2 minutos. 
 
 Janela pequena? `python mfd.py --demo --zoom 3`.
 
+## No celular
+
+O celular pode ser a tela, pelo Wi-Fi, sem instalar nada nele. A página desenha o mesmo layout da placa na resolução do celular, então tudo fica nítido.
+
+![A tela no celular, em órbita: o mesmo layout, desenhado na resolução do celular](img/mfd_celular.png)
+
+1. No notebook, rode a ponte com `--celular`; com `--demo` também funciona:
+
+   ```
+   cd bridge
+   python mfd.py --celular
+   ```
+
+   O terminal mostra o endereço, por exemplo `Abra no navegador do celular: http://192.168.0.15:8000`.
+
+2. Na primeira vez, o Windows pergunta se o Python pode usar a rede. Marque **Redes privadas** e permita.
+3. No celular, conectado **ao mesmo Wi-Fi**, abra esse endereço no navegador (Chrome no Android, Safari no iPhone) e deite o celular.
+   - **Android:** o primeiro toque põe a página em tela cheia.
+   - **iPhone:** Compartilhar → **Adicionar à Tela de Início**, e abra pelo ícone, que já fica sem a barra do navegador.
+4. Aumente o tempo de bloqueio da tela do celular. Uma página comum, sem HTTPS, não consegue manter a tela acesa sozinha.
+
+Outros detalhes:
+
+- Pode abrir em mais de um aparelho ao mesmo tempo, inclusive no navegador do próprio notebook: todos mostram a mesma coisa e todos respondem ao toque.
+- Qualquer pessoa no mesmo Wi-Fi pode abrir a página e tocar nos botões. Em casa não tem problema; em rede pública, não use.
+- Se a conexão cair, a página reconecta sozinha e pede tudo de novo à ponte.
+- A janela do simulador continua sendo a referência do que a placa vai mostrar, ponto por ponto. A página segue as mesmas posições, só que com mais detalhe.
+
 ## Testar com o KSP
 
 Com o jogo na cena de voo e o servidor kRPC iniciado:
@@ -125,6 +155,9 @@ A ponte do painel (`ponte.py`) pode rodar ao mesmo tempo, em outro terminal: o k
 | Fica parado em `Conectando ao kRPC...` | O jogo está esperando você aceitar a conexão | Aceitar na janela do kRPC, dentro do jogo |
 | Tocar em SAS não deixa o botão verde | A nave não tem SAS (sem piloto nem núcleo de sonda com SAS) | É o comportamento certo: o botão mostra o jogo |
 | `SEM SINAL` com o foguete voando | A ponte parou, ou o terminal mostra `Nenhuma nave ativa` | Ver a mensagem no terminal |
+| O celular não abre a página | Celular noutra rede (dados móveis, Wi-Fi de visitantes), firewall do Windows, ou rede do Windows como Pública | Mesmo Wi-Fi; permitir o Python em *Redes privadas*; rede do Windows como Privada, como na fase 0 |
+| O endereço mostrado não funciona, e o notebook tem mais de uma rede (cabo e Wi-Fi, VPN) | O IP mostrado é o da outra rede | Ver o IP do Wi-Fi com `ipconfig` e usar esse, com `:8000` no fim |
+| `Não foi possível abrir a porta 8000 para o celular` | Outro programa já usa a porta | `python mfd.py --celular 8080` e abrir com `:8080` no fim |
 | `DIST`, `AP` ou `PE` mostram `---` longe de casa | A distância passou de 2,1 milhões de km, o limite de um inteiro de 32 bits | Normal com planetas distantes |
 
 ## Como a navball é desenhada

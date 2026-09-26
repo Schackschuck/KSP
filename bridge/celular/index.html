@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#060a16">
+<title>Tela multifuncao</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #060a16;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="tela"></canvas>
+<script>
+"use strict";
+
+// Tela multifunção no navegador do celular.
+//
+// Faz o papel do firmware da mikromedia: recebe as mensagens do protocolo
+// (docs/protocolo.md) da ponte, desenha a tela e manda os toques de volta.
+// O layout está em unidades da tela da placa (320x240) e é o mesmo do
+// simulador (bridge/mfd_simulador.py), que continua sendo a referência do
+// firmware. Aqui tudo é desenhado na resolução do celular, por isso fica
+// nítido. A navball usa a mesma conta de bridge/navball.py.
+
+// ---------- layout, em unidades da tela da placa ----------
+
+const LARGURA = 320, ALTURA = 240;
+const MAX_LINHA = 31;
+const SEM_SINAL = 1000;           // ms sem mensagem válida
+const DESTAQUE_TOQUE = 200;       // ms de borda acesa depois do toque
+const INTERVALO_QUADRO = 1000 / 30;
+
+const BOLA = { x: 160, y: 104, r: 64 };
+const ARO_RAIO = 78;
+const FITA_ALCANCE = 60;          // graus de rumo para cada lado
+const CAIXA_RUMO = { x: 141, y: 2, w: 38, h: 18 };
+const CAIXA_VEL = { x: 22, y: 90, w: 80, h: 32 };   // tocar nela troca o modo
+const CAIXA_ALT = { x: 218, y: 90, w: 80, h: 32 };
+const BARRA_ACEL = { x: 6, y: 30, w: 10, h: 156 };
+const BARRA_VV = { x: 304, y: 30, w: 10, h: 156 };
+const VV_MAX = 1000;              // m/s no fim da barra; escala logarítmica
+const PAINEL = { x: 48, y: 198, w: 224, h: 40 };
+const BOTOES_REDONDOS = { RCS: [140, 178], SAS: [180, 178] };
+const RAIO_BOTAO = 13;
+const MAX_PONTOS_BOLA = 420;      // resolução máxima da imagem da bola, em pontos
+
+const COR = {
+  fundo: "#060a16", texto: "#f0f0f0", rotulo: "#8296c8", aro: "#16203c", borda: "#3c508c",
+  tracoFita: "#6e8cd2", cardealFita: "#ff5a50", vel: "#ebbe28", alt: "#e146c8", acel: "#5a78ff",
+  vvSobe: "#3cc85a", vvDesce: "#f0c828", vvDesceRapido: "#f03c28",
+  botaoApagado: "#283250", botaoLigado: "#28aa50", bordaLigado: "#82f096",
+  nave: "#ff8c00", aviso: "#e63c28", cardeal: "#ffffff",
+  pro: "#e6d228", nrm: "#c846ff", rdl: "#3cd2e6", tgt: "#ff8cc8", mnv: "#3c82ff",
+};
+
+// Navball: os mesmos valores de bridge/navball.py.
+const CEU = [40, 105, 200], CHAO = [150, 70, 25];
+const LINHA_CEU = [150, 195, 250], LINHA_CHAO = [250, 150, 60], HORIZONTE = [255, 255, 255];
+const PASSO_PITCH = 10, MEIA_LARGURA_PITCH = 0.5, MEIA_LARGURA_HORIZONTE = 1.2;
+const RUMOS_MERIDIANOS = [0, 30, 60, 90, 120, 150];
+const MEIA_LARGURA_MERIDIANO = 0.01, LATITUDE_MAX_MERIDIANO = 80, SOMBRA = 0.45;
+
+const CARDEAIS = [["N", 0], ["L", 90], ["S", 180], ["O", 270]];
+const RAD = Math.PI / 180, GRAUS = 180 / Math.PI;
+
+// ---------- o que a tela sabe, só a partir das mensagens ----------
+
+const MARCADORES_DO_MODO = ["PRO", "NRM", "RDL"];
+const NUMEROS_DO_MODO = ["VEL", "VH", "AP", "PE", "TAP", "TPE", "DIST"];
+const NUMEROS_OFF = ["AP", "PE", "TAP", "TPE", "DIST"];
+
+const estado = {
+  atitude: null,                  // [pitch, rumo, rolagem] em graus
+  marcadores: { PRO: null, NRM: null, RDL: null, TGT: null, MNV: null },  // [pitch, rumo]
+  altitude: null,                 // ["ALT" ou "RAD", metros]
+  numeros: { VEL: null, VH: null, AP: null, PE: null, TAP: null, TPE: null, DIST: null, VV: null, ACEL: null },
+  estados: { SAS: null, RCS: null, MODO: null },
+  ultimaValida: -Infinity,
+  toque: [null, -Infinity],
+};
+
+function inteiro(texto) {
+  return /^[+-]?[0-9]+$/.test(texto) ? parseInt(texto, 10) : null;
+}
+
+function interpretar(mensagem) {
+  const espaco = mensagem.indexOf(" ");
+  const nome = espaco < 0 ? mensagem : mensagem.slice(0, espaco);
+  const partes = espaco < 0 ? [] : mensagem.slice(espaco + 1).split(" ");
+  const numeros = partes.map(inteiro);
+  const tudoNumero = numeros.length > 0 && numeros.every((n) => n !== null);
+  const off = partes.length === 1 && partes[0] === "OFF";
+  const n = estado.numeros;
+
+  if (nome === "ATT" && partes.length === 3 && tudoNumero) {
+    estado.atitude = numeros.map((v) => v / 10);
+  } else if (nome in estado.marcadores && off) {
+    estado.marcadores[nome] = null;
+  } else if (nome in estado.marcadores && partes.length === 2 && tudoNumero) {
+    estado.marcadores[nome] = numeros.map((v) => v / 10);
+  } else if ((nome === "ALT" || nome === "RAD") && partes.length === 1 && tudoNumero) {
+    estado.altitude = [nome, numeros[0]];
+  } else if (NUMEROS_OFF.includes(nome) && off) {
+    n[nome] = null;
+  } else if (nome in n && partes.length === 1 && tudoNumero) {
+    n[nome] = numeros[0];
+  } else if ((nome === "SAS" || nome === "RCS") && partes.length === 1 && (partes[0] === "0" || partes[0] === "1")) {
+    estado.estados[nome] = partes[0] === "1";
+  } else if (nome === "MODO" && partes.length === 1 && ["SUP", "ORB", "ALVO"].includes(partes[0])) {
+    if (partes[0] !== estado.estados.MODO) {
+      // Os números e os marcadores do modo antigo não valem mais.
+      for (const k of NUMEROS_DO_MODO) n[k] = null;
+      for (const k of MARCADORES_DO_MODO) estado.marcadores[k] = null;
+    }
+    estado.estados.MODO = partes[0];
+  } else {
+    return false;
+  }
+  return true;
+}
+
+// ---------- comunicação com a ponte ----------
+
+// Uma linha de cada vez, na ordem, como numa serial. Pedidos soltos podem
+// chegar trocados: o navegador manda vários ao mesmo tempo.
+let envios = Promise.resolve();
+function mandar(linha) {
+  envios = envios
+    .then(() => fetch("/linha", { method: "POST", body: linha }))
+    .catch(() => {});
+}
+
+const eventos = new EventSource("/eventos");
+// Como a placa ao ligar: a ponte reenvia tudo. Vale também quando a conexão
+// cai e volta sozinha.
+eventos.onopen = () => mandar("READY");
+eventos.onmessage = (e) => {
+  const linha = e.data;
+  if (linha.length > MAX_LINHA) return;
+  if (interpretar(linha)) estado.ultimaValida = performance.now();
+  else mandar("ERR " + linha);
+};
+
+// ---------- navball ----------
+
+function direcao(pitch, rumo) {
+  const p = pitch * RAD, r = rumo * RAD;
+  return [Math.cos(p) * Math.cos(r), Math.cos(p) * Math.sin(r), Math.sin(p)];
+}
+
+function baseDaNave(pitch, rumo, rolagem) {
+  const p = pitch * RAD, r = rumo * RAD, o = rolagem * RAD;
+  const sp = Math.sin(p), cp = Math.cos(p), sr = Math.sin(r), cr = Math.cos(r);
+  const so = Math.sin(o), co = Math.cos(o);
+  const frente = [cp * cr, cp * sr, sp];
+  const direita0 = [-sr, cr, 0];
+  const cima0 = [-sp * cr, -sp * sr, cp];
+  const direita = direita0.map((d, i) => co * d - so * cima0[i]);
+  const cima = direita0.map((d, i) => so * d + co * cima0[i]);
+  return [frente, direita, cima];
+}
+
+function projetar(base, v) {
+  const [frente, direita, cima] = base;
+  const dot = (a) => a[0] * v[0] + a[1] * v[1] + a[2] * v[2];
+  return [dot(direita), dot(cima), dot(frente)];
+}
+
+let bola = null;   // a imagem da bola e as coordenadas de cada ponto dela
+
+function prepararBola(pontos) {
+  const n = Math.max(64, Math.min(MAX_PONTOS_BOLA, pontos));
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = n;
+  const x = new Float32Array(n * n), y = new Float32Array(n * n), z = new Float32Array(n * n);
+  const dentro = new Uint8Array(n * n);
+  const meio = (n - 1) / 2;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const k = i * n + j;
+      const xx = (j - meio) / meio, yy = -(i - meio) / meio;
+      const r2 = xx * xx + yy * yy;
+      x[k] = xx; y[k] = yy; z[k] = Math.sqrt(Math.max(0, 1 - r2));
+      dentro[k] = r2 <= 1 ? 1 : 0;
+    }
+  }
+  const contexto = canvas.getContext("2d");
+  bola = { n, canvas, contexto, imagem: contexto.createImageData(n, n), x, y, z, dentro, atitude: null };
+}
+
+function desenharBola(base) {
+  const { n, imagem, x, y, z, dentro } = bola;
+  const d = imagem.data;
+  const [f, dir, c] = base;
+  const normais = RUMOS_MERIDIANOS.map((h) => [-Math.sin(h * RAD), Math.cos(h * RAD)]);
+  for (let k = 0; k < n * n; k++) {
+    const o = k * 4;
+    if (!dentro[k]) { d[o + 3] = 0; continue; }
+    const xx = x[k], yy = y[k], zz = z[k];
+    const norte = xx * dir[0] + yy * c[0] + zz * f[0];
+    const leste = xx * dir[1] + yy * c[1] + zz * f[1];
+    const vertical = xx * dir[2] + yy * c[2] + zz * f[2];
+    const ceu = vertical >= 0;
+    const latitude = Math.asin(Math.max(-1, Math.min(1, vertical))) * GRAUS;
+    let cor = ceu ? CEU : CHAO;
+    if (Math.abs(latitude) < MEIA_LARGURA_HORIZONTE) {
+      cor = HORIZONTE;
+    } else {
+      let linha = Math.abs(latitude - PASSO_PITCH * Math.round(latitude / PASSO_PITCH)) < MEIA_LARGURA_PITCH;
+      if (!linha && Math.abs(latitude) <= LATITUDE_MAX_MERIDIANO) {
+        for (const [nn, nl] of normais) {
+          if (Math.abs(nn * norte + nl * leste) < MEIA_LARGURA_MERIDIANO) { linha = true; break; }
+        }
+      }
+      if (linha) cor = ceu ? LINHA_CEU : LINHA_CHAO;
+    }
+    const sombra = 1 - SOMBRA + SOMBRA * zz;
+    d[o] = cor[0] * sombra; d[o + 1] = cor[1] * sombra; d[o + 2] = cor[2] * sombra; d[o + 3] = 255;
+  }
+  bola.contexto.putImageData(imagem, 0, 0);
+}
+
+// ---------- desenho: primitivas em unidades da placa ----------
+
+const canvas = document.getElementById("tela");
+const ctx = canvas.getContext("2d");
+let escala = 1, deslocX = 0, deslocY = 0, dpr = 1;
+
+function fonte(tamanho) {
+  return `${tamanho}px "DejaVu Sans Mono", Menlo, Consolas, "Roboto Mono", monospace`;
+}
+
+function texto(t, cor, x, y, alinhamento = "left", linhaBase = "top", tamanho = 14) {
+  ctx.font = fonte(tamanho);
+  ctx.fillStyle = cor;
+  ctx.textAlign = alinhamento;
+  ctx.textBaseline = linhaBase;
+  ctx.fillText(t, x, y);
+}
+
+function textoCentro(t, cor, x, y, tamanho = 14) {
+  texto(t, cor, x, y, "center", "middle", tamanho);
+}
+
+function circulo(x, y, r, preenchimento, contorno, largura = 1) {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, 2 * Math.PI);
+  if (preenchimento) { ctx.fillStyle = preenchimento; ctx.fill(); }
+  if (contorno) { ctx.strokeStyle = contorno; ctx.lineWidth = largura; ctx.stroke(); }
+}
+
+function linha(cor, largura, ...pontos) {
+  ctx.beginPath();
+  ctx.moveTo(pontos[0][0], pontos[0][1]);
+  for (const [px, py] of pontos.slice(1)) ctx.lineTo(px, py);
+  ctx.strokeStyle = cor;
+  ctx.lineWidth = largura;
+  ctx.stroke();
+}
+
+function retangulo(r, preenchimento, contorno, largura = 1, raio = 0) {
+  ctx.beginPath();
+  if (raio > 0) {
+    const { x, y, w, h } = r;
+    ctx.moveTo(x + raio, y);
+    ctx.arcTo(x + w, y, x + w, y + h, raio);
+    ctx.arcTo(x + w, y + h, x, y + h, raio);
+    ctx.arcTo(x, y + h, x, y, raio);
+    ctx.arcTo(x, y, x + w, y, raio);
+    ctx.closePath();
+  } else {
+    ctx.rect(r.x, r.y, r.w, r.h);
+  }
+  if (preenchimento) { ctx.fillStyle = preenchimento; ctx.fill(); }
+  if (contorno) { ctx.strokeStyle = contorno; ctx.lineWidth = largura; ctx.stroke(); }
+}
+
+function polar(raio, angulo) {
+  // 0° à direita, 90° em cima
+  return [BOLA.x + raio * Math.cos(angulo * RAD), BOLA.y - raio * Math.sin(angulo * RAD)];
+}
+
+function naBola(x, y) {
+  return [BOLA.x + x * BOLA.r, BOLA.y - y * BOLA.r];
+}
+
+// ---------- formatação, igual ao simulador ----------
+
+function formatarDistancia(m) {
+  if (m === null) return "---";
+  const a = Math.abs(m);
+  if (a < 100000) return `${m} m`;
+  if (a < 10000000) return `${(m / 1000).toFixed(1)} km`;
+  if (a < 1000000000) return `${(m / 1000).toFixed(0)} km`;
+  return `${(m / 1000000).toFixed(0)} Mm`;
+}
+
+function formatarVelocidade(decimos) {
+  if (decimos === null) return "---";
+  const sinal = decimos < 0 ? "-" : "";
+  const d = Math.abs(decimos);
+  if (d < 10000) return `${sinal}${Math.floor(d / 10)}.${d % 10} m/s`;
+  return `${sinal}${Math.floor(d / 10)} m/s`;
+}
+
+function formatarTempo(s) {
+  if (s === null) return "T- ---";
+  const horas = Math.floor(s / 3600), resto = s % 3600;
+  if (horas >= 100) return `T-${horas}h`;
+  const dois = (v) => String(v).padStart(2, "0");
+  return `T-${dois(horas)}:${dois(Math.floor(resto / 60))}:${dois(resto % 60)}`;
+}
+
+const tres = (v) => String(v).padStart(3, "0");
+
+// ---------- desenho: as partes da tela ----------
+
+function desenharAro(comSinal) {
+  circulo(BOLA.x, BOLA.y, ARO_RAIO, COR.aro, COR.borda, 1);
+
+  let textoRumo = "---";
+  if (comSinal && estado.atitude) {
+    const rumo = estado.atitude[1];
+    // Um traço a cada 10°; a cada 30°, o número no lugar do traço.
+    const primeiro = Math.ceil((rumo - FITA_ALCANCE) / 10) * 10;
+    for (let marca = primeiro; marca <= Math.floor(rumo + FITA_ALCANCE); marca += 10) {
+      const angulo = 90 - (marca - rumo);
+      if (marca % 30 !== 0) {
+        linha(COR.tracoFita, 1, polar(66, angulo), polar(71, angulo));
+        continue;
+      }
+      const m = ((marca % 360) + 360) % 360;
+      const cardeal = CARDEAIS.find(([, h]) => h === m);
+      const [px, py] = polar(71, angulo);
+      if (cardeal) textoCentro(cardeal[0], COR.cardealFita, px, py, 11);
+      else textoCentro(tres(m), COR.tracoFita, px, py, 11);
+    }
+    textoRumo = tres(((Math.round(rumo) % 360) + 360) % 360);
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(BOLA.x - 4, 21); ctx.lineTo(BOLA.x + 4, 21); ctx.lineTo(BOLA.x, 27);
+  ctx.closePath();
+  ctx.fillStyle = COR.texto;
+  ctx.fill();
+  retangulo(CAIXA_RUMO, COR.fundo, COR.texto, 1, 3);
+  textoCentro(textoRumo, COR.texto, CAIXA_RUMO.x + CAIXA_RUMO.w / 2, CAIXA_RUMO.y + CAIXA_RUMO.h / 2);
+}
+
+function circuloComHastes([cx, cy], cor, angulos, de, ate) {
+  circulo(cx, cy, 6, null, cor, 2);
+  for (const a of angulos) {
+    const dx = Math.cos(a * RAD), dy = -Math.sin(a * RAD);
+    linha(cor, 2, [cx + de * dx, cy + de * dy], [cx + ate * dx, cy + ate * dy]);
+  }
+}
+
+function ponto([cx, cy], cor, r = 1) { circulo(cx, cy, r, cor, null); }
+
+function triangulo([cx, cy], cor, paraCima) {
+  const s = paraCima ? -1 : 1;
+  const pontos = [[cx, cy + 7 * s], [cx - 7, cy - 5 * s], [cx + 7, cy - 5 * s]];
+  ctx.beginPath();
+  ctx.moveTo(...pontos[0]); ctx.lineTo(...pontos[1]); ctx.lineTo(...pontos[2]);
+  ctx.closePath();
+  ctx.strokeStyle = cor; ctx.lineWidth = 2; ctx.stroke();
+  return pontos;
+}
+
+const DESENHO_MARCADOR = {
+  progrado: (c) => { circuloComHastes(c, COR.pro, [0, 90, 180], 6, 11); ponto(c, COR.pro); },
+  retrogrado: (c) => {
+    circuloComHastes(c, COR.pro, [45, 135, 225, 315], 1, 5);
+    circuloComHastes(c, COR.pro, [90, 225, 315], 6, 11);
+  },
+  normal: (c) => { triangulo(c, COR.nrm, true); ponto(c, COR.nrm); },
+  antinormal: (c) => { for (const p of triangulo(c, COR.nrm, false)) linha(COR.nrm, 1, c, p); },
+  radialFora: (c) => { circuloComHastes(c, COR.rdl, [45, 135, 225, 315], 6, 11); ponto(c, COR.rdl); },
+  radialDentro: (c) => circuloComHastes(c, COR.rdl, [45, 135, 225, 315], 2, 6),
+  alvo: (c) => { circuloComHastes(c, COR.tgt, [0, 90, 180, 270], 6, 11); ponto(c, COR.tgt); },
+  antialvo: (c) => circuloComHastes(c, COR.tgt, [45, 135, 225, 315], 1, 5),
+  manobra: (c) => { circuloComHastes(c, COR.mnv, [90, 210, 330], 6, 11); ponto(c, COR.mnv, 3); },
+};
+
+// A ordem é a de desenho: o último fica por cima.
+const PARES = [
+  ["RDL", "radialFora", "radialDentro"],
+  ["NRM", "normal", "antinormal"],
+  ["TGT", "alvo", "antialvo"],
+  ["PRO", "progrado", "retrogrado"],
+  ["MNV", "manobra", null],
+];
+
+function desenharNavball(comSinal) {
+  if (!comSinal || !estado.atitude) {
+    circulo(BOLA.x, BOLA.y, BOLA.r, COR.botaoApagado, null);
+    textoCentro("SEM SINAL", COR.aviso, BOLA.x, BOLA.y - 20);
+    return;
+  }
+
+  const [pitch, rumo, rolagem] = estado.atitude;
+  const base = baseDaNave(pitch, rumo, rolagem);
+  if (bola.atitude !== estado.atitude) {   // só refaz a bola quando a atitude muda
+    desenharBola(base);
+    bola.atitude = estado.atitude;
+  }
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(bola.canvas, BOLA.x - BOLA.r, BOLA.y - BOLA.r, 2 * BOLA.r, 2 * BOLA.r);
+
+  for (const [letra, h] of CARDEAIS) {
+    const [x, y, z] = projetar(base, direcao(5, h));
+    if (z > 0.3) textoCentro(letra, COR.cardeal, ...naBola(x, y), 11);
+  }
+
+  for (const [nome, desenho, oposto] of PARES) {
+    const m = estado.marcadores[nome];
+    if (!m) continue;
+    const [p, r] = m;
+    const direcoes = [[direcao(p, r), desenho]];
+    if (oposto) direcoes.push([direcao(-p, r + 180), oposto]);
+    for (const [vetor, qual] of direcoes) {
+      const [x, y, z] = projetar(base, vetor);
+      if (z > 0) DESENHO_MARCADOR[qual](naBola(x, y));
+    }
+  }
+
+  // O "W" laranja no centro: para onde o nariz aponta.
+  const cx = BOLA.x, cy = BOLA.y;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  linha(COR.nave, 3, [cx - 24, cy], [cx - 9, cy]);
+  linha(COR.nave, 3, [cx + 9, cy], [cx + 24, cy]);
+  linha(COR.nave, 3, [cx - 9, cy], [cx, cy + 7], [cx + 9, cy]);
+  ponto([cx, cy - 3], COR.nave, 2);
+  ctx.lineCap = "butt";
+  ctx.lineJoin = "miter";
+}
+
+function caixa(r, cor, titulo, valor, destacada) {
+  retangulo(r, COR.fundo, cor, destacada ? 2 : 1, 4);
+  texto(titulo, cor, r.x + 5, r.y + 3, "left", "top", 11);
+  texto(valor, COR.texto, r.x + r.w - 5, r.y + 15, "right", "top", 14);
+}
+
+function desenharCaixas(comSinal, agora) {
+  const [tocado, quando] = estado.toque;
+  const modo = estado.estados.MODO || "---";
+  const vel = comSinal ? formatarVelocidade(estado.numeros.VEL) : "---";
+  caixa(CAIXA_VEL, COR.vel, `VEL ${modo}`, vel, tocado === "MODO" && agora - quando < DESTAQUE_TOQUE);
+
+  const [tipo, altitude] = estado.altitude || ["ALT", null];
+  caixa(CAIXA_ALT, COR.alt, tipo === "RAD" ? "RADAR" : "ALT", comSinal ? formatarDistancia(altitude) : "---", false);
+}
+
+function desenharBarras(comSinal) {
+  const acel = comSinal ? estado.numeros.ACEL : null;
+  const vv = comSinal ? estado.numeros.VV : null;
+
+  // Acelerador: enche de baixo para cima.
+  let b = BARRA_ACEL;
+  retangulo(b, COR.aro, null);
+  if (acel !== null) {
+    const altura = b.h * Math.max(0, Math.min(100, acel)) / 100;
+    retangulo({ x: b.x, y: b.y + b.h - altura, w: b.w, h: altura }, COR.acel, null);
+  }
+  retangulo(b, null, COR.borda, 1);
+  texto("ACEL", COR.rotulo, 2, 4, "left", "top", 11);
+  texto(acel === null ? "---" : `${acel}%`, COR.texto, 2, b.y + b.h + 4, "left", "top", 11);
+
+  // Velocidade vertical: zero no meio, escala logarítmica.
+  b = BARRA_VV;
+  const meio = b.y + b.h / 2, metade = b.h / 2;
+  const yDaVv = (mps) => {
+    const fracao = Math.log10(1 + Math.min(Math.abs(mps), VV_MAX)) / Math.log10(1 + VV_MAX);
+    return meio - Math.sign(mps) * fracao * metade;
+  };
+  retangulo(b, COR.aro, null);
+  if (vv !== null) {
+    const mps = vv / 10;
+    const y = yDaVv(mps);
+    const cor = mps >= 0 ? COR.vvSobe : mps > -10 ? COR.vvDesce : COR.vvDesceRapido;
+    retangulo({ x: b.x, y: Math.min(y, meio), w: b.w, h: Math.abs(y - meio) + 1 }, cor, null);
+  }
+  retangulo(b, null, COR.borda, 1);
+  linha(COR.texto, 1, [b.x - 3, meio], [b.x + b.w, meio]);
+  for (const mps of [100, 10, -10, -100]) {
+    const y = yDaVv(mps);
+    linha(COR.tracoFita, 1, [b.x - 3, y], [b.x, y]);
+    texto(mps > 0 ? `+${mps}` : `${mps}`, COR.rotulo, b.x - 4, y, "right", "middle", 11);
+  }
+  texto("V VERT", COR.rotulo, LARGURA - 2, 4, "right", "top", 11);
+}
+
+function desenharBotoes(comSinal, agora) {
+  const [tocado, quando] = estado.toque;
+  for (const [nome, [cx, cy]] of Object.entries(BOTOES_REDONDOS)) {
+    const ligado = comSinal && estado.estados[nome];
+    const destaque = tocado === nome && agora - quando < DESTAQUE_TOQUE;
+    const borda = destaque ? COR.texto : ligado ? COR.bordaLigado : COR.borda;
+    circulo(cx, cy, RAIO_BOTAO, ligado ? COR.botaoLigado : COR.botaoApagado, borda, destaque ? 2 : 1);
+    textoCentro(nome, COR.texto, cx, cy, 11);
+  }
+}
+
+function desenharPainel(comSinal) {
+  const n = estado.numeros;
+  const modo = estado.estados.MODO;
+  let linhas = [];
+  if (comSinal && modo === "SUP") {
+    linhas = [["V VERT", formatarVelocidade(n.VV), ""], ["V HOR", formatarVelocidade(n.VH), ""]];
+  } else if (comSinal && modo === "ORB") {
+    linhas = [
+      ["AP", formatarDistancia(n.AP), formatarTempo(n.TAP)],
+      ["PE", formatarDistancia(n.PE), formatarTempo(n.TPE)],
+    ];
+  } else if (comSinal && modo === "ALVO") {
+    linhas = [["DIST", formatarDistancia(n.DIST), ""]];
+  }
+
+  retangulo(PAINEL, null, COR.borda, 1, 4);
+  let y = PAINEL.y + 3;
+  for (const [rotulo, valor, tempo] of linhas) {
+    texto(rotulo, COR.rotulo, PAINEL.x + 6, y + 3, "left", "top", 11);
+    texto(valor, COR.texto, PAINEL.x + 128, y + 1, "right", "top", 14);
+    if (tempo) texto(tempo, COR.rotulo, PAINEL.x + PAINEL.w - 5, y + 3, "right", "top", 11);
+    y += 17;
+  }
+}
+
+function desenhar(agora) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = COR.fundo;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(dpr * escala, 0, 0, dpr * escala, dpr * deslocX, dpr * deslocY);
+
+  const comSinal = agora - estado.ultimaValida < SEM_SINAL;
+  desenharAro(comSinal);
+  desenharNavball(comSinal);
+  desenharCaixas(comSinal, agora);
+  desenharBarras(comSinal);
+  desenharBotoes(comSinal, agora);
+  desenharPainel(comSinal);
+}
+
+// ---------- tamanho, toque e laço de desenho ----------
+
+function redimensionar() {
+  dpr = window.devicePixelRatio || 1;
+  const w = window.innerWidth, h = window.innerHeight;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+  // O layout de 320x240 ocupa o máximo possível, sem distorcer.
+  escala = Math.min(w / LARGURA, h / ALTURA);
+  deslocX = (w - LARGURA * escala) / 2;
+  deslocY = (h - ALTURA * escala) / 2;
+  prepararBola(Math.round(2 * BOLA.r * escala * dpr));
+}
+
+function telaCheia() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || !el.requestFullscreen) return;
+  el.requestFullscreen()
+    .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock("landscape"))
+    .catch(() => {});
+}
+
+function tocar(nome) {
+  estado.toque = [nome, performance.now()];
+  mandar(`TOQUE ${nome}`);
+}
+
+canvas.addEventListener("pointerdown", (e) => {
+  telaCheia();   // o primeiro toque põe em tela cheia, onde o navegador deixa
+  const x = (e.clientX - deslocX) / escala, y = (e.clientY - deslocY) / escala;
+  for (const [nome, [cx, cy]] of Object.entries(BOTOES_REDONDOS)) {
+    if ((x - cx) ** 2 + (y - cy) ** 2 <= RAIO_BOTAO ** 2) { tocar(nome); return; }
+  }
+  const r = CAIXA_VEL;
+  if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) tocar("MODO");
+});
+
+window.addEventListener("resize", redimensionar);
+redimensionar();
+
+let ultimoQuadro = 0;
+function quadro(agora) {
+  if (agora - ultimoQuadro >= INTERVALO_QUADRO - 1) {
+    ultimoQuadro = agora;
+    desenhar(agora);
+  }
+  requestAnimationFrame(quadro);
+}
+requestAnimationFrame(quadro);
+</script>
+</body>
+</html>

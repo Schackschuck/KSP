@@ -51,6 +51,12 @@ Protocolo entre a ponte da tela (`bridge/mfd.py`) e a mikromedia for ARM. Enquan
 
 A camada física e o enquadramento são os mesmos do painel: 115200 baud, uma mensagem por linha, no máximo 31 caracteres, e `ERR <linha>` para o que a tela não reconhece.
 
+No **celular** (`bridge/mfd_celular.py`), as mesmas linhas vão por HTTP, pelo Wi-Fi:
+
+- ponte → celular: a página abre `GET /eventos`, um fluxo *Server-Sent Events* que fica aberto, e cada linha do protocolo chega como um evento (`data: ALT 84321`);
+- celular → ponte: cada linha vai num `POST /linha`, com a linha no corpo (no máximo 64 bytes);
+- a página manda `READY` sempre que o fluxo de eventos abre, inclusive quando reconecta sozinha.
+
 ### Tela → ponte
 
 | Mensagem | Quando | Significado |
