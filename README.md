@@ -101,6 +101,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 ```
 bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de telemetria;
                   tela multifunção: ponte (mfd.py), simulador, navball e a página do celular (celular/);
+                  painel de sistemas de controle (sistemas.py), com a página de botões (celular/painel.html);
                   editor de nós de manobra com botões na página (manobras.py); testes em bridge/tests/
 scripts/          scripts de voo (pouso, fly by wire...), que rodam com ou sem o cockpit; testes em scripts/tests/
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
@@ -297,14 +298,14 @@ Como nos aviões da Airbus, o manche não mexe nas superfícies: ele diz para on
 
 ### Piloto automático de avião
 
-**Status: painel desenhado; código a fazer.**
+**Status: código escrito e testado com o avião simulado e a demonstração; falta testar no jogo.** O `fbw.py` voa HDG, ALT e V/S mexendo no ponto ([docs/fbw.md](docs/fbw.md#piloto-automático)), e o painel de sistemas é, por enquanto, uma página de botões aberta pela ponte da tela ([docs/mfd.md](docs/mfd.md#painel-de-sistemas-de-controle)), com a roda do SAS e a página do piloto na tela.
 
-**A fazer, para ficar igual ao painel desenhado** ([desenho](hardware/construcao.md#painel-de-sistemas-de-controle), [mensagens](docs/protocolo.md#painel-de-sistemas-de-controle)):
-
-- [ ] Página de botões no celular, no lugar do painel, como a do editor de manobras.
-- [ ] Ponte da tela (`bridge/mfd.py`): modos do SAS, SAS e RCS no jogo; azul ou verde pelo erro até o marcador; o menu do piloto; as páginas do SAS e do piloto, com a volta à navball.
-- [ ] Tela do celular e simulador: a roda dos modos do SAS e a página do piloto.
-- [ ] `scripts/fbw.py`: HDG, ALT e V/S mexendo no ponto; FBW e TRAVA pelo painel; estado e comandos por UDP com a ponte da tela; testes no avião simulado.
+- [x] Página de botões no celular, no lugar do painel, como a do editor de manobras.
+- [x] Ponte da tela (`bridge/mfd.py` e `bridge/sistemas.py`): modos do SAS, SAS e RCS no jogo; azul ou verde pelo erro até o marcador; o menu do piloto; as páginas do SAS e do piloto, com a volta à navball.
+- [x] Tela do celular e simulador: a roda dos modos do SAS e a página do piloto.
+- [x] `scripts/fbw.py`: HDG, ALT e V/S mexendo no ponto; FBW e TRAVA pelo painel; estado e comandos por UDP com a ponte da tela; testes no avião simulado.
+- [ ] Testar no jogo: os modos do SAS e as luzes ([roteiro](docs/mfd.md#testar-o-painel-sem-o-ksp)), e o piloto automático num avião ([roteiro](docs/fbw.md#piloto-automático)).
+- [ ] O painel de verdade: as mesmas linhas pela serial do Mega, e as pontes do painel e da tela juntas.
 
 Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing, o FCU do Airbus).
 

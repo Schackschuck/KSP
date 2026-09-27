@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#30353a">
+<title>Sistemas de controle</title>
+<link rel="icon" href="data:,">
+<style>
+  /* Cores e medidas da identidade visual (hardware/identidade_visual.md). */
+  :root {
+    --painel: #30353a; --borda: #15181b; --legenda: #eef0ea; --apoio: #b9bfc5;
+    --korry: #15181b; --apagado: #555c63;
+    --verde: #46d37f; --azul: #4c9dff; --ambar: #f2a93b;
+    --k: min(14.5vw, 76px);        /* lado de um korry */
+    --vao: calc(var(--k) * 0.133); /* 3 mm num korry de 22,5 mm */
+  }
+  html, body {
+    margin: 0; min-height: 100%; background: #202428; color: var(--legenda);
+    font-family: "B612", "Arial Narrow", Arial, sans-serif; font-weight: 700;
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  body { display: flex; justify-content: center; padding: 12px 8px 24px; box-sizing: border-box; }
+  .painel {
+    background: var(--painel); border: 2px solid var(--borda); border-radius: 10px;
+    padding: 10px 12px 16px; width: calc(var(--k) * 5 + var(--vao) * 4 + 40px); max-width: 100%; box-sizing: border-box;
+  }
+  h1 { font-size: 15px; letter-spacing: .08em; text-align: center; margin: 2px 0 14px; }
+  .grupo {
+    position: relative; border: 1px solid var(--legenda); border-radius: 5px;
+    padding: 16px 6px 8px; margin-bottom: 16px;
+  }
+  .grupo > .nome {
+    position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+    background: var(--painel); padding: 0 6px; font-size: 11px; letter-spacing: .06em; white-space: nowrap;
+  }
+  .grade { display: grid; gap: var(--vao); justify-content: center; }
+  .atitude { grid-template-columns: repeat(5, var(--k)); }
+  .baixo { display: flex; gap: 10px; flex-wrap: wrap; }
+  .baixo .grupo { flex: 0 0 auto; margin-bottom: 0; }
+  .baixo .piloto { flex: 1; }
+  .sistemas { grid-template-columns: repeat(2, var(--k)); }
+
+  /* Korry: legenda apagada em cinza; acesa na cor, com o fundo tingido. */
+  .korry {
+    width: var(--k); height: var(--k); box-sizing: border-box; padding: 0;
+    background: var(--korry); border: 3px solid #0a0c0d; border-radius: 5px;
+    color: var(--apagado); font: inherit; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; cursor: pointer; position: relative;
+  }
+  .korry:active { transform: translateY(1px); filter: brightness(1.3); }
+  .korry svg { width: 46%; height: 46%; overflow: visible; }
+  .korry .palavra { font-size: calc(var(--k) * 0.12); margin-top: 3px; letter-spacing: .02em; }
+  .korry.aceso { color: var(--cor); background: color-mix(in srgb, var(--cor) 16%, var(--korry)); }
+  .korry .cima, .korry .baixo2 { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
+  .korry .cima { font-size: calc(var(--k) * 0.2); border-bottom: 1px solid #2c3136; }
+  .korry .baixo2 { font-size: calc(var(--k) * 0.13); }
+  .korry .cima.aceso { color: var(--verde); background: color-mix(in srgb, var(--verde) 16%, transparent); }
+  .korry .baixo2.aceso { color: var(--ambar); background: color-mix(in srgb, var(--ambar) 16%, transparent); }
+  .korry.unica { font-size: calc(var(--k) * 0.16); text-align: center; line-height: 1.1; }
+
+  /* Encoder: arraste em volta para girar; o centro aperta (segurar 1 s liga o modo). */
+  .piloto .corpo { display: flex; align-items: center; justify-content: space-around; gap: 6px; }
+  .encoder { position: relative; width: calc(var(--k) * 1.45); height: calc(var(--k) * 1.45); touch-action: none; }
+  .anel {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: repeating-conic-gradient(#8a9096 0 2deg, #5d646b 2deg 7.5deg);
+    border: 2px solid #07080a; box-sizing: border-box;
+  }
+  .miolo {
+    position: absolute; inset: 18%; border-radius: 50%; border: 1px solid #8a9096;
+    background: radial-gradient(circle at 40% 35%, #4a5056, #15181b); font-size: 10px; color: var(--apoio);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .miolo.apertado { filter: brightness(1.6); }
+  .marca { position: absolute; left: 50%; top: 6%; width: 8%; height: 8%; margin-left: -4%; border-radius: 50%; background: #101316; }
+  .setas { display: flex; flex-direction: column; gap: 6px; }
+  .seta {
+    width: calc(var(--k) * 0.55); height: calc(var(--k) * 0.5); border-radius: 50%;
+    border: 1px solid #8a9096; background: #1e2226; color: var(--legenda); font: inherit; font-size: 18px;
+  }
+  .luzes { display: flex; flex-direction: column; gap: 10px; }
+  .luz { display: flex; align-items: center; gap: 6px; font-size: 11px; justify-content: flex-end; white-space: nowrap; }
+  .luz i {
+    width: 12px; height: 12px; border-radius: 50%; background: #262a2e;
+    border: 2px solid #8a9096; box-sizing: border-box; display: inline-block;
+  }
+  .luz.acesa i { background: var(--verde); box-shadow: 0 0 8px var(--verde); }
+  .apoio { color: var(--apoio); font-size: 9px; text-align: center; margin-top: 6px; line-height: 1.4; }
+  #conexao { color: var(--ambar); text-align: center; font-size: 12px; min-height: 16px; margin-top: 10px; }
+  .sem-sinal .korry, .sem-sinal .luz { opacity: .45; }
+</style>
+</head>
+<body>
+<!--
+  Painel de sistemas de controle: os botões fazem o papel do painel de
+  verdade (hardware/construcao.md#painel-de-sistemas-de-controle) e mandam
+  as mesmas linhas para a ponte da tela (bridge/mfd.py): BTN <nome> 1,
+  BTN AP 0 e ENC AP <cliques>. As luzes acendem com as linhas que a ponte
+  manda de volta (SASM, SAS, RCS, SEMEC, SEMMP, LEI, TRAVA, APL), como o
+  painel vai acender os LEDs. Protocolo em docs/protocolo.md.
+-->
+<div class="painel" id="painel">
+  <h1>SISTEMAS DE CONTROLE</h1>
+
+  <div class="grupo">
+    <span class="nome">ATITUDE</span>
+    <div class="grade atitude" id="modos"></div>
+  </div>
+
+  <div class="baixo">
+    <div class="grupo">
+      <span class="nome">SISTEMAS</span>
+      <div class="grade sistemas">
+        <button class="korry" data-btn="SAS"><span class="cima" id="SAS">SAS</span><span class="baixo2" id="SEMEC">SEM EC</span></button>
+        <button class="korry" data-btn="RCS"><span class="cima" id="RCS">RCS</span><span class="baixo2" id="SEMMP">SEM MP</span></button>
+        <button class="korry" data-btn="FBW"><span class="cima" id="FBW">FBW</span><span class="baixo2" id="DIRETA">DIRETA</span></button>
+        <button class="korry unica" data-btn="TRAVA" id="TRAVA" style="--cor: var(--verde)">TRAVA<br>ALT</button>
+      </div>
+    </div>
+
+    <div class="grupo piloto">
+      <span class="nome">PILOTO AUTO</span>
+      <div class="corpo">
+        <div class="setas">
+          <button class="seta" id="mais">+</button>
+          <button class="seta" id="menos">&minus;</button>
+        </div>
+        <div class="encoder" id="encoder">
+          <div class="anel" id="anel"><div class="marca"></div></div>
+          <div class="miolo" id="miolo">APERTAR</div>
+        </div>
+        <div class="luzes">
+          <span class="luz" id="APL-HDG">HDG <i></i></span>
+          <span class="luz" id="APL-ALT">ALT <i></i></span>
+          <span class="luz" id="APL-VS">V/S <i></i></span>
+        </div>
+      </div>
+      <div class="apoio">GIRAR: LINHA OU VALOR &middot; APERTAR: ESCOLHE &middot; SEGURAR 1 S: LIGA</div>
+    </div>
+  </div>
+  <div id="conexao"></div>
+</div>
+
+<script>
+"use strict";
+
+const MAX_LINHA = 31;
+const SEM_SINAL = 3000;       // ms sem nenhuma linha: a ponte manda as luzes pelo menos 1 vez por segundo
+const CLIQUES_POR_VOLTA = 20; // como o encoder EC11
+const COR = { A: "var(--azul)", V: "var(--verde)" };
+
+// Os 10 modos em pares: o modo em cima, o oposto embaixo (a mesma ordem do desenho).
+const CIMA = [["ESTAB", "ESTAB"], ["PRO", "PRO"], ["NRM", "NORMAL"], ["RFORA", "RAD FORA"], ["ALVO", "ALVO"]];
+const BAIXO = [["MAN", "MANOBRA"], ["RETRO", "RETRO"], ["ANRM", "ANTINRM"], ["RDENTRO", "RAD DENTRO"], ["AALVO", "ANTIALVO"]];
+
+// Ícones: os marcadores da navball, como em hardware/desenho/pecas.js (sasIcon).
+function icone(modo) {
+  const linha = (graus, r0, r1) => {
+    const a = graus * Math.PI / 180;
+    return `<line x1="${(r0 * Math.cos(a)).toFixed(2)}" y1="${(r0 * Math.sin(a)).toFixed(2)}" x2="${(r1 * Math.cos(a)).toFixed(2)}" y2="${(r1 * Math.sin(a)).toFixed(2)}"/>`;
+  };
+  const circulo = (r, extra = "") => `<circle r="${r}" ${extra}/>`;
+  const ponto = `<circle r=".55" fill="currentColor" stroke="none"/>`;
+  const triangulo = (d0, r) => {
+    const p = [0, 1, 2].map((i) => { const a = (d0 + i * 120) * Math.PI / 180; return `${(r * Math.cos(a)).toFixed(2)},${(r * Math.sin(a)).toFixed(2)}`; });
+    return `<polygon points="${p.join(" ")}" stroke-linejoin="round"/>`;
+  };
+  const desenhos = {
+    ESTAB: circulo(2.6) + linha(180, 0, 1.5) + linha(0, 0, 1.5),
+    MAN: circulo(2.1) + ponto + [-90, 30, 150].map((d) => {
+      const a = d * Math.PI / 180, px = -Math.sin(a), py = Math.cos(a);
+      return `<polygon fill="currentColor" stroke="none" points="${2.6 * Math.cos(a)},${2.6 * Math.sin(a)} ${3.9 * Math.cos(a) + 1.2 * px},${3.9 * Math.sin(a) + 1.2 * py} ${3.9 * Math.cos(a) - 1.2 * px},${3.9 * Math.sin(a) - 1.2 * py}"/>`;
+    }).join(""),
+    PRO: circulo(2.2) + ponto + linha(-90, 2.2, 3.8) + linha(180, 2.2, 3.8) + linha(0, 2.2, 3.8),
+    RETRO: circulo(2.2) + linha(45, -2.2, 2.2) + linha(135, -2.2, 2.2) + linha(-90, 2.2, 3.8) + linha(150, 2.2, 3.8) + linha(30, 2.2, 3.8),
+    NRM: triangulo(-90, 3) + ponto,
+    ANRM: triangulo(90, 3) + ponto + linha(-90, 1.5, 3.9) + linha(30, 1.5, 3.9) + linha(150, 1.5, 3.9),
+    RFORA: circulo(2) + ponto + [45, 135, 225, 315].map((d) => linha(d, 2, 3.7)).join(""),
+    RDENTRO: circulo(3) + [45, 135, 225, 315].map((d) => linha(d, 1, 3)).join(""),
+    ALVO: circulo(2.6, 'stroke-dasharray="1.1 .7"') + ponto + [0, 90, 180, 270].map((d) => linha(d, 2.6, 3.8)).join(""),
+    AALVO: circulo(2.6) + [-90, 30, 150].map((d) => linha(d, 0, 2.6)).join(""),
+  };
+  return `<svg viewBox="-4.5 -4.5 9 9" fill="none" stroke="currentColor" stroke-width=".55" stroke-linecap="round">${desenhos[modo]}</svg>`;
+}
+
+const caixaModos = document.getElementById("modos");
+for (const [modo, palavra] of [...CIMA, ...BAIXO]) {
+  const b = document.createElement("button");
+  b.className = "korry";
+  b.id = `modo-${modo}`;
+  b.dataset.btn = `SAS_${modo}`;
+  b.innerHTML = icone(modo) + `<span class="palavra">${palavra}</span>`;
+  caixaModos.append(b);
+}
+
+// ---------- comunicação com a ponte ----------
+
+// Uma linha de cada vez, na ordem, como numa serial.
+let envios = Promise.resolve();
+function mandar(linha) {
+  envios = envios.then(() => fetch("/linha", { method: "POST", body: linha })).catch(() => {});
+}
+
+for (const b of document.querySelectorAll("[data-btn]")) {
+  b.addEventListener("click", () => mandar(`BTN ${b.dataset.btn} 1`));
+}
+
+// ---------- luzes ----------
+
+let ultima = -Infinity;
+const acender = (id, sim) => document.getElementById(id).classList.toggle("aceso", sim);
+
+function interpretar(linha) {
+  const p = linha.split(" ");
+  if (p[0] === "SASM" && p.length === 2 && p[1] === "OFF") {
+    for (const b of caixaModos.children) b.classList.remove("aceso");
+  } else if (p[0] === "SASM" && p.length === 3 && p[2] in COR) {
+    for (const b of caixaModos.children) {
+      const este = b.id === `modo-${p[1]}`;
+      b.classList.toggle("aceso", este);
+      if (este) b.style.setProperty("--cor", COR[p[2]]);
+    }
+  } else if (["SAS", "RCS", "SEMEC", "SEMMP"].includes(p[0]) && p.length === 2) {
+    acender(p[0], p[1] === "1");
+  } else if (p[0] === "LEI" && p.length === 2) {
+    acender("FBW", p[1] === "FBW");
+    acender("DIRETA", p[1] === "DIRETA");
+  } else if (p[0] === "TRAVA" && p.length === 2) {
+    acender("TRAVA", p[1] !== "OFF");
+  } else if (p[0] === "APL" && p.length === 3) {
+    const luz = document.getElementById(`APL-${p[1]}`);
+    if (!luz) return false;
+    luz.classList.toggle("acesa", p[2] !== "0");
+  } else {
+    return false;
+  }
+  return true;
+}
+
+const eventos = new EventSource("/eventos");
+eventos.onopen = () => mandar("READY");   // a ponte reenvia todas as luzes
+eventos.onmessage = (e) => {
+  if (e.data.length <= MAX_LINHA && interpretar(e.data)) ultima = performance.now();
+};
+
+setInterval(() => {
+  const semSinal = performance.now() - ultima > SEM_SINAL;
+  document.getElementById("painel").classList.toggle("sem-sinal", semSinal);
+  document.getElementById("conexao").textContent = semSinal ? "SEM CONEXAO COM A PONTE" : "";
+}, 500);
+
+// ---------- encoder ----------
+
+// Arrastar o dedo em volta do anel gira o encoder: um clique a cada 18°.
+// Os cliques de um mesmo instante vão numa linha só (ENC AP 2).
+const encoder = document.getElementById("encoder");
+const anel = document.getElementById("anel");
+const miolo = document.getElementById("miolo");
+let giro = null, angulo = 0, pendentes = 0;
+
+function anguloDoToque(e) {
+  const r = encoder.getBoundingClientRect();
+  return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180 / Math.PI;
+}
+
+function girar(cliques) {
+  angulo += cliques * 360 / CLIQUES_POR_VOLTA;
+  anel.style.transform = `rotate(${angulo}deg)`;
+  pendentes += cliques;
+}
+
+setInterval(() => {
+  if (pendentes !== 0) { mandar(`ENC AP ${pendentes}`); pendentes = 0; }
+}, 40);
+
+anel.addEventListener("pointerdown", (e) => {
+  anel.setPointerCapture(e.pointerId);
+  giro = anguloDoToque(e);
+});
+anel.addEventListener("pointermove", (e) => {
+  if (giro === null) return;
+  const agora = anguloDoToque(e);
+  let delta = agora - giro;
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
+  const cliques = Math.trunc(delta / (360 / CLIQUES_POR_VOLTA));
+  if (cliques !== 0) {
+    girar(cliques);
+    giro += cliques * 360 / CLIQUES_POR_VOLTA;
+  }
+});
+for (const fim of ["pointerup", "pointercancel"]) anel.addEventListener(fim, () => { giro = null; });
+
+document.getElementById("mais").addEventListener("click", () => girar(1));
+document.getElementById("menos").addEventListener("click", () => girar(-1));
+
+// O centro é o botão do encoder: manda o aperto e a soltura, e a ponte mede o tempo.
+let apertado = false;
+miolo.addEventListener("pointerdown", (e) => {
+  e.stopPropagation();
+  miolo.setPointerCapture(e.pointerId);
+  apertado = true;
+  miolo.classList.add("apertado");
+  mandar("BTN AP 1");
+});
+for (const fim of ["pointerup", "pointercancel"]) {
+  miolo.addEventListener(fim, () => {
+    if (!apertado) return;
+    apertado = false;
+    miolo.classList.remove("apertado");
+    mandar("BTN AP 0");
+  });
+}
+</script>
+</body>
+</html>

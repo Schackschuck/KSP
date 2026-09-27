@@ -21,6 +21,7 @@ import socket
 import threading
 
 PAGINA = pathlib.Path(__file__).with_name("celular") / "index.html"
+PAGINA_PAINEL = pathlib.Path(__file__).with_name("celular") / "painel.html"
 MAX_CORPO = 64          # bytes: uma linha do protocolo tem no máximo 31 caracteres
 PING = 10               # s sem mensagem: manda um comentário para a conexão não cair
 MAX_FILA = 500          # mensagens guardadas para um celular que parou de ler (tela apagada)
@@ -38,9 +39,14 @@ def endereco_local():
 
 
 class TelaCelular:
-    """A tela no navegador do celular, com a mesma interface da classe Painel."""
+    """A tela no navegador do celular, com a mesma interface da classe Painel.
 
-    def __init__(self, porta=8000):
+    Serve também a página de botões do painel de sistemas (painel.html), que
+    faz o papel do painel de verdade: manda BTN e ENC e acende as luzes com
+    as linhas que a ponte manda, pelo mesmo caminho.
+    """
+
+    def __init__(self, porta=8000, pagina=PAGINA, nome="a tela"):
         self._recebidas = queue.Queue()   # celular → ponte
         self._clientes = set()            # ponte → celular: uma fila por página aberta
         self._trava = threading.Lock()
@@ -49,9 +55,10 @@ class TelaCelular:
         self._servidor = http.server.ThreadingHTTPServer(("0.0.0.0", porta), _Pedido)
         self._servidor.daemon_threads = True
         self._servidor.tela = self
+        self.pagina = pagina
         threading.Thread(target=self._servidor.serve_forever, daemon=True).start()
 
-        print(f"Abra no navegador do celular: http://{endereco_local()}:{porta}")
+        print(f"Para {nome}, abra no navegador do celular: http://{endereco_local()}:{porta}")
         print("(o celular precisa estar no mesmo Wi-Fi que este computador)")
 
     def enviar(self, mensagem):
@@ -108,7 +115,7 @@ class _Pedido(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def _pagina(self):
-        corpo = PAGINA.read_bytes()
+        corpo = self.server.tela.pagina.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(corpo)))

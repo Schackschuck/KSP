@@ -49,6 +49,8 @@ A ponte não sabe qual tela está do outro lado. Quando o firmware existir, bast
 | [`bridge/mfd_celular.py`](../bridge/mfd_celular.py) | O servidor da tela no celular: serve a página e troca as mensagens pelo Wi-Fi |
 | [`bridge/celular/index.html`](../bridge/celular/index.html) | A página do celular: o "firmware" do navegador, com a mesma navball e o mesmo layout |
 | [`bridge/navball.py`](../bridge/navball.py) | A conta da navball, escrita para ser passada para C |
+| [`bridge/sistemas.py`](../bridge/sistemas.py) | O painel de sistemas de controle: modos do SAS, SAS, RCS, FBW, o menu do piloto automático e a troca de página |
+| [`bridge/celular/painel.html`](../bridge/celular/painel.html) | A página de botões do painel de sistemas, no lugar do painel de verdade |
 | [`docs/protocolo.md`](protocolo.md#tela-multifunção-mikromedia) | O protocolo da tela, mensagem por mensagem |
 
 ## Instalar
@@ -149,6 +151,85 @@ Outros detalhes:
 - [ ] Desligar o Wi-Fi do celular por alguns segundos mostra `SEM SINAL`; ao religar, a tela volta sozinha.
 - [ ] Com o KSP, os mesmos itens de [Testar com o KSP](#testar-com-o-ksp) valem no celular.
 
+## Painel de sistemas de controle
+
+O [painel de sistemas de controle](../hardware/construcao.md#painel-de-sistemas-de-controle) (modos do SAS, SAS, RCS, FBW, trava de altitude e o piloto automático) é tratado por esta mesma ponte, porque ela já tem o jogo, a tela e a conversa com o [fly by wire](fbw.md). Enquanto o painel não existe, uma **página de botões** faz o papel dele, no navegador do celular ou do PC, e manda as mesmas linhas que o painel vai mandar ([protocolo](protocolo.md#painel-de-sistemas-de-controle)).
+
+![A página de botões: os dez modos do SAS com o NORMAL aceso, SAS, RCS e FBW ligados, e o encoder do piloto automático com o HDG ligado](img/painel_sistemas.png)
+
+A ponte abre a página sozinha, na porta **8001**, junto com a tela (no simulador, no celular ou na placa). O terminal mostra o endereço:
+
+```
+cd bridge
+python mfd.py --demo --celular
+```
+
+```
+Para a tela, abra no navegador do celular: http://192.168.0.15:8000
+Para a página de botões do painel de sistemas, abra no navegador do celular: http://192.168.0.15:8001
+```
+
+Dá para abrir a tela num celular e os botões noutro, ou os dois no mesmo, em abas. Os botões ficam melhores com o celular em pé. `--painel 8002` troca a porta, e `--sem-painel` não abre a página.
+
+**Os controles:**
+
+| Controle | Faz |
+|---|---|
+| Korry de modo (ESTAB, PRO, NORMAL...) | Escolhe o modo do SAS no jogo. Com o SAS desligado, liga junto. Um modo que o jogo não aceita (sem alvo, sem nó, SAS fraco) não muda nada |
+| SAS, RCS | Liga e desliga no jogo |
+| FBW, TRAVA ALT | Vão para o `fbw.py`: ligam e desligam o FBW e a trava da altitude do momento. Sem o `fbw.py` aberto, não fazem nada |
+| Encoder | Arraste o dedo em volta do anel para girar (20 cliques por volta), ou use `+` e `-`. O centro é o botão: apertar escolhe, segurar 1 s liga o modo |
+
+**As luzes**, que mostram o estado do jogo e do `fbw.py`, nunca o toque:
+
+- **Modo do SAS:** azul enquanto a nave vira para o marcador, verde quando ela chega a menos de 2° dele (e volta a azul acima de 4°). ESTAB fica verde logo, porque segura a atitude de agora.
+- **SAS, RCS:** verdes ligados. A metade de baixo acende em âmbar com o SAS ligado sem carga elétrica (`SEM EC`) ou o RCS ligado sem monopropelente (`SEM MP`).
+- **FBW:** verde voando no FBW; `DIRETA` em âmbar no ar na lei direta. **TRAVA ALT:** verde com a altitude travada.
+- **HDG, ALT, V/S:** verdes com o modo ligado (o ALT também armado).
+
+### As páginas do painel na tela
+
+Mexer no painel troca a tela, e uns **10 s depois do último toque** ela volta sozinha para a navball. As páginas são só para ver: o toque nelas não faz nada.
+
+| Página | Abre quando | Mostra |
+|---|---|---|
+| Roda do SAS | Um korry de modo, SAS ou RCS | Os seis modos em volta da nave e, embaixo, ESTAB, MANOBRA, ALVO e ANTIALVO (`--` sem nó ou sem alvo). O modo escolhido ganha um anel azul ou verde, e a seta do meio aponta para ele, torta enquanto a nave ainda vira. Em cima, o SAS e o erro em graus até o marcador |
+| Piloto automático | O encoder | HDG, ALT e V/S, cada um com o estado (DESLIGADO, LIGADO em verde, ARMADO em azul) e o valor. O cursor é a seta; a linha escolhida tem o valor na caixa âmbar. Embaixo, a lei do FBW e a trava |
+
+![A roda do SAS no simulador: o PRO escolhido, azul, com a nave ainda virando](img/mfd_sas.png) ![A página do piloto automático no simulador: HDG e V/S ligados, ALT armado e escolhido](img/mfd_ap.png)
+
+**O menu do piloto**, com o encoder:
+
+1. Com a tela noutra página, girar ou apertar só abre a página do piloto.
+2. Girar move o cursor entre HDG, ALT e V/S (horário desce).
+3. Apertar escolhe a linha, e girar muda o valor: horário soma. Devagar, de 1 em 1 (1°, 10 m, 0,1 m/s); rápido, de 10 em 10.
+4. Apertar de novo sai da linha.
+5. Segurar 1 s liga ou desliga o modo da linha do cursor.
+
+Os valores começam onde o avião está na primeira vez que a página abre (o rumo e a altitude arredondada), e vão para o `fbw.py` quando mudam e 1 vez por segundo. O que cada modo faz no avião está em [docs/fbw.md](fbw.md#piloto-automático).
+
+### Testar o painel sem o KSP
+
+Com `python mfd.py --demo --celular`, a página de botões e as páginas novas da tela funcionam com a nave de mentira. Um avião de mentira faz o papel do `fbw.py`: os modos ligam e desligam, e o ALT fica armado por 6 s antes de "chegar".
+
+| Você faz | Resultado esperado |
+|---|---|
+| Aperta PRO | A tela mostra a roda do SAS. PRO fica azul, com o `ERRO` caindo, e verde em uns 4 s, na tela e no korry. 10 s depois, a tela volta para a navball |
+| Aperta ALVO sem alvo (na primeira metade de cada minuto) | Nada muda. O terminal diz que o jogo não aceitaria |
+| Aperta RCS | O RCS acende. A cada 2 minutos, por 20 s, o `SEM MP` fica âmbar |
+| Gira o encoder | A tela mostra a página do piloto. O próximo giro move o cursor |
+| Aperta o centro e gira | O valor da linha fica na caixa âmbar e muda. Girando rápido, anda de 10 em 10 |
+| Segura o centro 1 s | O modo da linha liga: a luz ao lado do encoder acende, e a página mostra LIGADO (ou ARMADO no ALT, e LIGADO 6 s depois) |
+| Aperta FBW | `LEI DIRETA` na página, `DIRETA` âmbar no korry, e os modos desligam |
+
+**Pronto quando:**
+
+- [ ] Com o KSP: cada korry de modo muda o modo do SAS no jogo, e a luz fica azul e depois verde quando a nave chega no marcador.
+- [ ] Com o KSP: apertar ALVO sem alvo não muda nada no jogo nem na luz.
+- [ ] Com o KSP: `SEM EC` acende quando a bateria acaba com o SAS ligado.
+- [ ] Com o `fbw.py` voando: os korry FBW e TRAVA ALT, e o encoder segurado, mudam o FBW, e as luzes acompanham.
+- [ ] No celular de verdade: arrastar em volta do anel gira o encoder sem rolar a página.
+
 ## Testar com o KSP
 
 Com o jogo na cena de voo e o servidor kRPC iniciado:
@@ -199,7 +280,7 @@ A cada volta do laço principal (`voar()` no `mfd.py`, a cada ~10 ms):
 
 1. **A fonte lê o jogo** e devolve uma `Telemetria`: atitude, velocidades nos três modos, altitude e radar, posição, órbita, acelerador, alvo, nó de manobra e o estado do SAS e do RCS. A fonte é a `NaveKrpc` (streams do kRPC) ou a `Demo` (a nave de mentira).
 2. **O ponto do fly by wire** chega dos scripts por UDP (`Scripts`), se o `fbw.py` estiver voando. Na demonstração, a `Demo` inventa um.
-3. **As linhas da tela são tratadas:** `READY` faz a ponte reenviar tudo; `TOQUE SAS` e `TOQUE RCS` invertem o sistema no jogo; `TOQUE MODO` passa para o próximo modo.
+3. **As linhas da tela e do painel são tratadas:** `READY` faz a ponte reenviar tudo; `TOQUE SAS` e `TOQUE RCS` invertem o sistema no jogo; `TOQUE MODO` passa para o próximo modo. As linhas do painel de sistemas (`BTN`, `ENC`) vão para `Sistemas.tratar()`.
 4. **O `ModoNavball` escolhe o modo** (`SUP`, `ORB` ou `ALVO`), com as trocas automáticas pela altitude e pelo alvo.
 5. **O `Transmissor` decide o que mandar e quando:**
 
@@ -211,6 +292,8 @@ A cada volta do laço principal (`voar()` no `mfd.py`, a cada ~10 ms):
    | Números: `ALT` ou `RAD`, `VEL`, `VV`, `ACEL` e `DIST` | 10 por segundo |
    | Órbita: `AP`, `PE`, `TAP` e `TPE`, só no modo `ORB` | 2 por segundo |
 
+6. **O painel de sistemas:** a cada 50 ms, a ponte mede o erro até o marcador do SAS (`erro_do_sas()`), junta o estado do `fbw.py` e manda as luzes ao painel e as páginas à tela. Um `Remetente` para cada um manda cada linha quando muda e todas 1 vez por segundo.
+
 As peças:
 
 | Peça | Arquivo | Papel |
@@ -219,10 +302,13 @@ As peças:
 | `Telemetria` | `mfd.py` | Tudo o que a ponte precisa saber da nave numa volta do laço |
 | `ModoNavball` | `mfd.py` | O modo da navball e as trocas automáticas |
 | `Transmissor` | `mfd.py` | Transforma a telemetria em mensagens, cada uma na sua frequência |
-| `Scripts` | `mfd.py` | Recebe dos scripts de voo, por UDP, o que eles querem na navball (hoje, o ponto do FBW) |
+| `Scripts` | `mfd.py` | Conversa com os scripts de voo por UDP: recebe o ponto, a lei, a trava e os modos do FBW, e manda os comandos do painel |
+| `Sistemas`, `MenuPiloto`, `CorDoModo` | `sistemas.py` | O painel de sistemas: os botões, o menu do piloto, o azul e o verde, e a página da tela |
+| `Demo`, `FbwDemo` | `mfd.py` | A nave de mentira e um fly by wire de mentira, para testar o painel sem o jogo |
 | `Simulador` | `mfd_simulador.py` | Tela: janela no PC, na resolução da placa |
 | `TelaCelular` | `mfd_celular.py` | Tela: servidor HTTP que liga a ponte à página do celular |
 | página | `celular/index.html` | O "firmware" do navegador: interpreta o protocolo e desenha |
+| página de botões | `celular/painel.html` | O painel de sistemas no navegador: manda os botões e acende as luzes, servida por outra `TelaCelular` |
 | `Painel` | `ponte.py` | Tela: a serial, para a mikromedia quando o firmware existir |
 | funções da navball | `navball.py` | A conta da bola, usada pelo simulador e copiada no JavaScript |
 
@@ -271,7 +357,7 @@ Com raio de 72 pontos, são cerca de 16 mil pontos por quadro, cada um com umas 
 2. **Manual e esquemático** da mikromedia for ARM, no site da MikroE: controlador e pinos da tela e do touch, e como gravar. Pode ser pelo bootloader serial do LPC2148, pela PROG, com o Flash Magic ou o `lpc21isp`; ou pelo bootloader USB da MikroE, pela outra porta. **Antes de gravar qualquer coisa**, baixar o `.hex` do demo de fábrica, se estiver disponível: gravar um programa novo apaga o demo.
 3. **Firmware, fase 6:** piscar um LED, depois a serial (eco, e em seguida este protocolo), depois a tela (pintar, texto), a navball e o touch. Quando a placa responder `READY`, rodar `python mfd.py --porta COMx`.
 4. **Manobras pela tela** (ideia para depois): informações do próximo nó (Δv, tempo de queima, T− até o nó) e um editor de manobras pelo toque, junto com o editor de encoders da fase 4.
-5. **Roda de modos do SAS** (ideia para depois): uma segunda página com botões grandes para estabilidade, pró e retrógrado, normal, radial, alvo e manobra.
+5. **Painel de sistemas de verdade:** quando o módulo existir, as mesmas linhas chegam pela serial do Mega, pela ponte do painel (`ponte.py`), e as duas pontes precisam virar uma, ou a do painel repassar as linhas para esta.
 
 ## Histórico
 
@@ -285,3 +371,4 @@ A tela foi feita aos poucos, testando no jogo entre uma etapa e outra:
 | [#13](https://github.com/Schackschuck/KSP/pull/13) | Marcadores normal, radial e de manobra; visual inspirado no KSP2, com barras do acelerador e da velocidade vertical e botões redondos |
 | [#14](https://github.com/Schackschuck/KSP/pull/14) | A tela no celular, pelo Wi-Fi |
 | [#15](https://github.com/Schackschuck/KSP/pull/15) | Números do rumo e do pitch na própria navball; sai a fita de rumo, e o modo SUP fica sem o painel de baixo |
+| [#32](https://github.com/Schackschuck/KSP/pull/32) | Painel de sistemas de controle: a página de botões, a roda do SAS e a página do piloto automático, com a volta à navball; a conversa com o `fbw.py` nos dois sentidos |
