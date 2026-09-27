@@ -61,6 +61,19 @@ Por cima do FBW, como um piloto que não cansa: cada modo só mexe no ponto, e a
 
 **Pronto quando:** um avião decola na mão, e o piloto automático leva ele até a altitude e o rumo escolhidos no painel e segura lá.
 
+### Sem joystick
+
+Para testar o piloto automático sem o joystick:
+
+```
+python scripts/fbw.py --sem-joystick
+```
+
+- **Na lei direta** (no chão, e com o FBW desligado), o script não mexe nas superfícies: o avião é pilotado pelo **teclado do jogo** (W/S, A/D, Q/E), como sem o script. Decole assim.
+- **No ar**, 1 s depois de sair do chão, o FBW assume e segura o ponto onde o avião está indo. Daí em diante, o teclado não deve ser usado para pilotar: quem mexe no ponto é o piloto automático, pelo painel (a página de botões da ponte da tela). O acelerador continua no Shift e no Ctrl.
+- Para voltar ao teclado (para pousar, por exemplo), aperte o korry **FBW** no painel: a lei volta a ser a direta, e o script solta o manche.
+- A conferir no jogo: se, na lei direta, o teclado não mexer nas superfícies, anote. O script manda o manche zerado uma vez, ao voltar para a lei direta, e depois não manda mais nada.
+
 ## Controles
 
 Perfil `extreme3d` (padrão), o [Logitech Extreme 3D Pro](../hardware/construcao.md#joystick-logitech-extreme-3d-pro):
@@ -198,6 +211,7 @@ A guiagem (`FlyByWire`) não conhece o kRPC nem o joystick, como a do pouso: rec
 | O ponto não aparece na tela | A ponte da tela não está aberta, ou está em outro computador | Abrir o `mfd.py`; em outro computador, `--tela <IP>` e liberar a porta UDP 50100 no firewall |
 | O painel mostra `FBW FECHADO` e os modos não ligam | A ponte não recebe o `fbw.py` | Abrir o `fbw.py`, com `--tela <IP>` se a ponte está noutro computador. As respostas voltam para a porta de onde o `fbw.py` manda: no firewall, liberar o Python |
 | Segurar o encoder não liga o modo | O avião está na lei direta (no chão, ou FBW desligado) | Normal: o piloto automático só liga voando no FBW |
+| `Nenhum joystick encontrado`, e não há joystick | O script espera um joystick | `--sem-joystick`: decola pelo teclado, e o piloto automático voa ([Sem joystick](#sem-joystick)) |
 
 ## Próximos passos
 

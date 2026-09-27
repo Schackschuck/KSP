@@ -50,6 +50,7 @@ Uso:
     python scripts/fbw.py --tela 192.168.1.20  # ponte da tela em outro computador
     python scripts/fbw.py --controles        # mostra os eixos e botões do joystick, sem o KSP
     python scripts/fbw.py --perfil xbox      # controle de Xbox no lugar do Extreme 3D Pro
+    python scripts/fbw.py --sem-joystick     # sem joystick: decola pelo teclado, e o piloto automático voa
     python scripts/fbw.py --gravar voo.csv   # grava o voo numa planilha, para ajustar os ganhos
 
 Deixe os eixos do joystick sem nada nas configurações de controle do KSP,
@@ -669,8 +670,19 @@ class Controles:
     def __init__(self, controle):
         self._controle = controle
         self._enviados = {}
+        self._livre = False
 
-    def mandar(self, c):
+    def mandar(self, c, livre=False):
+        """livre: sem joystick e na lei direta. O manche fica com o teclado do
+        jogo: a primeira vez solta o que o FBW tinha pedido, e depois não
+        manda mais nada até o FBW assumir de novo."""
+        if livre:
+            if not self._livre:
+                self.soltar()
+                self._enviados = {}
+                self._livre = True
+            return
+        self._livre = False
         for nome in ("pitch", "roll", "yaw", "acelerador"):
             valor = getattr(c, nome)
             if valor is None:
@@ -753,6 +765,21 @@ class Joystick:
             botoes = " ".join(str(i) for i in range(j.get_numbuttons()) if j.get_button(i)) or "-"
             print(f"\reixos {eixos}   botões {botoes:12}", end="", flush=True)
             time.sleep(0.05)
+
+
+class SemJoystick:
+    """No lugar do joystick (--sem-joystick): o manche fica sempre solto.
+
+    Na lei direta, o avião é pilotado pelo teclado do jogo (decolagem e
+    pouso). No ar, o FBW segura o ponto, e quem mexe nele é o piloto
+    automático, pelo painel de sistemas (a página de botões da ponte da tela).
+    """
+
+    nome = "nenhum (--sem-joystick: teclado na lei direta, piloto automático no FBW)"
+    manche_livre = True
+
+    def ler(self):
+        return Manche(), False
 
 
 # ---- a tela e a gravação ----
@@ -930,7 +957,7 @@ def voar(conn, nave, joystick, tela, gravador):
                 if texto:
                     print(texto)
             c = fbw.passo(l, m)
-            controles.mandar(c)
+            controles.mandar(c, livre=getattr(joystick, "manche_livre", False) and fbw.lei == DIRETA)
             gravador.gravar(l, m, c, fbw)
 
             agora = time.monotonic()
@@ -997,17 +1024,24 @@ def main():
     )
     parser.add_argument("--joystick", type=int, default=0, metavar="N", help="qual joystick usar, se houver mais de um")
     parser.add_argument("--controles", action="store_true", help="só mostra os eixos e os botões do joystick, sem o KSP")
+    parser.add_argument(
+        "--sem-joystick",
+        action="store_true",
+        help="sem joystick: na lei direta, o teclado do jogo; no FBW, o piloto automático pelo painel",
+    )
     parser.add_argument("--gravar", metavar="ARQUIVO", help="grava o voo numa planilha CSV")
     args = parser.parse_args()
 
-    joystick = Joystick(PERFIS[args.perfil], args.joystick)
+    if args.sem_joystick and args.controles:
+        sys.exit("--controles mostra o joystick: não dá para usar junto com --sem-joystick.")
+    joystick = SemJoystick() if args.sem_joystick else Joystick(PERFIS[args.perfil], args.joystick)
     if args.controles:
         try:
             joystick.mostrar()
         except KeyboardInterrupt:
             print()
         return
-    print(f"Joystick: {joystick.nome} (perfil {args.perfil})")
+    print(f"Joystick: {joystick.nome}" + ("" if args.sem_joystick else f" (perfil {args.perfil})"))
 
     # Os scripts ficam em scripts/ e a ponte em bridge/, que tem a conexão com o kRPC.
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bridge"))
