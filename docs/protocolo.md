@@ -107,7 +107,7 @@ Distâncias e tempos são inteiros de 32 bits. Acima de 2,1 milhões de km, o qu
 
 ### Scripts → ponte da tela
 
-Um script de voo pode pôr um marcador na navball sem depender da ponte. Hoje, só o fly by wire faz isso.
+Um script de voo pode pôr um marcador na navball sem depender da ponte. Hoje, só o fly by wire faz isso, e manda no mesmo pacote o estado do painel de sistemas ([abaixo](#ponte-da-tela--fly-by-wire)).
 
 - O script manda a **própria linha do protocolo da tela** (`FBW 52 2700` ou `FBW OFF`), num pacote **UDP** para a porta **50100** do computador da ponte, 10 vezes por segundo. Sem a ponte aberta, o pacote se perde e o script segue voando.
 - A ponte (`bridge/mfd.py`) escuta em todas as redes (o script pode rodar noutro computador), confere a linha e a repassa para a tela na vez dos marcadores. Linhas que não entende, ela mostra no terminal e descarta.
@@ -157,13 +157,13 @@ O painel do editor ([hardware/construcao.md](../hardware/construcao.md#painel-do
 
 ## Painel de sistemas de controle
 
-Linhas do painel de sistemas de controle ([desenho](../hardware/construcao.md#painel-de-sistemas-de-controle)): os modos do SAS, SAS, RCS, FBW, trava de altitude e o encoder do [piloto automático](../README.md#piloto-automático-de-avião). **Planejado, ainda não feito na ponte.** Quem responde é a ponte da tela (`bridge/mfd.py`), que já tem o jogo, a tela e o fly by wire; enquanto o painel não existe, uma página de botões no celular manda as mesmas linhas.
+Linhas do painel de sistemas de controle ([desenho](../hardware/construcao.md#painel-de-sistemas-de-controle)): os modos do SAS, SAS, RCS, FBW, trava de altitude e o encoder do [piloto automático](../README.md#piloto-automático-de-avião). Quem responde é a ponte da tela (`bridge/mfd.py`, com a lógica em `bridge/sistemas.py`), que já tem o jogo, a tela e o fly by wire. Enquanto o painel não existe, a página de botões `bridge/celular/painel.html` manda as mesmas linhas, pelo mesmo caminho da tela no celular (`POST /linha` e `GET /eventos`, na porta 8001), e manda `READY` ao abrir, para receber todas as luzes. Uso e testes em [docs/mfd.md](mfd.md#painel-de-sistemas-de-controle).
 
 ### Painel → ponte
 
 | Mensagem | Quando | Significado |
 |---|---|---|
-| `BTN SAS_<modo> 1` | Um korry de modo foi apertado | Escolhe o modo do SAS. Modos: `ESTAB`, `MAN`, `PRO`, `RETRO`, `NRM`, `ANRM`, `RFORA`, `RDENTRO`, `ALVO`, `AALVO`. Um modo que o jogo não aceita não muda nada |
+| `BTN SAS_<modo> 1` | Um korry de modo foi apertado | Escolhe o modo do SAS. Modos: `ESTAB`, `MAN`, `PRO`, `RETRO`, `NRM`, `ANRM`, `RFORA`, `RDENTRO`, `ALVO`, `AALVO`. Com o SAS desligado, liga junto. Um modo que o jogo não aceita não muda nada |
 | `BTN SAS 1`, `BTN RCS 1` | O korry foi apertado | Inverte o sistema no jogo |
 | `BTN FBW 1` | O korry FBW foi apertado | Liga ou desliga o FBW, como o botão do joystick |
 | `BTN TRAVA 1` | O korry TRAVA ALT foi apertado | Trava a altitude do momento, ou destrava |
@@ -172,7 +172,7 @@ Linhas do painel de sistemas de controle ([desenho](../hardware/construcao.md#pa
 
 ### Ponte → painel e tela
 
-As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão quando mudam e também 1 vez por segundo.
+As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão quando mudam e também 1 vez por segundo, calculadas 20 vezes por segundo. A tela não recebe `SEMEC` nem `SEMMP`, e o painel não recebe `SASE`, `APV`, `APC` nem `PAG`.
 
 | Mensagem | Valores | No painel | Na tela |
 |---|---|---|---|
@@ -192,7 +192,7 @@ As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão 
 
 ### Ponte da tela ⇄ fly by wire
 
-O `fbw.py` já manda o ponto por UDP para a porta **50100** da ponte da tela. **Planejado:** no mesmo pacote, o estado do FBW e do piloto, uma linha por vez, 10 vezes por segundo: `FBW`, `LEI`, `TRAVA` e `APL`, como na tabela acima. A ponte responde para o endereço de onde o pacote veio:
+O `fbw.py` manda por UDP para a porta **50100** da ponte da tela, 10 vezes por segundo, num pacote só, uma linha por vez: o ponto (`FBW`), a lei (`LEI`), a trava (`TRAVA`) e os modos do piloto (`APL`), como na tabela acima. A ponte responde para o endereço de onde o pacote veio:
 
 | Mensagem | Quando | Significado |
 |---|---|---|
@@ -200,4 +200,4 @@ O `fbw.py` já manda o ponto por UDP para a porta **50100** da ponte da tela. **
 | `CMD HDG`, `CMD ALT`, `CMD VS` | O encoder segurado 1 s | Liga ou desliga o modo |
 | `APV <HDG\|ALT\|VS> <valor>` | Quando muda e 1 vez por segundo | O valor escolhido no menu |
 
-Sem notícia do `fbw.py` por 1 s, a ponte manda `LEI OFF`, `TRAVA OFF` e os `APL` em `0`.
+Sem notícia do `fbw.py` por 1 s, a ponte manda `LEI OFF`, `TRAVA OFF` e os `APL` em `0`, e não manda nada a ele. O `fbw.py` só liga um modo voando na lei do FBW; o que ele faz em cada modo está em [docs/fbw.md](fbw.md#piloto-automático).

@@ -105,6 +105,33 @@ COR_TGT = rgb565(255, 140, 200)
 COR_MNV = rgb565(60, 130, 255)
 COR_FBW = rgb565(90, 230, 90)    # o ponto do fly by wire (scripts/fbw.py)
 
+# Painel de sistemas de controle: azul armado, verde ligado, âmbar atenção.
+AZUL = rgb565(76, 157, 255)
+VERDE = rgb565(70, 211, 127)
+AMBAR = rgb565(242, 169, 59)
+APAGADO = rgb565(85, 92, 99)
+FUNDO_MODO = rgb565(17, 23, 29)
+
+# Páginas do painel de sistemas de controle, no lugar da navball enquanto o
+# painel é mexido (PAG SAS e PAG AP). A roda do SAS: os seis modos em volta
+# da nave, e embaixo os que não têm par na roda.
+RODA_X, RODA_Y, RODA_RAIO = 160, 104, 78
+RODA_MODOS = 52         # raio em que ficam os modos
+RODA_BOTAO = 14
+MODOS_RODA = {"NRM": -90, "PRO": -30, "RFORA": 30, "ANRM": 90, "RETRO": 150, "RDENTRO": -150}
+MODOS_FAIXA = ("ESTAB", "MAN", "ALVO", "AALVO")
+FAIXA = pygame.Rect(72, 190, 40, 28)
+FAIXA_PASSO = 46
+LINHAS_AP = ("HDG", "ALT", "VS")
+NOMES_AP = {"HDG": "HDG", "ALT": "ALT", "VS": "V/S"}
+ESTADO_AP = {0: ("DESLIGADO", APAGADO), 1: ("LIGADO", VERDE), 2: ("ARMADO", AZUL)}
+LEIS = {
+    "FBW": ("LEI FBW", VERDE),
+    "DIRETA": ("LEI DIRETA", AMBAR),
+    "CHAO": ("NO CHAO", APAGADO),
+    "OFF": ("FBW FECHADO", APAGADO),
+}
+
 # Números pintados na navball. O rumo vai a cada 30°, logo acima do
 # horizonte, com letras nos pontos cardeais (L = leste, O = oeste). O pitch
 # vai a cada 30°, um pouco ao lado dos meridianos de N, L, S e O.
@@ -176,6 +203,8 @@ class Simulador:
         fontes = "consolas,dejavusansmono,couriernew,monospace"
         self._fonte = pygame.font.SysFont(fontes, 14)
         self._fonte_pequena = pygame.font.SysFont(fontes, 11)
+        self._fonte_media = pygame.font.SysFont(fontes, 16)
+        self._fonte_grande = pygame.font.SysFont(fontes, 20)
 
         # O que a tela sabe, só a partir das mensagens. None = ainda não chegou.
         self._atitude = None       # (pitch, rumo, rolagem) em graus
@@ -183,6 +212,13 @@ class Simulador:
         self._altitude = None      # ("ALT" ou "RAD", metros)
         self._numeros = dict.fromkeys(NUMEROS_DO_MODO + ("VV", "ACEL"))
         self._estados = {"SAS": None, "RCS": None, "MODO": None}
+        # Painel de sistemas de controle.
+        self._pagina = "NAV"
+        self._sas = {"modo": None, "cor": None, "erro": None}   # erro em décimos de grau
+        self._ap = {nome: [0, None] for nome in LINHAS_AP}      # [estado, valor]
+        self._cursor = ("HDG", False)                           # (linha, escolhida)
+        self._lei = "OFF"
+        self._trava = None
 
         self._ultima_valida = float("-inf")
         self._toque = (None, float("-inf"))   # último botão tocado e quando
@@ -251,6 +287,24 @@ class Simulador:
             self._numeros[nome] = numeros[0]
         elif nome in ("SAS", "RCS") and partes in (["0"], ["1"]):
             self._estados[nome] = partes[0] == "1"
+        elif nome == "PAG" and partes in (["NAV"], ["SAS"], ["AP"]):
+            self._pagina = partes[0]
+        elif nome == "SASM" and partes == ["OFF"]:
+            self._sas["modo"] = self._sas["cor"] = None
+        elif nome == "SASM" and len(partes) == 2 and partes[1] in ("A", "V"):
+            self._sas["modo"], self._sas["cor"] = partes
+        elif nome == "SASE" and (partes == ["OFF"] or (len(partes) == 1 and tudo_numero)):
+            self._sas["erro"] = None if partes == ["OFF"] else numeros[0]
+        elif nome == "APL" and len(partes) == 2 and partes[0] in self._ap and partes[1] in ("0", "1", "2"):
+            self._ap[partes[0]][0] = numeros[1]
+        elif nome == "APV" and len(partes) == 2 and partes[0] in self._ap and numeros[1] is not None:
+            self._ap[partes[0]][1] = numeros[1]
+        elif nome == "APC" and len(partes) == 2 and partes[0] in self._ap and partes[1] in ("0", "1"):
+            self._cursor = (partes[0], partes[1] == "1")
+        elif nome == "LEI" and len(partes) == 1 and partes[0] in LEIS:
+            self._lei = partes[0]
+        elif nome == "TRAVA" and (partes == ["OFF"] or (len(partes) == 1 and tudo_numero)):
+            self._trava = None if partes == ["OFF"] else numeros[0]
         elif nome == "MODO" and partes in (["SUP"], ["ORB"], ["ALVO"]):
             if partes[0] != self._estados["MODO"]:
                 # Os números e os marcadores do modo antigo não valem mais;
@@ -263,6 +317,8 @@ class Simulador:
         return True
 
     def _tocar(self, x, y):
+        if self._pagina != "NAV":
+            return   # as páginas do painel de sistemas são só para ver
         for nome, retangulo in BOTOES.items():
             if nome in BOTOES_REDONDOS:
                 cx, cy = BOTOES_REDONDOS[nome]
@@ -278,12 +334,17 @@ class Simulador:
     def _desenhar(self, agora):
         self._tela.fill(FUNDO)
         com_sinal = agora - self._ultima_valida < SEM_SINAL
-        self._desenhar_aro()
-        self._desenhar_navball(com_sinal)
-        self._desenhar_caixas(com_sinal, agora)
-        self._desenhar_barras(com_sinal)
-        self._desenhar_botoes(com_sinal, agora)
-        self._desenhar_painel(com_sinal)
+        if com_sinal and self._pagina == "SAS":
+            self._desenhar_pagina_sas()
+        elif com_sinal and self._pagina == "AP":
+            self._desenhar_pagina_ap()
+        else:
+            self._desenhar_aro()
+            self._desenhar_navball(com_sinal)
+            self._desenhar_caixas(com_sinal, agora)
+            self._desenhar_barras(com_sinal)
+            self._desenhar_botoes(com_sinal, agora)
+            self._desenhar_painel(com_sinal)
         ampliada = pygame.transform.scale(self._tela, self._janela.get_size())
         self._janela.blit(ampliada, (0, 0))
         pygame.display.flip()
@@ -429,6 +490,117 @@ class Simulador:
         pygame.draw.line(self._tela, NAVE, (cx + 9, cy), (cx + 24, cy), 3)
         pygame.draw.lines(self._tela, NAVE, False, [(cx - 9, cy), (cx, cy + 7), (cx + 9, cy)], 3)
         pygame.draw.circle(self._tela, NAVE, (cx, cy - 3), 2)
+
+    # ---- páginas do painel de sistemas de controle ----
+
+    def _marcador_do_modo(self, modo, centro):
+        if modo == "ESTAB":
+            # Segura a atitude de agora: não tem marcador na navball.
+            cx, cy = centro
+            pygame.draw.circle(self._tela, TEXTO, centro, 7, 2)
+            pygame.draw.line(self._tela, TEXTO, (cx - 4, cy), (cx + 4, cy), 2)
+            return
+        desenhos = {
+            "PRO": self._progrado, "RETRO": self._retrogrado, "NRM": self._normal,
+            "ANRM": self._antinormal, "RFORA": self._radial_fora, "RDENTRO": self._radial_dentro,
+            "ALVO": self._alvo, "AALVO": self._antialvo, "MAN": self._manobra,
+        }
+        desenhos[modo](centro)
+
+    def _disponivel(self, modo):
+        """Alvo e manobra só existem com um alvo ou um nó, como os marcadores da navball."""
+        if modo in ("ALVO", "AALVO"):
+            return self._marcadores["TGT"] is not None
+        if modo == "MAN":
+            return self._marcadores["MNV"] is not None
+        return True
+
+    def _botao_de_modo(self, modo, centro, raio):
+        escolhido = self._sas["modo"] == modo
+        cor = (VERDE if self._sas["cor"] == "V" else AZUL) if escolhido else None
+        centro = (round(centro[0]), round(centro[1]))
+        if cor:
+            pygame.draw.circle(self._tela, cor, centro, raio + 4, 2)
+        pygame.draw.circle(self._tela, FUNDO_MODO, centro, raio)
+        pygame.draw.circle(self._tela, cor or BORDA, centro, raio, 3 if cor else 1)
+        if self._disponivel(modo):
+            self._marcador_do_modo(modo, centro)
+        else:
+            self._texto("--", APAGADO, centro=centro, fonte=self._fonte_pequena)
+
+    def _desenhar_pagina_sas(self):
+        s, ligado = self._sas, self._estados["SAS"]
+        self._texto("SAS", ROTULO, canto=(8, 4), fonte=self._fonte_pequena)
+        self._texto("LIGADO" if ligado else "DESLIGADO", VERDE if ligado else APAGADO, canto=(8, 17))
+        self._texto("ERRO", ROTULO, direita=(312, 4), fonte=self._fonte_pequena)
+        erro = "---" if s["erro"] is None else f"{s['erro'] / 10:.1f}"
+        cor_erro = VERDE if s["cor"] == "V" else AZUL if s["cor"] == "A" else APAGADO
+        self._texto(erro, cor_erro, direita=(312, 17))
+
+        pygame.draw.circle(self._tela, ARO, (RODA_X, RODA_Y), RODA_RAIO)
+        pygame.draw.circle(self._tela, BORDA, (RODA_X, RODA_Y), RODA_RAIO, 1)
+        posicoes = {}
+        for modo, angulo in MODOS_RODA.items():
+            a = math.radians(angulo)
+            posicoes[modo] = (RODA_X + RODA_MODOS * math.cos(a), RODA_Y + RODA_MODOS * math.sin(a))
+            pygame.draw.line(self._tela, BORDA, (RODA_X, RODA_Y), posicoes[modo], 1)
+        for modo, centro in posicoes.items():
+            self._botao_de_modo(modo, centro, RODA_BOTAO)
+
+        # A nave no centro aponta para o modo escolhido, torta enquanto ainda vira.
+        if ligado and s["modo"] in MODOS_RODA:
+            torto = 0 if s["cor"] == "V" else min(60, (s["erro"] or 600) / 10)
+            a = math.radians(MODOS_RODA[s["modo"]] + torto)
+            cor = VERDE if s["cor"] == "V" else AZUL
+            ponta = (RODA_X + 22 * math.cos(a), RODA_Y + 22 * math.sin(a))
+            lados = [(RODA_X + 9 * math.cos(a + d), RODA_Y + 9 * math.sin(a + d)) for d in (-2.4, 2.4)]
+            pygame.draw.lines(self._tela, cor, False, [lados[0], ponta, lados[1]], 3)
+        pygame.draw.circle(self._tela, NAVE, (RODA_X, RODA_Y), 3)
+
+        for i, modo in enumerate(MODOS_FAIXA):
+            caixa = FAIXA.move(i * FAIXA_PASSO, 0)
+            pygame.draw.rect(self._tela, ARO, caixa, border_radius=4)
+            pygame.draw.rect(self._tela, BORDA, caixa, 1, border_radius=4)
+            self._botao_de_modo(modo, caixa.center, 11)
+        self._texto("MODO DO SAS", ROTULO, centro=(160, 232), fonte=self._fonte_pequena)
+
+    @staticmethod
+    def _valor_ap(nome, valor):
+        if valor is None:
+            return "---"
+        if nome == "HDG":
+            return f"{valor:03d}"
+        if nome == "ALT":
+            return f"{valor} M"
+        return f"{'+' if valor >= 0 else '-'}{abs(valor) / 10:.1f} M/S"
+
+    def _desenhar_pagina_ap(self):
+        self._texto("PILOTO AUTOMATICO", ROTULO, centro=(160, 12))
+        pygame.draw.line(self._tela, BORDA, (12, 24), (308, 24), 1)
+        linha_cursor, escolhida = self._cursor
+        for i, nome in enumerate(LINHAS_AP):
+            y = 46 + i * 44
+            modo, valor = self._ap[nome]
+            rotulo, cor = ESTADO_AP[modo]
+            no_cursor = nome == linha_cursor
+            if no_cursor:
+                pygame.draw.lines(self._tela, TEXTO, False, [(12, y - 6), (20, y), (12, y + 6)], 1)
+                if escolhida:
+                    pygame.draw.rect(self._tela, AMBAR, (176, y - 15, 130, 30), 2, border_radius=3)
+                else:
+                    pygame.draw.rect(self._tela, TEXTO, (24, y - 17, 286, 34), 1, border_radius=4)
+            self._texto(NOMES_AP[nome], TEXTO, canto=(32, y - 9), fonte=self._fonte_media)
+            self._texto(rotulo, cor, canto=(80, y - 6), fonte=self._fonte_pequena)
+            imagem = self._fonte_grande.render(self._valor_ap(nome, valor), True, AMBAR if no_cursor and escolhida else TEXTO)
+            self._tela.blit(imagem, imagem.get_rect(midright=(300, y)))
+        pygame.draw.line(self._tela, BORDA, (12, 184), (308, 184), 1)
+        lei, cor_lei = LEIS[self._lei]
+        self._texto("FBW", ROTULO, canto=(16, 194), fonte=self._fonte_pequena)
+        self._texto(lei, cor_lei, canto=(48, 192))
+        trava = "SEM TRAVA" if self._trava is None else f"TRAVA {self._trava} M"
+        self._texto(trava, APAGADO if self._trava is None else VERDE, direita=(304, 192))
+        dica = "GIRAR: VALOR  APERTAR: SAI" if escolhida else "GIRAR: LINHA  APERTAR: ESCOLHE"
+        self._texto(dica, ROTULO, centro=(160, 226), fonte=self._fonte_pequena)
 
     # ---- caixas, barras, botões e painel ----
 

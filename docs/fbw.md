@@ -31,6 +31,36 @@ O manche move um **ponto na navball**, que diz para onde o avião deve ir: um ru
 
 **O acelerador fica com o piloto.** A alavanca do joystick vai para o jogo só quando é mexida, e as teclas Shift e Ctrl do jogo continuam valendo (a última que mexeu ganha). O acelerador automático (SPD) já existe por dentro (`FlyByWire.velocidade_alvo`) e é usado nos testes, mas ainda não tem como ser ligado.
 
+## Piloto automático
+
+Por cima do FBW, como um piloto que não cansa: cada modo só mexe no ponto, e as proteções continuam valendo. Os modos são ligados e os valores escolhidos no [painel de sistemas de controle](../hardware/construcao.md#painel-de-sistemas-de-controle), que ainda é uma [página de botões](mfd.md#painel-de-sistemas-de-controle) aberta pela ponte da tela. Por isso, **o piloto automático precisa da ponte da tela aberta** (`python mfd.py`).
+
+| Modo | O ponto | Luz |
+|---|---|---|
+| **HDG** | O rumo do ponto vai para o rumo escolhido. Longe, o ponto fica na beirada (60° do pró-grado) e o avião faz uma curva contínua até lá | Verde |
+| **V/S** | O ângulo de subida que dá a velocidade vertical escolhida | Verde |
+| **ALT** | Sobe ou desce até a altitude escolhida: com a velocidade do V/S, se ele estiver ligado, ou a 10 m/s. Perto dela (20 m, ou 4 s na velocidade vertical de agora), nivela e segura, e o V/S desliga | Azul enquanto vai (armado), verde segurando |
+
+- **Só liga voando na lei do FBW.** Na lei direta (no chão, ou com o FBW desligado), os modos desligam, como no avião.
+- **Mexer no manche devolve o ponto ao piloto:** para os lados desliga o HDG; para trás ou para a frente, o ALT e o V/S. O ponto começa de onde o piloto automático deixou, sem tranco.
+- **Trava de altitude:** continua sozinha, com o manche solto e o ponto perto do horizonte. O korry **TRAVA ALT** trava a altitude do momento (e desliga o ALT e o V/S) ou solta a trava; solta pelo korry, ela só volta sozinha depois de o manche se mexer.
+- **Korry FBW:** o mesmo que o botão do FBW no joystick.
+
+**Na ponte:** o `fbw.py` manda à ponte da tela, 10 vezes por segundo, num pacote UDP, o ponto (`FBW`), a lei (`LEI`), a trava (`TRAVA`) e os modos (`APL`). A ponte responde para o mesmo endereço com os toques do painel (`CMD FBW`, `CMD TRAVA`, `CMD HDG`...) e os valores do menu (`APV`). Protocolo em [docs/protocolo.md](protocolo.md#ponte-da-tela--fly-by-wire).
+
+**Testar no jogo**, depois do roteiro do FBW abaixo, com a ponte da tela e a página de botões abertas:
+
+| Você faz | Resultado esperado |
+|---|---|
+| No chão, segura o encoder no HDG | Nada liga: a página continua DESLIGADO |
+| Voando no FBW, escolhe HDG 90° a mais que o rumo e segura o encoder | Terminal: `Painel: HDG ligado`. O avião vira até o rumo, com as asas até 60°, e segura. A altitude muda pouco |
+| Escolhe V/S +5,0 e liga | O avião sobe a uns 5 m/s (barra V VERT da tela) |
+| Escolhe ALT 300 m acima e liga, com o V/S ligado | ALT azul (armado); perto da altitude, nivela, fica verde e o V/S desliga |
+| Mexe o manche para o lado | O HDG desliga (luz apagada); o ALT continua |
+| Aperta TRAVA ALT | A trava liga na altitude do momento; o terminal mostra `trava` no status |
+
+**Pronto quando:** um avião decola na mão, e o piloto automático leva ele até a altitude e o rumo escolhidos no painel e segura lá.
+
 ## Controles
 
 Perfil `extreme3d` (padrão), o [Logitech Extreme 3D Pro](../hardware/construcao.md#joystick-logitech-extreme-3d-pro):
@@ -151,7 +181,8 @@ A guiagem (`FlyByWire`) não conhece o kRPC nem o joystick, como a do pouso: rec
 - **Ângulo de ataque e escorregamento** saem da velocidade escrita nos eixos da nave. A **carga** é a força do ar (`aerodynamic_force` do kRPC) na direção do "cima" da nave, dividida pelo peso.
 - **Integrais:** o do pitch guarda o profundor que segura o ângulo de ataque; o do roll só age perto da inclinação pedida, senão o aileron guardado na rolagem levaria a asa além dela.
 - **Troca de lei sem tranco:** ao assumir, o ponto começa no pró-grado e os integrais com o comando que já estava no jogo.
-- **Na tela:** o script manda `FBW <pitch> <rumo>` por UDP para a ponte da tela, que repassa para a navball ([protocolo](protocolo.md#scripts--ponte-da-tela)).
+- **Na tela:** o script manda `FBW <pitch> <rumo>` por UDP para a ponte da tela, que repassa para a navball ([protocolo](protocolo.md#scripts--ponte-da-tela)), junto com a lei, a trava e os modos do piloto, e recebe os toques do painel de volta.
+- **Piloto automático:** depois do manche, `_mover_ponto()` põe o rumo do HDG no ponto, e `_subida_do_piloto()` dá a velocidade vertical do ALT e do V/S, que vira o ângulo de subida do ponto. O resto do FBW não muda.
 
 ## Problemas comuns
 
@@ -165,11 +196,13 @@ A guiagem (`FlyByWire`) não conhece o kRPC nem o joystick, como a do pouso: rec
 | `--> lei DIRETA (ar ralo...)` voando | Pressão dinâmica abaixo de 500 Pa: muito alto ou muito devagar | Normal: as superfícies não seguram o avião ali |
 | O SAS liga sozinho e o terminal diz `SAS desligado` de novo | Alguém apertou T | O FBW desliga o SAS, que brigaria com ele pelo manche |
 | O ponto não aparece na tela | A ponte da tela não está aberta, ou está em outro computador | Abrir o `mfd.py`; em outro computador, `--tela <IP>` e liberar a porta UDP 50100 no firewall |
+| O painel mostra `FBW FECHADO` e os modos não ligam | A ponte não recebe o `fbw.py` | Abrir o `fbw.py`, com `--tela <IP>` se a ponte está noutro computador. As respostas voltam para a porta de onde o `fbw.py` manda: no firewall, liberar o Python |
+| Segurar o encoder não liga o modo | O avião está na lei direta (no chão, ou FBW desligado) | Normal: o piloto automático só liga voando no FBW |
 
 ## Próximos passos
 
 1. **Testar no jogo** com o roteiro acima e ajustar os ganhos.
 2. **SPD:** uma interface para a velocidade escolhida (botões + e − no celular, depois um encoder).
-3. **Piloto automático** ([README](../README.md#piloto-automático-de-avião)): HDG, ALT e V/S só mexem no ponto, como um piloto que não cansa.
+3. **Testar o piloto automático no jogo** com o roteiro de [Piloto automático](#piloto-automático).
 4. **Arredondamento no pouso:** perto do chão, passar para uma lei que facilite o toque, como o Airbus faz a 50 pés.
 5. **Joystick na ponte:** quando a ponte ler o joystick ([hardware/construcao.md](../hardware/construcao.md#joystick-logitech-extreme-3d-pro)), a classe `Joystick` passa para lá, e o script recebe o manche dela.

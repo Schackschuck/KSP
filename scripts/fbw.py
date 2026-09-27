@@ -12,6 +12,11 @@ manche, o ponto fica onde está e o avião vai até ele e segue nele.
   a altitude daquele momento e corrige o ponto sozinho para ficar nela.
 - No chão, ou com o FBW desligado pelo botão, o manche mexe direto nas
   superfícies (lei direta), como no jogo sem o script.
+- Piloto automático, por cima do ponto (ligado pelo painel de sistemas, pela
+  ponte da tela): HDG põe o rumo do ponto no rumo escolhido; V/S põe o ângulo
+  de subida que dá a velocidade vertical escolhida; ALT sobe ou desce até a
+  altitude escolhida (armado) e segura nela (ligado). Mexer o manche para os
+  lados desliga o HDG; para trás ou para a frente, o ALT e o V/S.
 - Proteções: inclinação das asas até INCLINACAO_MAX, ângulo de subida entre
   GAMA_MIN e GAMA_MAX e ângulo de ataque até ALFA_MAX: puxar o manche não
   estola o avião.
@@ -34,7 +39,10 @@ guiagem com um avião simulado.
 
 O ponto aparece na navball da tela multifunção (bridge/mfd.py), se ela
 estiver aberta: o script manda FBW <pitch> <rumo> por UDP para a ponte da
-tela, que repassa para a tela. Sem a ponte aberta, nada acontece.
+tela, que repassa para a tela, junto com a lei, a trava e os modos do piloto
+automático. A ponte responde com os toques do painel de sistemas (os korry
+FBW e TRAVA ALT e os modos do piloto) e os valores escolhidos no menu. Sem a
+ponte aberta, nada acontece. Protocolo em docs/protocolo.md.
 
 Uso:
     python scripts/fbw.py                    # KSP e tela neste computador
@@ -99,6 +107,12 @@ KI_ROLL = 2.0            # 1/s²: só perto da inclinação pedida, para o ailer
 INTEGRA_ROLL = math.radians(5.0)   # rad: mais longe que isso, o integral do roll fica parado
 AUTORIDADE_MIN = 0.2     # rad/s²: abaixo disso, o que o jogo informa é ruído (evita dividir por quase zero)
 
+# ---- piloto automático: HDG, ALT e V/S ----
+VV_ALT_PADRAO = 10.0     # m/s: com o ALT armado e o V/S desligado, sobe ou desce com isso
+ALT_CAPTURA_MIN = 20.0   # m: o ALT assume (nivela) a menos disso da altitude escolhida...
+ALT_CAPTURA_TEMPO = 4.0  # s: ...ou a menos de 4 s dela, na velocidade vertical de agora
+MODOS_AP = ("HDG", "ALT", "VS")
+
 # ---- acelerador automático (SPD): ainda sem interface; fica desligado ----
 KP_ACELERADOR, KI_ACELERADOR = 0.1, 0.02   # por m/s e por m (m/s × s)
 
@@ -113,6 +127,7 @@ INTERVALO = 0.02         # s: até 50 voltas por segundo, a mesma taxa da físic
 INTERVALO_TELA = 0.1     # s: o ponto vai para a tela 10 vezes por segundo, como os outros marcadores
 INTERVALO_STATUS = 1.0   # s
 PORTA_TELA = 50100       # UDP: a ponte da tela (bridge/mfd.py) escuta aqui
+MAX_PACOTE = 512         # bytes: um pacote da ponte da tela, com algumas linhas
 MUDANCA_MIN = 0.002      # não reenvia ao jogo um comando que quase não mudou
 ACELERADOR_MUDOU = 0.01  # a alavanca só vai para o jogo depois de se mexer isso
 
@@ -250,6 +265,10 @@ class FlyByWire:
         self.comando = None          # o que o FBW persegue: o ponto, corrigido pela trava de altitude
         self.altitude_travada = None  # m
         self.velocidade_alvo = None  # m/s: acelerador automático (SPD); None = acelerador na mão
+        self.ap = dict.fromkeys(MODOS_AP, False)        # modos do piloto automático ligados
+        self.ap_valores = dict.fromkeys(MODOS_AP, None)  # rumo (graus), altitude (m), velocidade vertical (m/s)
+        self.alt_capturada = False   # o ALT chegou na altitude e segura nela
+        self._sem_trava_auto = False  # a trava foi solta no korry: não trava sozinho até o manche mexer
         self.taxas = (0.0, 0.0, 0.0)  # rad/s: giro medido em pitch, roll e yaw
         self.diagnostico = {}        # o que cada camada pediu, para o terminal e a gravação
         self._no_ar_desde = None     # ut da decolagem
@@ -257,6 +276,7 @@ class FlyByWire:
         self._integral = {"pitch": 0.0, "roll": 0.0, "acelerador": 0.0}
         self._saida = Comandos(0.0, 0.0, 0.0, None)
         self._carga_maxima = None    # g: quanto a asa aguenta antes de ALFA_MAX, filtrado
+        self._pedido_trava = False   # o korry TRAVA ALT pediu para travar na próxima volta
 
     def passo(self, l, m):
         base = base_da_nave(l.pitch, l.rumo, l.rolagem)
@@ -270,6 +290,50 @@ class FlyByWire:
             saida = self._voar(l, m, base, dt)
         self._saida = saida
         return saida
+
+    # ---- piloto automático e trava, pelo painel ----
+
+    @property
+    def no_chao(self):
+        """No chão, ou no primeiro segundo depois de sair dele (um pulo na pista não conta)."""
+        return self._no_ar_desde is None or self.motivo == "no chão"
+
+    def estado_ap(self, nome):
+        """0 desligado, 1 ligado, 2 armado (o ALT indo até a altitude)."""
+        if not self.ap[nome]:
+            return 0
+        return 2 if nome == "ALT" and not self.alt_capturada else 1
+
+    def definir(self, nome, valor):
+        """O valor escolhido no menu: rumo em graus, altitude em m, velocidade vertical em m/s."""
+        if nome == "HDG":
+            valor %= 360.0
+        if nome == "ALT" and valor != self.ap_valores["ALT"]:
+            self.alt_capturada = False   # altitude nova: vai até ela de novo
+        self.ap_valores[nome] = valor
+
+    def alternar_modo(self, nome):
+        """Liga ou desliga um modo. Só liga voando na lei do FBW."""
+        if self.ap[nome]:
+            self.ap[nome] = False
+        elif self.lei == FBW:
+            self.ap[nome] = True
+            if nome == "ALT":
+                self.alt_capturada = False
+            if nome in ("ALT", "VS"):
+                self.altitude_travada = None   # o piloto automático cuida da subida
+        return self.ap[nome]
+
+    def alternar_trava(self):
+        """Korry TRAVA ALT: trava a altitude do momento, ou solta. Só voando na lei do FBW."""
+        if self.lei != FBW:
+            return
+        if self.altitude_travada is not None:
+            self.altitude_travada = None
+            self._sem_trava_auto = True
+        else:
+            self._pedido_trava = True
+            self.ap["ALT"] = self.ap["VS"] = False
 
     # ---- leis ----
 
@@ -289,8 +353,11 @@ class FlyByWire:
     def _trocar_lei(self, lei, l):
         self.lei = lei
         self.altitude_travada = None
+        self._pedido_trava = self._sem_trava_auto = False
         if lei == DIRETA:
+            # Sem o FBW, não há ponto: o piloto automático desliga, como no avião.
             self.ponto = self.comando = None
+            self.ap = dict.fromkeys(MODOS_AP, False)
             return
         # O ponto começa onde o avião já está indo, e os integradores com o
         # comando que já estava no jogo: a troca não dá tranco.
@@ -340,18 +407,52 @@ class FlyByWire:
     def _mover_ponto(self, l, m, dt, rumo_trajetoria):
         gama, rumo = self.ponto
         puxa, lado = curva(m.pitch), curva(m.roll)
+        # Mexer no manche devolve o ponto ao piloto, no eixo que ele mexeu.
         if puxa != 0.0:
             self.altitude_travada = None
+            self._sem_trava_auto = False
+            self.ap["ALT"] = self.ap["VS"] = False
+        if lado != 0.0:
+            self.ap["HDG"] = False
         gama = limitar(gama + VEL_PONTO_PITCH * puxa * dt, GAMA_MIN, GAMA_MAX)
         rumo += VEL_PONTO_RUMO * lado * dt
+        if self.ap["HDG"]:
+            rumo = self._valor("HDG", rumo_trajetoria)
         # Longe demais para o lado, o ponto sairia da navball: fica na beirada
         # e vai sendo levado pelo avião enquanto ele vira.
         lado_do_progrado = limitar(angulo180(rumo - rumo_trajetoria), -LADO_MAX, LADO_MAX)
         rumo = (rumo_trajetoria + lado_do_progrado) % 360.0
-        if puxa == 0.0 and self.altitude_travada is None and abs(gama) < TRAVA_GAMA:
+        subindo = self.ap["ALT"] or self.ap["VS"]
+        if self._pedido_trava or (
+            puxa == 0.0 and self.altitude_travada is None and not subindo
+            and not self._sem_trava_auto and abs(gama) < TRAVA_GAMA
+        ):
             self.altitude_travada = l.altitude
+            self._pedido_trava = False
             gama = 0.0
         self.ponto = (gama, rumo)
+
+    def _valor(self, nome, atual):
+        """O valor escolhido para o modo; sem valor, fica o de agora."""
+        if self.ap_valores[nome] is None:
+            self.ap_valores[nome] = atual
+        return self.ap_valores[nome]
+
+    def _subida_do_piloto(self, l, v):
+        """Velocidade vertical pedida pelo ALT e pelo V/S, em m/s, ou None se nenhum está ligado."""
+        vs = self._valor("VS", 0.0) if self.ap["VS"] else None
+        if not self.ap["ALT"]:
+            return vs
+        erro = self._valor("ALT", l.altitude) - l.altitude
+        if not self.alt_capturada and abs(erro) <= max(ALT_CAPTURA_MIN, abs(l.velocidade[0]) * ALT_CAPTURA_TEMPO):
+            # Chegou: nivela e segura, e o V/S termina, como no avião.
+            self.alt_capturada = True
+            self.ap["VS"] = False
+        if self.alt_capturada:
+            return limitar(K_ALTITUDE * erro, -VV_TRAVA_MAX, VV_TRAVA_MAX)
+        if vs is not None:
+            return vs
+        return math.copysign(VV_ALT_PADRAO, erro)
 
     def _voar(self, l, m, base, dt):
         v = modulo(l.velocidade)
@@ -359,7 +460,13 @@ class FlyByWire:
         self._mover_ponto(l, m, dt, rumo)
 
         gama_c, rumo_c = self.ponto
-        if self.altitude_travada is not None:
+        subida = self._subida_do_piloto(l, v)
+        if subida is not None:
+            # O ponto fica no ângulo de subida do piloto automático: soltar o
+            # modo mexendo no manche começa dali, sem tranco.
+            gama_c = limitar(math.degrees(math.asin(limitar(subida / v, -1.0, 1.0))), GAMA_MIN, GAMA_MAX)
+            self.ponto = (gama_c, rumo_c)
+        elif self.altitude_travada is not None:
             subida = limitar(K_ALTITUDE * (self.altitude_travada - l.altitude), -VV_TRAVA_MAX, VV_TRAVA_MAX)
             gama_c = math.degrees(math.asin(limitar(subida / v, -1.0, 1.0)))
         self.comando = (gama_c, rumo_c)
@@ -650,27 +757,85 @@ class Joystick:
 
 # ---- a tela e a gravação ----
 
-class TelaFbw:
-    """Manda o ponto para a navball da tela multifunção, pela ponte da tela.
+def linhas_de_estado(fbw):
+    """O estado do FBW nas linhas do protocolo da tela (docs/protocolo.md):
+    o ponto, a lei, a trava e os modos do piloto automático."""
+    if fbw is None or fbw.lei != FBW:
+        ponto = "FBW OFF"
+    else:
+        pitch, rumo = fbw.comando
+        ponto = f"FBW {round(pitch * 10)} {round(rumo * 10) % 3600}"
+    if fbw is None:
+        return [ponto, "LEI OFF", "TRAVA OFF"] + [f"APL {nome} 0" for nome in MODOS_AP]
+    if fbw.lei == FBW:
+        lei = "FBW"
+    else:
+        lei = "CHAO" if fbw.no_chao else "DIRETA"
+    trava = "OFF" if fbw.altitude_travada is None else str(round(fbw.altitude_travada))
+    return [ponto, f"LEI {lei}", f"TRAVA {trava}"] + [f"APL {nome} {fbw.estado_ap(nome)}" for nome in MODOS_AP]
 
-    A mesma linha do protocolo da tela (docs/protocolo.md), por UDP: se a
-    ponte não estiver aberta, a linha se perde e nada acontece.
+
+def executar(linha, fbw):
+    """Executa uma linha da ponte da tela: um toque do painel de sistemas ou
+    um valor do menu do piloto. Devolve um texto para o terminal, ou None."""
+    partes = linha.split()
+    if len(partes) == 2 and partes[0] == "CMD":
+        nome = partes[1]
+        if nome == "FBW":
+            fbw.ligado = not fbw.ligado
+            return f"Painel: FBW {'ligado' if fbw.ligado else 'desligado (lei direta)'}"
+        if nome == "TRAVA":
+            fbw.alternar_trava()
+            return "Painel: trava de altitude"
+        if nome in MODOS_AP:
+            ligado = fbw.alternar_modo(nome)
+            return f"Painel: {nome} {'ligado' if ligado else 'desligado'}"
+    if len(partes) == 3 and partes[0] == "APV" and partes[1] in MODOS_AP:
+        try:
+            valor = int(partes[2])
+        except ValueError:
+            return f"Linha desconhecida da ponte: {linha[:40]}"
+        fbw.definir(partes[1], valor / 10 if partes[1] == "VS" else float(valor))
+        return None
+    return f"Linha desconhecida da ponte: {linha[:40]}"
+
+
+class TelaFbw:
+    """Conversa com a ponte da tela (bridge/mfd.py), por UDP.
+
+    Manda o ponto, a lei, a trava e os modos do piloto automático, nas linhas
+    do protocolo da tela (docs/protocolo.md), num pacote só. A ponte responde
+    para o endereço de onde o pacote veio, com os toques do painel de
+    sistemas e os valores do menu. Se a ponte não estiver aberta, os pacotes
+    se perdem e nada acontece.
     """
 
     def __init__(self, endereco):
         self._destino = (endereco, PORTA_TELA)
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Uma porta fixa desde já: no Windows, ler de um socket sem porta dá erro.
+        self._socket.bind(("", 0))
+        self._socket.setblocking(False)
 
-    def enviar(self, ponto):
-        if ponto is None:
-            linha = "FBW OFF"
-        else:
-            pitch, rumo = ponto
-            linha = f"FBW {round(pitch * 10)} {round(rumo * 10) % 3600}"
+    def enviar(self, fbw):
+        """fbw: a FlyByWire, ou None quando o script está saindo."""
+        pacote = "\n".join(linhas_de_estado(fbw))
         try:
-            self._socket.sendto(linha.encode("ascii"), self._destino)
+            self._socket.sendto(pacote.encode("ascii"), self._destino)
         except OSError:
             pass  # a tela é opcional
+
+    def receber(self):
+        """As linhas que a ponte mandou desde a última chamada."""
+        linhas = []
+        while True:
+            try:
+                dados, _ = self._socket.recvfrom(MAX_PACOTE)
+            except OSError:
+                # Nada na fila, ou, no Windows, o aviso de que um pacote
+                # anterior não achou a ponte.
+                return linhas
+            linhas += dados.decode("ascii", errors="replace").split("\n")
 
 
 class Gravador:
@@ -731,6 +896,10 @@ def status(l, fbw, c):
     if fbw.lei == FBW:
         d = fbw.diagnostico
         trava = f"  trava {fbw.altitude_travada:.0f} m" if fbw.altitude_travada is not None else ""
+        modos = " ".join(
+            f"{nome}{'*' if fbw.estado_ap(nome) == 2 else ''}" for nome in MODOS_AP if fbw.ap[nome]
+        )
+        trava += f"  piloto {modos}" if modos else ""
         texto += (
             f"  ponto {fbw.comando[0]:+5.1f} {fbw.comando[1]:5.1f}{trava}"
             f"  inclinacao {l.rolagem:+4.0f}/{d['inclinacao_c']:+4.0f}"
@@ -756,6 +925,10 @@ def voar(conn, nave, joystick, tela, gravador):
             if apertou:
                 fbw.ligado = not fbw.ligado
                 print(f"Botão: FBW {'ligado' if fbw.ligado else 'desligado (lei direta)'}")
+            for linha in tela.receber():
+                texto = executar(linha.strip(), fbw) if linha.strip() else None
+                if texto:
+                    print(texto)
             c = fbw.passo(l, m)
             controles.mandar(c)
             gravador.gravar(l, m, c, fbw)
@@ -765,7 +938,7 @@ def voar(conn, nave, joystick, tela, gravador):
                 lei = fbw.lei
                 print(f"--> lei {lei}" + (f" ({fbw.motivo})" if fbw.motivo else ""))
             if agora >= proxima_tela:
-                tela.enviar(fbw.comando if fbw.lei == FBW else None)
+                tela.enviar(fbw)
                 proxima_tela = agora + INTERVALO_TELA
             if agora >= proxima_verificacao:
                 # O SAS do KSP brigaria com o FBW pelo manche.

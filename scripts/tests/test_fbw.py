@@ -454,5 +454,124 @@ class TestVoo(unittest.TestCase):
         self.assertEqual(c.acelerador, 0.8)
 
 
+class TestPilotoAutomatico(unittest.TestCase):
+    def test_hdg_vira_para_o_rumo_e_segura(self):
+        aviao = Aviao()
+        guiagem = fbw_no_ar(aviao, velocidade_alvo=150.0)
+        altitude = aviao.altitude
+        guiagem.definir("HDG", 180.0)   # de leste para sul: 90° à direita
+        self.assertTrue(guiagem.alternar_modo("HDG"))
+        voar(aviao, guiagem, 60.0)
+        _, rumo = trajetoria(aviao)
+        self.assertAlmostEqual(angulo180(rumo - 180.0), 0.0, delta=1.0)
+        self.assertEqual(guiagem.estado_ap("HDG"), 1)
+        self.assertAlmostEqual(aviao.altitude, altitude, delta=10.0)
+
+    def test_vs_sobe_com_a_velocidade_escolhida(self):
+        aviao = Aviao()
+        guiagem = fbw_no_ar(aviao, velocidade_alvo=150.0)
+        guiagem.definir("VS", 5.0)
+        guiagem.alternar_modo("VS")
+        self.assertIsNone(guiagem.altitude_travada)
+        voar(aviao, guiagem, 30.0)
+        self.assertAlmostEqual(aviao.velocidade[0], 5.0, delta=0.5)
+
+    def test_alt_armado_sobe_e_nivela(self):
+        aviao = Aviao()
+        guiagem = fbw_no_ar(aviao, velocidade_alvo=150.0)
+        guiagem.definir("ALT", 2300.0)
+        guiagem.alternar_modo("ALT")
+        voar(aviao, guiagem, 2.0)
+        self.assertEqual(guiagem.estado_ap("ALT"), 2)    # armado: subindo
+        voar(aviao, guiagem, 90.0)
+        self.assertEqual(guiagem.estado_ap("ALT"), 1)    # chegou e segura
+        self.assertAlmostEqual(aviao.altitude, 2300.0, delta=5.0)
+
+    def test_alt_com_vs_nivela_e_o_vs_termina(self):
+        aviao = Aviao()
+        guiagem = fbw_no_ar(aviao, velocidade_alvo=150.0)
+        guiagem.definir("ALT", 1700.0)
+        guiagem.definir("VS", -4.0)
+        guiagem.alternar_modo("ALT")
+        guiagem.alternar_modo("VS")
+        voar(aviao, guiagem, 20.0)
+        self.assertAlmostEqual(aviao.velocidade[0], -4.0, delta=0.6)
+        voar(aviao, guiagem, 90.0)
+        self.assertFalse(guiagem.ap["VS"])
+        self.assertEqual(guiagem.estado_ap("ALT"), 1)
+        self.assertAlmostEqual(aviao.altitude, 1700.0, delta=5.0)
+
+    def test_manche_devolve_o_ponto_ao_piloto(self):
+        aviao = Aviao()
+        guiagem = fbw_no_ar(aviao)
+        guiagem.definir("ALT", 3000.0)   # longe: o ALT fica armado e o V/S continua
+        for nome in ("HDG", "ALT", "VS"):
+            guiagem.alternar_modo(nome)
+        voar(aviao, guiagem, 0.5, lambda t: Manche(roll=0.5))
+        self.assertEqual(guiagem.ap, {"HDG": False, "ALT": True, "VS": True})
+        voar(aviao, guiagem, 0.5, lambda t: Manche(pitch=0.5))
+        self.assertEqual(guiagem.ap, {"HDG": False, "ALT": False, "VS": False})
+
+    def test_so_liga_voando_no_fbw_e_desliga_na_lei_direta(self):
+        aviao = Aviao()
+        guiagem = FlyByWire()
+        self.assertFalse(guiagem.alternar_modo("HDG"))    # ainda na lei direta
+        voar(aviao, guiagem, fbw.TEMPO_DECOLAGEM + 0.2)
+        self.assertTrue(guiagem.alternar_modo("HDG"))
+        guiagem.ligado = False
+        voar(aviao, guiagem, 0.1)
+        self.assertEqual(guiagem.lei, DIRETA)
+        self.assertFalse(guiagem.ap["HDG"])
+
+    def test_korry_da_trava_solta_e_trava(self):
+        aviao = Aviao()
+        guiagem = fbw_no_ar(aviao)
+        self.assertIsNotNone(guiagem.altitude_travada)
+        guiagem.alternar_trava()
+        voar(aviao, guiagem, 2.0)
+        self.assertIsNone(guiagem.altitude_travada)       # não trava sozinho de novo
+        guiagem.alternar_trava()
+        voar(aviao, guiagem, 0.1)
+        self.assertAlmostEqual(guiagem.altitude_travada, aviao.altitude, delta=2.0)
+
+
+class TestConversaComAPonte(unittest.TestCase):
+    def test_linhas_de_estado(self):
+        aviao = Aviao()
+        guiagem = fbw_no_ar(aviao)
+        guiagem.alternar_modo("ALT")
+        linhas = fbw.linhas_de_estado(guiagem)
+        self.assertTrue(linhas[0].startswith("FBW "))
+        self.assertIn("LEI FBW", linhas)
+        self.assertIn("TRAVA OFF", linhas)              # o ALT soltou a trava
+        self.assertIn("APL ALT 2", linhas)
+        self.assertIn("APL HDG 0", linhas)
+        self.assertEqual(fbw.linhas_de_estado(None)[:3], ["FBW OFF", "LEI OFF", "TRAVA OFF"])
+        self.assertIn("LEI CHAO", fbw.linhas_de_estado(FlyByWire()))
+        desligado = FlyByWire()
+        desligado.ligado = False
+        desligado.passo(Aviao(no_chao=True).leitura(), Manche())
+        self.assertIn("LEI CHAO", fbw.linhas_de_estado(desligado))   # desligado, mas no chão
+        guiagem.ligado = False
+        voar(aviao, guiagem, 0.1)
+        self.assertIn("LEI DIRETA", fbw.linhas_de_estado(guiagem))    # no ar: DIRETA acende âmbar
+        for linha in linhas:
+            self.assertLessEqual(len(linha), 31)
+
+    def test_executa_os_comandos_da_ponte(self):
+        aviao = Aviao()
+        guiagem = fbw_no_ar(aviao)
+        self.assertIsNone(fbw.executar("APV VS -25", guiagem))
+        self.assertEqual(guiagem.ap_valores["VS"], -2.5)
+        fbw.executar("APV HDG 370", guiagem)
+        self.assertEqual(guiagem.ap_valores["HDG"], 10.0)
+        fbw.executar("CMD HDG", guiagem)
+        self.assertTrue(guiagem.ap["HDG"])
+        fbw.executar("CMD FBW", guiagem)
+        self.assertFalse(guiagem.ligado)
+        self.assertIn("desconhecida", fbw.executar("CMD XYZ", guiagem))
+        self.assertIn("desconhecida", fbw.executar("APV ALT abc", guiagem))
+
+
 if __name__ == "__main__":
     unittest.main()

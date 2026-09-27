@@ -14,10 +14,19 @@ Uso:
     python mfd.py --celular          # a tela no navegador do celular, pelo Wi-Fi
     python mfd.py --celular 8080     # idem, noutra porta (padrão: 8000)
     python mfd.py --porta COM7       # a mikromedia de verdade, quando o firmware existir
+    python mfd.py --painel 8002      # a página de botões do painel noutra porta (padrão: 8001)
+    python mfd.py --sem-painel       # sem a página de botões
 
 Os scripts de voo também podem pôr um marcador na navball: o fly by wire
 (scripts/fbw.py) manda o ponto para onde o avião vai, por UDP, e esta ponte
 repassa para a tela.
+
+O painel de sistemas de controle (modos do SAS, SAS, RCS, FBW e o piloto
+automático) também é tratado aqui, em sistemas.py: enquanto o painel não
+existe, uma página de botões no navegador (celular/painel.html) manda as
+mesmas linhas. Apertar um modo abre a roda do SAS na tela, e mexer no
+encoder abre a página do piloto automático; uns 10 s depois, a tela volta
+para a navball.
 """
 
 import argparse
@@ -30,6 +39,7 @@ from dataclasses import dataclass
 import serial
 
 from ponte import Painel, conectar_krpc, esperar_nave
+from sistemas import Remetente, Sistemas
 
 INTERVALO_ATITUDE = 0.05  # s: navball 20 vezes por segundo
 INTERVALO_MARCADORES = 0.1  # s: as direções dos marcadores no mundo mudam devagar
@@ -44,6 +54,28 @@ SENO_MIN_MARCADOR = 0.01  # normal e radial somem quando a nave anda na vertical
 INT32_MAX = 2**31 - 1     # a placa guarda os números em inteiros de 32 bits
 PORTA_SCRIPTS = 50100     # UDP: os scripts de voo (scripts/) mandam para cá o que querem na tela
 VALIDADE_SCRIPTS = 1.0    # s: sem notícia do script por esse tempo, o marcador dele some
+MAX_PACOTE = 512          # bytes: um pacote do fbw.py, com o ponto, a lei, a trava e os modos
+RECURSO_MIN = 0.01        # abaixo disso, o recurso acabou (SEM EC, SEM MP)
+PORTA_PAINEL = 8001       # a página de botões do painel de sistemas
+INTERVALO_LUZES = 0.05    # s: as luzes do painel de sistemas e as páginas dele, 20 vezes por segundo
+
+# Modo do SAS no protocolo → nome do modo no kRPC (SASMode).
+MODOS_KRPC = {
+    "ESTAB": "stability_assist",
+    "MAN": "maneuver",
+    "PRO": "prograde",
+    "RETRO": "retrograde",
+    "NRM": "normal",
+    "ANRM": "anti_normal",
+    "RFORA": "radial",
+    "RDENTRO": "anti_radial",
+    "ALVO": "target",
+    "AALVO": "anti_target",
+}
+MODOS_DO_KRPC = {krpc: nome for nome, krpc in MODOS_KRPC.items()}
+
+# Linhas de estado do fbw.py, e o que vale sem ele aberto.
+FBW_FECHADO = {"LEI": "LEI OFF", "TRAVA": "TRAVA OFF", "APL HDG": "APL HDG 0", "APL ALT": "APL ALT 0", "APL VS": "APL VS 0"}
 
 # Perto do chão, a altitude passa a ser a do radar (acima do chão, ou do mar).
 # Entra abaixo de RADAR_ENTRA e só sai acima de RADAR_SAI: a folga evita
@@ -83,6 +115,10 @@ class Telemetria:
     posicao_alvo: tuple   # (cima, norte, leste) do alvo em relação à nave, em m
     manobra: tuple        # (cima, norte, leste) da queima que falta no próximo nó, em m/s; None sem nó
     sistemas: dict        # {"SAS": True, "RCS": False}
+    sas_modo: str = None  # modo do SAS no jogo, um de sistemas.MODOS_SAS
+    sem_ec: bool = False  # sem carga elétrica
+    sem_mp: bool = False  # sem monopropelente
+    erro_sas: float = None  # graus até o marcador; None = a ponte calcula (só a demonstração manda)
 
 
 def inteiro32(valor):
@@ -161,6 +197,48 @@ def mensagem_direcao(nome, vetor, minimo):
     cima, norte, leste = vetor
     pitch = math.degrees(math.asin(max(-1.0, min(1.0, cima / tamanho))))
     return mensagem_ponto(nome, (pitch, math.degrees(math.atan2(leste, norte))))
+
+
+def angulo_ate(pitch, rumo, vetor):
+    """Graus entre o nariz (pitch, rumo) e a direção do vetor (cima, norte, leste)."""
+    tamanho = modulo(vetor)
+    if tamanho == 0:
+        return None
+    p, r = math.radians(pitch), math.radians(rumo)
+    nariz = (math.sin(p), math.cos(p) * math.cos(r), math.cos(p) * math.sin(r))
+    cosseno = sum(a * b for a, b in zip(nariz, vetor)) / tamanho
+    return math.degrees(math.acos(max(-1.0, min(1.0, cosseno))))
+
+
+def erro_do_sas(t, modo_navball):
+    """Graus entre o nariz e o marcador do modo do SAS, ou None.
+
+    O SAS do KSP segue o modo da navball: pró-grado em relação ao chão no
+    SUP, à órbita no ORB e ao alvo no ALVO. No ALVO, normal e radial são os
+    da órbita. ESTAB não tem marcador: segura a atitude de agora.
+    """
+    if t.erro_sas is not None:
+        return t.erro_sas
+    modo = t.sas_modo
+    velocidade = t.velocidades.get(modo_navball, t.velocidades["ORB"])
+    if modo in ("PRO", "RETRO"):
+        vetor = velocidade if modulo(velocidade) >= VEL_MIN_MARCADOR else None
+    elif modo in ("NRM", "ANRM", "RFORA", "RDENTRO"):
+        base = velocidade if modo_navball != "ALVO" else t.velocidades["ORB"]
+        normal, radial = normal_e_radial(t.posicao, base)
+        vetor = normal if modo in ("NRM", "ANRM") else radial
+        vetor = vetor if modulo(vetor) >= SENO_MIN_MARCADOR else None
+    elif modo in ("ALVO", "AALVO"):
+        vetor = t.posicao_alvo if t.alvo is not None else None
+    elif modo == "MAN":
+        vetor = t.manobra
+    else:
+        return None
+    if vetor is None:
+        return None
+    if modo in ("RETRO", "ANRM", "RDENTRO", "AALVO"):
+        vetor = tuple(-c for c in vetor)
+    return angulo_ate(t.pitch, t.rumo, vetor)
 
 
 class ModoNavball:
@@ -289,17 +367,22 @@ def _inteiro(texto):
 
 
 class Scripts:
-    """O que os scripts de voo (scripts/) querem mostrar na tela, por UDP.
+    """O que os scripts de voo (scripts/) mandam para a tela, por UDP.
 
-    Hoje, só o fly by wire (scripts/fbw.py), que manda 10 vezes por segundo
-    a própria linha do protocolo da tela: FBW <pitch> <rumo> ou FBW OFF. A
-    ponte confere a linha e a repassa na vez dos marcadores. Se o script
-    parar de mandar (fechou ou travou), o marcador some em VALIDADE_SCRIPTS.
+    Hoje, só o fly by wire (scripts/fbw.py). Ele manda 10 vezes por segundo,
+    num pacote, linhas do próprio protocolo da tela: o ponto (FBW <pitch>
+    <rumo> ou FBW OFF), a lei (LEI), a trava de altitude (TRAVA) e os modos
+    do piloto automático (APL). A ponte confere cada linha e guarda. Se o
+    script parar de mandar (fechou ou travou), tudo volta a OFF em
+    VALIDADE_SCRIPTS. As linhas para o fbw.py (os toques do painel de
+    sistemas e os valores do menu) vão para o endereço de onde ele mandou.
     """
 
     def __init__(self, porta=PORTA_SCRIPTS):
         self._fbw = None
+        self._estado = dict(FBW_FECHADO)
         self._quando = -math.inf
+        self._endereco = None      # de onde o fbw.py manda
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             # Qualquer rede: o script pode rodar noutro computador (ex.: no PC, com a ponte no Pi).
@@ -314,26 +397,52 @@ class Scripts:
     def _ler(self):
         while self._socket is not None:
             try:
-                dados, _ = self._socket.recvfrom(64)
+                dados, endereco = self._socket.recvfrom(MAX_PACOTE)
             except OSError:
                 return  # nada na fila (ou, no Windows, um aviso de pacote perdido)
-            linha = dados.decode("ascii", errors="replace").strip()
-            partes = linha.split(" ")
-            numeros = [_inteiro(p) for p in partes[1:]]
-            if partes == ["FBW", "OFF"]:
-                self._fbw, self._quando = None, time.monotonic()
-            elif partes[0] == "FBW" and len(numeros) == 2 and None not in numeros and abs(numeros[0]) <= 900:
-                self._fbw = (numeros[0] / 10, (numeros[1] / 10) % 360)
-                self._quando = time.monotonic()
-            else:
-                print(f"Linha desconhecida de um script: {linha[:40]}")
+            self._endereco = endereco
+            for linha in dados.decode("ascii", errors="replace").split("\n"):
+                if linha.strip():
+                    self._linha(linha.strip())
+
+    def _linha(self, linha):
+        partes = linha.split(" ")
+        numeros = [_inteiro(p) for p in partes[1:]]
+        if partes == ["FBW", "OFF"]:
+            self._fbw, self._quando = None, time.monotonic()
+        elif partes[0] == "FBW" and len(numeros) == 2 and None not in numeros and abs(numeros[0]) <= 900:
+            self._fbw = (numeros[0] / 10, (numeros[1] / 10) % 360)
+            self._quando = time.monotonic()
+        elif len(partes) == 2 and partes[0] == "LEI" and partes[1] in ("FBW", "DIRETA", "CHAO", "OFF"):
+            self._estado["LEI"] = linha
+        elif len(partes) == 2 and partes[0] == "TRAVA" and (partes[1] == "OFF" or numeros[0] is not None):
+            self._estado["TRAVA"] = linha
+        elif len(partes) == 3 and partes[0] == "APL" and f"APL {partes[1]}" in self._estado and partes[2] in ("0", "1", "2"):
+            self._estado[f"APL {partes[1]}"] = linha
+        else:
+            print(f"Linha desconhecida de um script: {linha[:40]}")
+
+    def _valido(self):
+        return time.monotonic() - self._quando <= VALIDADE_SCRIPTS
 
     def ponto_fbw(self):
         """(pitch, rumo) do ponto do fly by wire, em graus, ou None."""
         self._ler()
-        if time.monotonic() - self._quando > VALIDADE_SCRIPTS:
-            return None
-        return self._fbw
+        return self._fbw if self._valido() else None
+
+    def estado_fbw(self):
+        """As linhas LEI, TRAVA e APL do fbw.py, ou as de OFF se ele não está mandando."""
+        self._ler()
+        return dict(self._estado) if self._valido() else dict(FBW_FECHADO)
+
+    def comando_fbw(self, linha):
+        """Manda uma linha ao fbw.py (CMD ..., APV ...). Sem o fbw.py, se perde."""
+        if self._socket is None or self._endereco is None or not self._valido():
+            return
+        try:
+            self._socket.sendto(linha.encode("ascii"), self._endereco)
+        except OSError:
+            pass
 
     def fechar(self):
         if self._socket is not None:
@@ -391,6 +500,10 @@ class NaveKrpc:
         }
         for nome, propriedade in SISTEMAS.items():
             self._streams[nome] = stream(getattr, nave.control, propriedade)
+        self._streams["sas_modo"] = stream(getattr, nave.control, "sas_mode")
+        self._streams["ec"] = stream(nave.resources.amount, "ElectricCharge")
+        self._streams["mp"] = stream(nave.resources.amount, "MonoPropellant")
+        self._sas_mode = space_center.SASMode
 
         self._superficie = superficie
         self._alvo = None          # o alvo atual, como objeto do kRPC
@@ -489,7 +602,22 @@ class NaveKrpc:
             posicao_alvo=posicao_alvo,
             manobra=manobra,
             sistemas={nome: s[nome]() for nome in SISTEMAS},
+            sas_modo=MODOS_DO_KRPC.get(s["sas_modo"]().name),
+            sem_ec=s["ec"]() < RECURSO_MIN,
+            sem_mp=s["mp"]() < RECURSO_MIN,
         )
+
+    def escolher_modo(self, nome):
+        """Korry de modo. Com o SAS desligado, liga junto. Se o jogo não
+        aceitar o modo (sem alvo, sem nó, SAS fraco), nada muda: a luz
+        continua no modo de antes."""
+        try:
+            if not self._streams["SAS"]():
+                self._nave.control.sas = True
+            self._nave.control.sas_mode = getattr(self._sas_mode, MODOS_KRPC[nome])
+            print(f"SAS: modo {nome}")
+        except (ValueError, RuntimeError) as e:
+            print(f"O jogo não aceitou o modo {nome}: {e}")
 
     def alternar(self, nome):
         """O botão foi tocado: inverte o sistema. O botão só muda de cor
@@ -520,10 +648,16 @@ class Demo:
     RAIO_KERBIN = 600_000  # m
     TERRENO = 700          # m: altura do chão sob a nave
 
+    DEMORA_SAS = 4.0       # s: quanto a nave de mentira leva para chegar no marcador do modo
+    ERRO_INICIAL = 35.0    # graus até o marcador quando o modo é escolhido
+
     def __init__(self):
         self._inicio = time.monotonic()
         self._sistemas = {nome: False for nome in SISTEMAS}
         self._progrado = (0.0, 0.0)   # (pitch, rumo) do movimento na última leitura
+        self._sas_modo = "ESTAB"
+        self._sas_desde = -math.inf   # quando o modo foi escolhido
+        self.fbw = FbwDemo()
 
     def ler(self):
         t = time.monotonic() - self._inicio
@@ -579,7 +713,29 @@ class Demo:
             posicao_alvo=posicao_alvo,
             manobra=manobra,
             sistemas=dict(self._sistemas),
+            sas_modo=self._sas_modo,
+            sem_mp=t % 120 >= 100,   # o monopropelente "acaba" por 20 s a cada 2 min
+            erro_sas=self._erro_sas(alvo is not None, manobra is not None),
         )
+
+    def _erro_sas(self, tem_alvo, tem_no):
+        """A nave de mentira chega no marcador em DEMORA_SAS segundos."""
+        if self._sas_modo == "ESTAB":
+            return None
+        if self._sas_modo in ("ALVO", "AALVO") and not tem_alvo or self._sas_modo == "MAN" and not tem_no:
+            return None
+        passou = time.monotonic() - self._sas_desde
+        return max(0.0, self.ERRO_INICIAL * (1 - passou / self.DEMORA_SAS))
+
+    def escolher_modo(self, nome):
+        t = time.monotonic() - self._inicio
+        if nome in ("ALVO", "AALVO") and t % 60 < 30 or nome == "MAN" and t % 90 < 60:
+            print(f"SAS: o jogo não aceitaria {nome} agora (sem alvo ou sem nó)")
+            return
+        self._sistemas["SAS"] = True
+        if nome != self._sas_modo:
+            self._sas_modo, self._sas_desde = nome, time.monotonic()
+        print(f"SAS: modo {nome}")
 
     def ponto_fbw(self):
         """Faz o papel dos scripts (Scripts.ponto_fbw) na demonstração."""
@@ -593,16 +749,74 @@ class Demo:
         self._sistemas[nome] = not self._sistemas[nome]
         print(f"{nome}: {'ligar' if self._sistemas[nome] else 'desligar'}")
 
+    def estado_fbw(self):
+        return self.fbw.estado()
+
+    def comando_fbw(self, linha):
+        self.fbw.executar(linha)
+
     def remover(self):
         pass
 
 
+class FbwDemo:
+    """Faz o papel do scripts/fbw.py na demonstração: um avião voando no FBW.
+
+    Os modos ligam e desligam com os comandos do painel, e o ALT fica armado
+    por uns segundos antes de chegar na altitude.
+    """
+
+    ALT_DEMORA = 6.0   # s até o ALT armado "chegar"
+
+    def __init__(self):
+        self.ligado = True
+        self.modos = dict.fromkeys(("HDG", "ALT", "VS"), False)
+        self._alt_desde = None
+        self.trava = None
+
+    def executar(self, linha):
+        partes = linha.split()
+        if partes[:1] != ["CMD"]:
+            return   # os valores (APV) não mudam nada na demonstração
+        nome = partes[1]
+        if nome == "FBW":
+            self.ligado = not self.ligado
+            if not self.ligado:
+                self.modos = dict.fromkeys(self.modos, False)
+                self.trava = None
+        elif nome == "TRAVA" and self.ligado:
+            self.trava = None if self.trava is not None else 12_000
+            if self.trava is not None:
+                self.modos["ALT"] = self.modos["VS"] = False
+        elif nome in self.modos and self.ligado:
+            self.modos[nome] = not self.modos[nome]
+            if nome == "ALT" and self.modos["ALT"]:
+                self._alt_desde = time.monotonic()
+            if nome in ("ALT", "VS") and self.modos[nome]:
+                self.trava = None
+        print(f"FBW (demonstração): {linha}")
+
+    def estado(self):
+        alt = 0
+        if self.modos["ALT"]:
+            alt = 1 if time.monotonic() - self._alt_desde > self.ALT_DEMORA else 2
+            if alt == 1:
+                self.modos["VS"] = False   # chegou: o V/S termina
+        return {
+            "LEI": f"LEI {'FBW' if self.ligado else 'DIRETA'}",
+            "TRAVA": f"TRAVA {self.trava if self.trava is not None else 'OFF'}",
+            "APL HDG": f"APL HDG {int(self.modos['HDG'])}",
+            "APL ALT": f"APL ALT {alt}",
+            "APL VS": f"APL VS {int(self.modos['VS'])}",
+        }
+
+
 def tratar_mensagem(linha, fonte, transmissor, modo):
-    """Executa uma mensagem que veio da tela."""
+    """Executa uma mensagem que veio da tela. Devolve True se a tela reiniciou."""
     if linha == "READY":
         print("A tela (re)iniciou.")
         transmissor.esquecer()
-        return
+        return True
 
     tipo, _, nome = linha.partition(" ")
     if tipo == "TOQUE" and nome == "MODO":
@@ -613,24 +827,59 @@ def tratar_mensagem(linha, fonte, transmissor, modo):
         print(f"A tela não entendeu a mensagem: {nome}")
     else:
         print(f"Mensagem desconhecida da tela: {linha}")
+    return False
 
 
-def voar(tela, transmissor, fonte, scripts, continua_valida):
-    """Mantém a tela atualizada até continua_valida() dizer que não."""
+class Acoes:
+    """O que o painel de sistemas pede: ao jogo (fonte) ou ao fbw.py (scripts)."""
+
+    def __init__(self, fonte, scripts):
+        self.alternar = fonte.alternar
+        self.escolher_modo = fonte.escolher_modo
+        self.comando_fbw = scripts.comando_fbw
+
+
+def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistemas=None):
+    """Mantém a tela atualizada até continua_valida() dizer que não.
+
+    painel: a página de botões do painel de sistemas (ou, um dia, o painel
+    de verdade), que manda BTN e ENC e recebe as luzes; pode faltar.
+    sistemas: a lógica do painel, que continua de uma nave para a outra.
+    """
     modo = ModoNavball()
-    proxima_verificacao = 0.0
+    sistemas = sistemas or Sistemas(None)
+    sistemas.acoes = Acoes(fonte, scripts)
+    luzes_painel = Remetente(painel.enviar) if painel is not None else None
+    luzes_tela = Remetente(tela.enviar)
+    proxima_verificacao = proximas_luzes = 0.0
     while True:
         agora = time.monotonic()
         t = fonte.ler()
 
         anterior = modo.modo
         for linha in tela.linhas():
-            tratar_mensagem(linha, fonte, transmissor, modo)
+            if tratar_mensagem(linha, fonte, transmissor, modo):
+                luzes_tela.esquecer()
+        if painel is not None:
+            for linha in painel.linhas():
+                if linha == "READY":
+                    luzes_painel.esquecer()
+                elif not sistemas.tratar(linha, agora, t.rumo, t.altitude):
+                    print(f"Linha desconhecida do painel: {linha[:40]}")
+        sistemas.atualizar(agora)
         atual = modo.atualizar(t)
         if atual != anterior:
             print(f"Modo da navball: {atual}")
 
         transmissor.enviar(t, atual, agora, scripts.ponto_fbw())
+        if agora >= proximas_luzes:
+            proximas_luzes = agora + INTERVALO_LUZES
+            erro = erro_do_sas(t, atual) if t.sas_modo is not None else None
+            sas, rcs = t.sistemas["SAS"], t.sistemas["RCS"]
+            luzes = sistemas.luzes(sas, rcs, t.sas_modo, erro, t.sem_ec, t.sem_mp, scripts.estado_fbw())
+            luzes_tela.mandar(sistemas.tela(luzes, erro, sas), agora)
+            if luzes_painel is not None:
+                luzes_painel.mandar(luzes, agora)
 
         if agora >= proxima_verificacao:
             if not continua_valida():
@@ -640,7 +889,7 @@ def voar(tela, transmissor, fonte, scripts, continua_valida):
         time.sleep(0.01)
 
 
-def acompanhar_nave(conn, tela, transmissor, scripts, nave):
+def acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas):
     """Acompanha uma nave até ela deixar de ser a ativa ou trocar de planeta.
 
     Ao trocar de planeta (ex.: entrar na esfera de influência da Mun), os
@@ -656,6 +905,8 @@ def acompanhar_nave(conn, tela, transmissor, scripts, nave):
             fonte,
             scripts,
             lambda: conn.space_center.active_vessel == nave and nave.orbit.body == fonte.corpo,
+            painel,
+            sistemas,
         )
     finally:
         fonte.remover()
@@ -687,6 +938,17 @@ def abrir_tela(args):
     return tela
 
 
+def abrir_painel(args):
+    """A página de botões do painel de sistemas, no navegador do celular ou do PC."""
+    if args.sem_painel:
+        return None
+    from mfd_celular import TelaCelular, PAGINA_PAINEL
+    try:
+        return TelaCelular(args.painel, PAGINA_PAINEL, "a página de botões do painel de sistemas")
+    except OSError as e:
+        sys.exit(f"Não foi possível abrir a porta {args.painel} para o painel: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Ponte kRPC ⇄ tela multifunção.")
     parser.add_argument(
@@ -713,6 +975,15 @@ def main():
         metavar="PORTA",
         help="mostra a tela no navegador do celular; PORTA de rede, padrão 8000",
     )
+    painel = parser.add_mutually_exclusive_group()
+    painel.add_argument(
+        "--painel",
+        type=int,
+        default=PORTA_PAINEL,
+        metavar="PORTA",
+        help=f"porta de rede da página de botões do painel de sistemas (padrão: {PORTA_PAINEL})",
+    )
+    painel.add_argument("--sem-painel", action="store_true", help="não abre a página de botões do painel")
     parser.add_argument(
         "--zoom",
         type=int,
@@ -726,19 +997,21 @@ def main():
     # jogo, a janela do simulador ficaria congelada.
     conn = None if args.demo else conectar_krpc(args.address)
     tela = abrir_tela(args)
+    painel = abrir_painel(args)
     transmissor = Transmissor(tela)
+    sistemas = Sistemas(None)
     scripts = None
     try:
         if args.demo:
-            print("Demonstração: a nave se mexe sozinha. Clique nos botões da tela.")
+            print("Demonstração: a nave se mexe sozinha. Clique nos botões da tela e do painel.")
             demo = Demo()
-            voar(tela, transmissor, demo, demo, lambda: True)
+            voar(tela, transmissor, demo, demo, lambda: True, painel, sistemas)
         else:
             scripts = Scripts()
             while True:
                 nave = esperar_nave(conn, tela)
                 try:
-                    acompanhar_nave(conn, tela, transmissor, scripts, nave)
+                    acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas)
                 except (ValueError, RuntimeError):
                     # A nave deixou de existir ou o jogo saiu da cena de voo.
                     pass
@@ -748,6 +1021,8 @@ def main():
         print("\nA tela foi desconectada.")
     finally:
         tela.fechar()
+        if painel is not None:
+            painel.fechar()
         if scripts is not None:
             scripts.fechar()
         if conn is not None:

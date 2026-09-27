@@ -66,7 +66,20 @@ const COR = {
   numeroRumo: "#ffffff", numeroPitch: "#c8d7f0", sombraNumero: "#0a0f1e",
   pro: "#e6d228", nrm: "#c846ff", rdl: "#3cd2e6", tgt: "#ff8cc8", mnv: "#3c82ff",
   fbw: "#5ae65a",                 // o ponto do fly by wire (scripts/fbw.py)
+  // Painel de sistemas de controle: azul armado, verde ligado, âmbar atenção.
+  azul: "#4c9dff", verde: "#46d37f", ambar: "#f2a93b", apagado: "#555c63", fundoModo: "#11171d",
 };
+
+// Páginas do painel de sistemas de controle, no lugar da navball enquanto o
+// painel é mexido (PAG SAS e PAG AP). A roda do SAS: os seis modos em volta
+// da nave, e embaixo os que não têm par na roda.
+const RODA = { x: 160, y: 104, r: 78, modos: 52, botao: 14 };
+const MODOS_RODA = { NRM: -90, PRO: -30, RFORA: 30, ANRM: 90, RETRO: 150, RDENTRO: -150 };
+const MODOS_FAIXA = ["ESTAB", "MAN", "ALVO", "AALVO"];
+const FAIXA = { x: 72, y: 190, w: 40, h: 28, passo: 46 };
+const LINHAS_AP = ["HDG", "ALT", "VS"];
+const NOMES_AP = { HDG: "HDG", ALT: "ALT", VS: "V/S" };
+const ESTADO_AP = { 0: ["DESLIGADO", "apagado"], 1: ["LIGADO", "verde"], 2: ["ARMADO", "azul"] };
 
 // Navball: os mesmos valores de bridge/navball.py.
 const CEU = [40, 105, 200], CHAO = [150, 70, 25];
@@ -98,6 +111,11 @@ const estado = {
   altitude: null,                 // ["ALT" ou "RAD", metros]
   numeros: { VEL: null, AP: null, PE: null, TAP: null, TPE: null, DIST: null, VV: null, ACEL: null },
   estados: { SAS: null, RCS: null, MODO: null },
+  pagina: "NAV",
+  sas: { modo: null, cor: null, erro: null },          // modo do SAS no jogo, "A"/"V", décimos de grau
+  ap: { HDG: [0, null], ALT: [0, null], VS: [0, null] },  // [estado, valor]
+  cursor: ["HDG", false],                              // [linha, escolhida]
+  lei: "OFF", trava: null,
   ultimaValida: -Infinity,
   toque: [null, -Infinity],
 };
@@ -129,6 +147,24 @@ function interpretar(mensagem) {
     n[nome] = numeros[0];
   } else if ((nome === "SAS" || nome === "RCS") && partes.length === 1 && (partes[0] === "0" || partes[0] === "1")) {
     estado.estados[nome] = partes[0] === "1";
+  } else if (nome === "PAG" && partes.length === 1 && ["NAV", "SAS", "AP"].includes(partes[0])) {
+    estado.pagina = partes[0];
+  } else if (nome === "SASM" && off) {
+    estado.sas.modo = estado.sas.cor = null;
+  } else if (nome === "SASM" && partes.length === 2 && ["A", "V"].includes(partes[1])) {
+    [estado.sas.modo, estado.sas.cor] = partes;
+  } else if (nome === "SASE" && (off || (partes.length === 1 && tudoNumero))) {
+    estado.sas.erro = off ? null : numeros[0];
+  } else if (nome === "APL" && partes.length === 2 && partes[0] in estado.ap && ["0", "1", "2"].includes(partes[1])) {
+    estado.ap[partes[0]][0] = numeros[1];
+  } else if (nome === "APV" && partes.length === 2 && partes[0] in estado.ap && numeros[1] !== null) {
+    estado.ap[partes[0]][1] = numeros[1];
+  } else if (nome === "APC" && partes.length === 2 && partes[0] in estado.ap && ["0", "1"].includes(partes[1])) {
+    estado.cursor = [partes[0], partes[1] === "1"];
+  } else if (nome === "LEI" && partes.length === 1 && ["FBW", "DIRETA", "CHAO", "OFF"].includes(partes[0])) {
+    estado.lei = partes[0];
+  } else if (nome === "TRAVA" && (off || (partes.length === 1 && tudoNumero))) {
+    estado.trava = off ? null : numeros[0];
   } else if (nome === "MODO" && partes.length === 1 && ["SUP", "ORB", "ALVO"].includes(partes[0])) {
     if (partes[0] !== estado.estados.MODO) {
       // Os números e os marcadores do modo antigo não valem mais.
@@ -534,6 +570,103 @@ function desenharPainel(comSinal) {
   }
 }
 
+// ---------- páginas do painel de sistemas de controle ----------
+
+function marcadorDoModo(modo, c) {
+  const desenhos = {
+    PRO: "progrado", RETRO: "retrogrado", NRM: "normal", ANRM: "antinormal",
+    RFORA: "radialFora", RDENTRO: "radialDentro", ALVO: "alvo", AALVO: "antialvo", MAN: "manobra",
+  };
+  if (modo === "ESTAB") {   // segura a atitude de agora: não tem marcador na navball
+    circulo(c[0], c[1], 7, null, COR.texto, 2);
+    linha(COR.texto, 2, [c[0] - 4, c[1]], [c[0] + 4, c[1]]);
+  } else {
+    DESENHO_MARCADOR[desenhos[modo]](c);
+  }
+}
+
+function disponivel(modo) {
+  if (modo === "ALVO" || modo === "AALVO") return estado.marcadores.TGT !== null;
+  if (modo === "MAN") return estado.marcadores.MNV !== null;
+  return true;
+}
+
+function botaoDeModo(modo, c, r) {
+  const escolhido = estado.sas.modo === modo;
+  const cor = escolhido ? (estado.sas.cor === "V" ? COR.verde : COR.azul) : null;
+  if (cor) circulo(c[0], c[1], r + 4, null, cor, 2);
+  circulo(c[0], c[1], r, COR.fundoModo, cor || COR.borda, cor ? 3 : 1);
+  if (disponivel(modo)) marcadorDoModo(modo, c);
+  else textoCentro("--", COR.apagado, c[0], c[1], 11);
+}
+
+function desenharPaginaSas() {
+  const s = estado.sas, ligado = estado.estados.SAS;
+  texto("SAS", COR.rotulo, 8, 4, "left", "top", 11);
+  texto(ligado ? "LIGADO" : "DESLIGADO", ligado ? COR.verde : COR.apagado, 8, 17, "left", "top", 14);
+  texto("ERRO", COR.rotulo, 312, 4, "right", "top", 11);
+  const erro = s.erro === null ? "---" : (s.erro / 10).toFixed(1);
+  texto(erro, s.cor === "V" ? COR.verde : s.cor === "A" ? COR.azul : COR.apagado, 312, 17, "right", "top", 14);
+
+  circulo(RODA.x, RODA.y, RODA.r, COR.aro, COR.borda, 1);
+  const pos = {};
+  for (const [modo, a] of Object.entries(MODOS_RODA)) {
+    pos[modo] = [RODA.x + RODA.modos * Math.cos(a * RAD), RODA.y + RODA.modos * Math.sin(a * RAD)];
+    linha(COR.borda, 1, [RODA.x, RODA.y], pos[modo]);
+  }
+  for (const [modo, c] of Object.entries(pos)) botaoDeModo(modo, c, RODA.botao);
+
+  // A nave no centro aponta para o modo escolhido, torta enquanto ainda vira.
+  if (ligado && s.modo in MODOS_RODA) {
+    const torto = s.cor === "V" ? 0 : Math.min(60, (s.erro || 600) / 10);
+    const a = (MODOS_RODA[s.modo] + torto) * RAD, cor = s.cor === "V" ? COR.verde : COR.azul;
+    const ponta = [RODA.x + 22 * Math.cos(a), RODA.y + 22 * Math.sin(a)];
+    const lado = (d) => [RODA.x + 9 * Math.cos(a + d), RODA.y + 9 * Math.sin(a + d)];
+    linha(cor, 3, lado(-2.4), ponta, lado(2.4));
+  }
+  circulo(RODA.x, RODA.y, 3, COR.nave, null);
+
+  MODOS_FAIXA.forEach((modo, i) => {
+    const r = { x: FAIXA.x + i * FAIXA.passo, y: FAIXA.y, w: FAIXA.w, h: FAIXA.h };
+    retangulo(r, COR.aro, COR.borda, 1, 4);
+    botaoDeModo(modo, [r.x + r.w / 2, r.y + r.h / 2], 11);
+  });
+  textoCentro("MODO DO SAS", COR.rotulo, 160, 232, 11);
+}
+
+function valorAp(nome, valor) {
+  if (valor === null) return "---";
+  if (nome === "HDG") return String(valor).padStart(3, "0");
+  if (nome === "ALT") return `${valor} M`;
+  return `${valor >= 0 ? "+" : "-"}${(Math.abs(valor) / 10).toFixed(1)} M/S`;
+}
+
+function desenharPaginaAp() {
+  textoCentro("PILOTO AUTOMATICO", COR.rotulo, 160, 12, 14);
+  linha(COR.borda, 1, [12, 24], [308, 24]);
+  const [linhaCursor, escolhida] = estado.cursor;
+  LINHAS_AP.forEach((nome, i) => {
+    const y = 46 + i * 44;
+    const [modo, valor] = estado.ap[nome];
+    const [rotulo, cor] = ESTADO_AP[modo];
+    if (nome === linhaCursor) {
+      linha(COR.texto, 1, [12, y - 6], [20, y], [12, y + 6]);
+      if (!escolhida) retangulo({ x: 24, y: y - 17, w: 286, h: 34 }, null, COR.texto, 1, 4);
+      else retangulo({ x: 176, y: y - 15, w: 130, h: 30 }, null, COR.ambar, 2, 3);
+    }
+    texto(NOMES_AP[nome], COR.texto, 32, y, "left", "middle", 16);
+    texto(rotulo, COR[cor], 80, y, "left", "middle", 11);
+    texto(valorAp(nome, valor), nome === linhaCursor && escolhida ? COR.ambar : COR.texto, 300, y, "right", "middle", 20);
+  });
+  linha(COR.borda, 1, [12, 184], [308, 184]);
+  const lei = { FBW: ["LEI FBW", COR.verde], DIRETA: ["LEI DIRETA", COR.ambar], CHAO: ["NO CHAO", COR.apagado], OFF: ["FBW FECHADO", COR.apagado] }[estado.lei];
+  texto("FBW", COR.rotulo, 16, 200, "left", "middle", 11);
+  texto(lei[0], lei[1], 48, 200, "left", "middle", 14);
+  texto(estado.trava === null ? "SEM TRAVA" : `TRAVA ${estado.trava} M`, estado.trava === null ? COR.apagado : COR.verde, 304, 200, "right", "middle", 14);
+  const dica = escolhida ? "GIRAR: VALOR  APERTAR: SAI" : "GIRAR: LINHA  APERTAR: ESCOLHE";
+  textoCentro(dica, COR.rotulo, 160, 226, 11);
+}
+
 function desenhar(agora) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = COR.fundo;
@@ -541,6 +674,8 @@ function desenhar(agora) {
   ctx.setTransform(dpr * escala, 0, 0, dpr * escala, dpr * deslocX, dpr * deslocY);
 
   const comSinal = agora - estado.ultimaValida < SEM_SINAL;
+  if (comSinal && estado.pagina === "SAS") { desenharPaginaSas(); return; }
+  if (comSinal && estado.pagina === "AP") { desenharPaginaAp(); return; }
   desenharAro();
   desenharNavball(comSinal);
   desenharCaixas(comSinal, agora);
@@ -580,6 +715,7 @@ function tocar(nome) {
 
 canvas.addEventListener("pointerdown", (e) => {
   telaCheia();   // o primeiro toque põe em tela cheia, onde o navegador deixa
+  if (estado.pagina !== "NAV") return;   // as páginas do painel são só para ver
   const x = (e.clientX - deslocX) / escala, y = (e.clientY - deslocY) / escala;
   for (const [nome, [cx, cy]] of Object.entries(BOTOES_REDONDOS)) {
     if ((x - cx) ** 2 + (y - cy) ** 2 <= RAIO_BOTAO ** 2) { tocar(nome); return; }
