@@ -193,6 +193,16 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 **Status: editor de manobras escrito, com botões numa página no lugar das chaves; falta testar no jogo.** [`bridge/manobras.py`](bridge/manobras.py) cria e edita os nós pelo kRPC e mostra os números do nó e da órbita (antes e depois) no navegador do PC ou do celular: [docs/manobras.md](docs/manobras.md). A página manda linhas do protocolo pela rede; o painel vai mandar as suas pela serial, com o encoder no lugar dos pares `+`/`-` do Δv. Por enquanto a página também gira a câmera do mapa, **o que tem que sair dela:** no cockpit, a câmera do mapa vai ser mexida pelo joystick, no modo CÂMERA.
 
+**A fazer no editor, para ficar igual ao painel desenhado** ([desenho](hardware/construcao.md#painel-do-editor-de-manobras), [mensagens](docs/protocolo.md#no-painel)):
+
+- [ ] Ponte (`bridge/manobras.py`): guardar o eixo escolhido (PRO, NRM ou RAD), começando pelo PRO em cada nó novo, e trocar de eixo com `BTN PRO`, `BTN NRM` e `BTN RAD`.
+- [ ] Ponte: aceitar `ENC DV <cliques>` (horário positivo) e aplicar os cliques × passo no eixo escolhido.
+- [ ] Ponte: aceitar `SW PASSO <0 a 3>`, o passo pela posição da chave rotativa, no lugar do `BTN PASSO`.
+- [ ] Ponte: mandar ao painel qual eixo está escolhido, para acender o korry certo.
+- [ ] Página do celular (`bridge/celular/manobras.html`): trocar os pares `PRO -`/`PRO +`, `NRM -`/`NRM +` e `RAD -`/`RAD +` por três botões de eixo e um par `-`/`+` que faz o papel do encoder, com o eixo escolhido destacado.
+- [ ] Testes (`bridge/tests/test_manobras.py`) para o eixo escolhido, o `ENC DV` e o `SW PASSO`.
+- [ ] Atualizar [docs/manobras.md](docs/manobras.md) e tirar o "planejado" da seção [No painel](docs/protocolo.md#no-painel) do protocolo.
+
 - Displays de 7 segmentos com MAX7219 para os números mais importantes.
 - Encoder rotativo para escolher o que cada display mostra. Lido pela mesma cadeia de 74HC165 dos módulos: o Mega lê a cadeia inteira mil vezes por segundo numa **interrupção de timer**, e assim o redesenho do LCD (~20 ms) não faz perder cliques. O painel acumula os cliques e manda `ENC <nome> <cliques>`.
 - **Editor de nós de manobra** (pelo kRPC: `control.add_node`, `node.prograde` etc.):
