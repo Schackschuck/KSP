@@ -17,11 +17,14 @@ manche, o ponto fica onde está e o avião vai até ele e segue nele.
   de subida que dá a velocidade vertical escolhida; ALT sobe ou desce até a
   altitude escolhida (armado) e segura nela (ligado). Mexer o manche para os
   lados desliga o HDG; para trás ou para a frente, o ALT e o V/S.
-- Alpha floor, como no Airbus: com o ângulo de ataque perto de ALFA_MAX (o
-  avião devagar demais para a asa segurar), o acelerador vai a 100% sozinho,
-  o piloto automático desliga e o painel acende ESTOL, com alarme na tela.
-  Sai quando o ângulo de ataque volta; o acelerador fica no máximo até o
-  piloto mexer nele.
+- Alpha floor: com o ângulo de ataque perto de ALFA_MAX (o avião devagar
+  demais para a asa segurar), o FBW recupera sozinho: acelerador a 100%,
+  piloto automático e trava desligados, asas niveladas e o ponto a
+  GAMA_RECUPERA abaixo do horizonte (e mais, até GAMA_RECUPERA_MIN, enquanto
+  a asa não folga), trocando altura por velocidade. O painel
+  acende ESTOL, com alarme na tela. Quando o ângulo de ataque volta, o ponto
+  volta ao horizonte e a trava pega a altitude nova; o acelerador fica no
+  máximo até o piloto mexer nele.
 - Proteções: inclinação das asas até INCLINACAO_MAX, ângulo de subida entre
   GAMA_MIN e GAMA_MAX e ângulo de ataque até ALFA_MAX: puxar o manche não
   estola o avião.
@@ -117,6 +120,9 @@ AUTORIDADE_MIN = 0.2     # rad/s²: abaixo disso, o que o jogo informa é ruído
 ALFA_FLOOR = ALFA_MAX - 0.5   # graus: com o ângulo de ataque acima disso, entra (a curva devagar usa até ~90% de ALFA_MAX)
 ALFA_FLOOR_SAI = ALFA_MAX - 5.0  # graus: sai com o ângulo de ataque abaixo disso...
 FLOOR_SAI_DEPOIS = 2.0       # s: ...por esse tempo seguido
+GAMA_RECUPERA = -5.0         # graus: no alpha floor, o ponto começa pelo menos isso abaixo do horizonte...
+VEL_RECUPERA = 2.0           # graus/s: ...e desce mais, devagar, enquanto a asa não folga (sem motor, precisa)...
+GAMA_RECUPERA_MIN = -15.0    # graus: ...até no máximo isso
 
 # ---- piloto automático: HDG, ALT e V/S ----
 VV_ALT_PADRAO = 10.0     # m/s: com o ALT armado e o V/S desligado, sobe ou desce com isso
@@ -281,6 +287,7 @@ class FlyByWire:
         self.alt_capturada = False   # o ALT chegou na altitude e segura nela
         self._sem_trava_auto = False  # a trava foi solta no korry: não trava sozinho até o manche mexer
         self.estol = False           # alpha floor ligado: acelerador no máximo
+        self._alfa = 0.0             # graus: ângulo de ataque da última volta
         self._floor_abaixo = 0.0     # s seguidos com o ângulo de ataque abaixo de ALFA_FLOOR_SAI
         self.taxas = (0.0, 0.0, 0.0)  # rad/s: giro medido em pitch, roll e yaw
         self.diagnostico = {}        # o que cada camada pediu, para o terminal e a gravação
@@ -430,6 +437,16 @@ class FlyByWire:
             self.ap["HDG"] = False
         gama = limitar(gama + VEL_PONTO_PITCH * puxa * dt, GAMA_MIN, GAMA_MAX)
         rumo += VEL_PONTO_RUMO * lado * dt
+        if self.estol:
+            # Recuperação do estol: nariz para baixo (o manche ainda pode
+            # descer mais, mas não subir) e asas niveladas, sem curva, a não
+            # ser que o piloto mexa para o lado. Enquanto a asa continua no
+            # limite, o ponto desce mais: sem motor, só a descida dá velocidade.
+            gama = min(gama, GAMA_RECUPERA)
+            if self._alfa > ALFA_FLOOR_SAI:
+                gama = max(gama - VEL_RECUPERA * dt, min(gama, GAMA_RECUPERA_MIN))
+            if lado == 0.0:
+                rumo = rumo_trajetoria
         if self.ap["HDG"]:
             rumo = self._valor("HDG", rumo_trajetoria)
         # Longe demais para o lado, o ponto sairia da navball: fica na beirada
@@ -437,10 +454,10 @@ class FlyByWire:
         lado_do_progrado = limitar(angulo180(rumo - rumo_trajetoria), -LADO_MAX, LADO_MAX)
         rumo = (rumo_trajetoria + lado_do_progrado) % 360.0
         subindo = self.ap["ALT"] or self.ap["VS"]
-        if self._pedido_trava or (
+        if not self.estol and (self._pedido_trava or (
             puxa == 0.0 and self.altitude_travada is None and not subindo
             and not self._sem_trava_auto and abs(gama) < TRAVA_GAMA
-        ):
+        )):
             self.altitude_travada = l.altitude
             self._pedido_trava = False
             gama = 0.0
@@ -554,16 +571,24 @@ class FlyByWire:
 
     def _alpha_floor(self, alfa, dt):
         """Liga o alpha floor perto do estol; desliga quando a asa folga por um tempo."""
+        self._alfa = alfa
         if not self.estol:
             if alfa > ALFA_FLOOR:
                 self.estol = True
                 self._floor_abaixo = 0.0
-                # O piloto automático desliga: o avião volta para o piloto.
+                # O piloto automático e a trava desligam: nenhum dos dois
+                # pode segurar o nariz para cima agora.
                 self.ap = dict.fromkeys(MODOS_AP, False)
+                self.altitude_travada = None
+                self._pedido_trava = False
             return
         self._floor_abaixo = self._floor_abaixo + dt if alfa < ALFA_FLOOR_SAI else 0.0
         if self._floor_abaixo >= FLOOR_SAI_DEPOIS:
             self.estol = False
+            # Recuperado: o ponto volta ao horizonte, e a trava pega a
+            # altitude nova na próxima volta, para o avião não seguir descendo.
+            self.ponto = (0.0, self.ponto[1])
+            self._sem_trava_auto = False
 
     def _inclinacao_maxima(self, carga, alfa, dt):
         """Até onde as asas podem inclinar sem o avião descer.

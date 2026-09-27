@@ -660,5 +660,49 @@ class TestAlphaFloor(unittest.TestCase):
         self.assertIn("ESTOL 0", fbw.linhas_de_estado(guiagem))
 
 
+class TestRecuperacaoDoEstol(unittest.TestCase):
+    def estolar(self, aviao, guiagem, limite=120.0):
+        """Voa até o alpha floor ligar; devolve quanto tempo levou."""
+        inicio = aviao.t
+        while not guiagem.estol and aviao.t - inicio < limite:
+            voar(aviao, guiagem, 0.2)
+        self.assertTrue(guiagem.estol)
+
+    def test_no_estol_solta_a_trava_baixa_o_nariz_e_nivela_as_asas(self):
+        aviao = Aviao(velocidade=(0.0, 0.0, 110.0), acelerador=0.0)
+        guiagem = fbw_no_ar(aviao)
+        guiagem.definir("HDG", 180.0)          # virando para o sul quando estolar
+        guiagem.alternar_modo("HDG")
+        self.estolar(aviao, guiagem)
+        voar(aviao, guiagem, 0.2)
+        self.assertIsNone(guiagem.altitude_travada)
+        self.assertLessEqual(guiagem.ponto[0], fbw.GAMA_RECUPERA)
+        # O ponto não segue mais o rumo do HDG: fica no rumo em que o avião está.
+        _, rumo = trajetoria(aviao)
+        self.assertAlmostEqual(angulo180(guiagem.ponto[1] - rumo), 0.0, delta=1.0)
+
+    def test_recupera_e_nivela_numa_altitude_nova(self):
+        aviao = Aviao(velocidade=(0.0, 0.0, 110.0), acelerador=0.0)
+        guiagem = fbw_no_ar(aviao)
+        self.estolar(aviao, guiagem)
+        voar(aviao, guiagem, 60.0)
+        self.assertFalse(guiagem.estol)
+        self.assertIsNotNone(guiagem.altitude_travada)   # a trava pegou a altitude nova
+        altitude = guiagem.altitude_travada
+        voar(aviao, guiagem, 30.0)
+        self.assertAlmostEqual(aviao.altitude, altitude, delta=10.0)
+        self.assertLessEqual(aviao.maior_alfa, ALFA_MAX + 1.0)
+
+    def test_sem_motor_desce_em_vez_de_ficar_pendurado_na_asa(self):
+        # Um avião sem motor: o alpha floor não tem potência, então só o nariz para baixo salva.
+        aviao = Aviao(velocidade=(0.0, 0.0, 110.0), acelerador=0.0, empuxo_max=0.0)
+        guiagem = fbw_no_ar(aviao)
+        self.estolar(aviao, guiagem)
+        voar(aviao, guiagem, 20.0)
+        gama, _ = trajetoria(aviao)
+        self.assertLess(gama, -2.0)                     # descendo, trocando altura por velocidade
+        self.assertLess(guiagem.diagnostico["alfa"], fbw.ALFA_FLOOR)
+
+
 if __name__ == "__main__":
     unittest.main()
