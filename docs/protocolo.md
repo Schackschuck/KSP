@@ -128,7 +128,7 @@ Um script de voo pode pôr um marcador na navball sem depender da ponte. Hoje, s
 
 ## Editor de nós de manobra
 
-Linhas do editor da fase 4 ([docs/manobras.md](manobras.md)). Hoje quem manda é a página `bridge/celular/manobras.html`, por HTTP (`POST /linha`, uma linha por pedido); quando as teclas existirem, o painel manda as mesmas linhas pela serial. Tudo é painel → ponte: os números do nó vão para uma página do editor na tela multifunção, que ainda não tem mensagem própria (a página recebe as tabelas prontas em JSON pelo `GET /estado`).
+Linhas do editor da fase 4 ([docs/manobras.md](manobras.md)). Hoje quem manda é a página `bridge/celular/manobras.html`, por HTTP (`POST /linha`, uma linha por pedido); quando o painel existir, ele manda as linhas pela serial, com as diferenças do [painel](#no-painel) abaixo. Tudo é painel → ponte, menos os LEDs dos korry de eixo: os números do nó vão para uma página do editor na tela multifunção, que ainda não tem mensagem própria (a página recebe as tabelas prontas em JSON pelo `GET /estado`).
 
 | Mensagem | Quando | Significado |
 |---|---|---|
@@ -140,3 +140,17 @@ Linhas do editor da fase 4 ([docs/manobras.md](manobras.md)). Hoje quem manda é
 - **Botões:** `PASSO` (um só para os quatro ajustes), `NOVO`, `APAGAR`, `ANT`, `PROX` e `CIRC`. `MAPA` fica na seção da câmera do painel, mas vem para o editor com o mesmo nome.
 - **Temporários**, até o joystick mexer na câmera do mapa no modo CÂMERA: `CAM_ESQ`, `CAM_DIR`, `CAM_CIMA`, `CAM_BAIXO`, `CAM_PERTO`, `CAM_LONGE` e `CAM_FOCO`.
 - Uma linha que o editor não reconhece aparece na página como `ERR <linha>`.
+
+### No painel
+
+O painel do editor ([hardware/construcao.md](../hardware/construcao.md#painel-do-editor-de-manobras)) tem um encoder só para o Δv, e não um par `+`/`-` por eixo. **Planejado, ainda não feito na ponte:**
+
+| Mensagem | Quando | Significado |
+|---|---|---|
+| `BTN PRO 1`, `BTN NRM 1`, `BTN RAD 1` | Um korry de eixo foi apertado | Escolhe o eixo que o encoder mexe. Um nó novo começa com `PRO` |
+| `ENC DV <cliques>` | O encoder girou | Cliques com sinal, horário positivo. A ponte multiplica pelo passo e soma no eixo escolhido. Vários cliques podem ir numa linha só |
+| `INC TEMPO <passos>` | A tecla do TEMPO foi para um lado | Como hoje, com a repetição no firmware |
+| `SW PASSO <0 a 3>` | A chave rotativa mudou de posição | O passo pela posição (0 = 0,1 m/s e 1 s), no lugar do `BTN PASSO`. O painel manda a posição também ao ligar |
+
+- **O eixo escolhido fica na ponte**, como o estado de qualquer sistema. O painel não sabe qual é; a ponte acende o LED do korry certo, pelo mesmo caminho dos outros LEDs.
+- **A página do celular** continua mandando `INC PRO`, `INC NRM` e `INC RAD` até ganhar os botões de eixo e o par `-`/`+` do encoder. A ponte aceita as duas formas.
