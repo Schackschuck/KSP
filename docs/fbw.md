@@ -32,10 +32,11 @@ O manche move um **ponto na navball**, que diz para onde o avião deve ir: um ru
 Devagar demais, a asa no limite do ângulo de ataque não sustenta o peso, e o avião vai afundando, mesmo com o ponto no horizonte: a proteção não deixa estolar, mas também não faz milagre. Como no Airbus, o FBW então corrige:
 
 - Com o ângulo de ataque acima de **14,5°** (0,5° antes do limite), o **acelerador vai a 100%**, o **piloto automático desliga** e o painel acende a luz **ESTOL**, vermelha e piscando, com dois bipes por segundo na tela. O terminal mostra `ESTOL`.
-- O nariz continua na proteção dos 15°, e o avião ganha velocidade. Com o ângulo de ataque abaixo de **10°** por **2 s**, o alarme para.
+- **A recuperação é do próprio FBW:** a trava de altitude solta, as asas nivelam (o ponto para de seguir o rumo do HDG e fica no rumo em que o avião está) e o ponto desce para **5° abaixo do horizonte**. Se a asa continuar no limite, o ponto desce mais, 2° por segundo, até **−15°**: sem motor, só a descida dá velocidade. O manche ainda pode baixar o ponto, mas não subir.
+- Com o ângulo de ataque abaixo de **10°** por **2 s**, o alarme para, o ponto volta ao horizonte e a trava pega a **altitude nova**, para o avião não seguir descendo (importante com `--sem-joystick`).
 - **O acelerador fica no máximo** até o piloto mexer nele (a alavanca do joystick, ou Shift e Ctrl), como o TOGA LOCK do Airbus: ninguém tira a potência sem querer.
 - Durante o alpha floor, o piloto automático não liga.
-- Sem motor, ou com pouco, o alarme continua: o avião desce devagar, com a asa no limite.
+- **Com motor**, no avião simulado, a recuperação perde uns 10 m. **Sem motor** (planador), não dá para segurar a altitude: o avião desce, recupera, nivela, perde velocidade e repete, uns 400 m a cada vez. Planando, desça de propósito com o ponto uns 10° abaixo do horizonte.
 - Na curva devagar, a asa usa até uns 13,5° (90% do que aguenta), abaixo do alpha floor: curva não liga o alarme.
 
 **Lei direta:** no chão, e com o FBW desligado pelo botão, o manche mexe direto nas superfícies, como no jogo sem o script. O FBW assume sozinho 1 s depois de o avião sair do chão, e volta para a lei direta ao tocar no chão. No ar ralo, ou muito devagar, as superfícies não seguram o avião, e também fica a lei direta.
@@ -69,7 +70,7 @@ Por cima do FBW, como um piloto que não cansa: cada modo só mexe no ponto, e a
 | Escolhe ALT 300 m acima e liga, com o V/S ligado | ALT azul (armado); perto da altitude, nivela, fica verde e o V/S desliga |
 | Mexe o manche para o lado | O HDG desliga (luz apagada); o ALT continua |
 | Aperta TRAVA ALT | A trava liga na altitude do momento; o terminal mostra `trava` no status |
-| Com a trava ligada, tira o motor (Ctrl ou X) e espera | O avião perde velocidade. Perto de 14,5° de ângulo de ataque: `ESTOL`, acelerador em 100%, piloto automático desligado, luz ESTOL piscando e alarme. Depois de recuperar, o alarme para, e o acelerador fica no máximo até você mexer |
+| Com a trava ligada e o HDG virando, tira o motor (Ctrl ou X) e espera | O avião perde velocidade. Perto de 14,5° de ângulo de ataque: `ESTOL`, acelerador em 100%, HDG e trava desligados, asas niveladas, nariz para baixo (o ponto verde 5° abaixo do horizonte), luz ESTOL piscando e alarme. Depois de recuperar, o alarme para, o ponto volta ao horizonte e a trava pega a altitude nova; o acelerador fica no máximo até você mexer |
 
 **Pronto quando:** um avião decola na mão, e o piloto automático leva ele até a altitude e o rumo escolhidos no painel e segura lá.
 

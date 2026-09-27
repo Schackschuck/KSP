@@ -300,7 +300,7 @@ Como nos aviões da Airbus, o manche não mexe nas superfícies: ele diz para on
 
 - **O ponto do FBW:** o manche move um ponto na navball, um rumo e um ângulo de subida, e o avião voa até o pró-grado ficar em cima dele. Soltando o manche, o ponto fica onde está. Com o manche solto e o ponto perto do horizonte, o avião trava a altitude.
 - **Proteções:** asas até 60° (menos se a asa não aguenta: a curva abre em vez de o avião descer), subida entre −30° e +30° e ângulo de ataque até 15°.
-- **Alpha floor:** devagar demais para a asa (ângulo de ataque perto dos 15°), o acelerador vai ao máximo, o piloto automático desliga, a luz ESTOL do painel pisca e a tela toca um alarme.
+- **Alpha floor:** devagar demais para a asa (ângulo de ataque perto dos 15°), o FBW recupera sozinho: acelerador no máximo, piloto automático e trava desligados, asas niveladas e nariz para baixo até a asa folgar; depois nivela numa altitude nova. A luz ESTOL do painel pisca e a tela toca um alarme.
 - **Lei direta** no chão e com o botão do FBW desligado: o manche vai direto para as superfícies. O FBW assume 1 s depois da decolagem.
 - **Sem joystick** (`--sem-joystick`): decola pelo teclado do jogo, na lei direta, e no ar o piloto automático voa pelo painel.
 - **O acelerador fica com o piloto.** O acelerador automático (SPD) já existe por dentro, ainda sem interface.
