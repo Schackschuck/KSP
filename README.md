@@ -107,7 +107,8 @@ firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
 firmware/passos/  sketches de aprendizado, um por passo da fase 1
 firmware/mfd/     mikromedia for ARM / LPC2148 (C, GCC e make)
 hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa; ver hardware/README.md
-                  e hardware/construcao.md (carcaça, aparência, korry switches, joystick)
+                  e hardware/construcao.md (carcaça, aparência, painéis, joystick);
+                  cada peça própria numa pasta, com ficha e desenhos (hardware/korry/)
 docs/             protocolo serial, pinagem, anotações
 ```
 
@@ -175,7 +176,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - Enquanto o primeiro módulo não fica pronto, os controles básicos continuam direto nos pinos do Mega, como em [docs/fase2.md](docs/fase2.md).
 - Próximo passo: o firmware do Mega lendo a fila de módulos pelas etiquetas, e testar o primeiro módulo direto no Mega.
 - **Joystick:** o Logitech Extreme 3D Pro, na USB do Pi, lido pela ponte e mandado ao jogo pelo kRPC. O acelerador é a alavanca da base dele. Mapeamento proposto em [hardware/construcao.md](hardware/construcao.md#joystick-logitech-extreme-3d-pro).
-- **Korry switches** (ideia): botões iluminados com legenda, como nos aviões, para SAS, RCS, luzes e outros sistemas. Um primeiro korry pode ser testado direto no Mega. Como fazer em [hardware/construcao.md](hardware/construcao.md#korry-switches).
+- **Korry switches** (ideia): botões iluminados com legenda, como nos aviões, para SAS, RCS, luzes e outros sistemas. Um primeiro korry pode ser testado direto no Mega. Todos do mesmo tamanho, 22,5 × 22,5 mm; medidas, peças e circuito em [hardware/korry/](hardware/korry/README.md).
 
 **Pronto quando:** dá para lançar e colocar um foguete em órbita usando só o painel.
 
@@ -409,7 +410,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [ ] Backplane: 12× conector IDC 2x8, 5× resistor 47 Ω, 13× resistor 10 kΩ, capacitores de 470 µF e 100 nF, borne de 2 vias e jumper de 3 pinos
 - [x] Joystick: Logitech Extreme 3D Pro (3 eixos + acelerador, na USB do Pi)
 - [ ] 1× potenciômetro deslizante 10 kΩ linear, curso ≥ 60 mm (opcional: só para uma alavanca de acelerador própria)
-- [ ] Por korry switch: 1 botão tátil 12 × 12 mm ou microswitch e 2 LEDs de alto brilho de 3 mm (verde e âmbar); corpo impresso, tampa de acrílico leitoso de 3 mm
+- [ ] Por korry switch ([lista completa](hardware/korry/README.md#lista-de-peças-um-korry)): 1 botão tátil 6 × 6 mm, até 2 LEDs difusos de alto brilho de 3 mm, plaquinha de 22 × 22 mm, conector de 4 vias; corpo impresso, tampa de acrílico leitoso de 3 mm
 - [ ] Placas perfuradas + barras de pinos (headers)
 
 ### Fase 3 — Tela de telemetria

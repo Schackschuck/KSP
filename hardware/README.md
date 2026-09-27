@@ -9,7 +9,7 @@ Esquemáticos do painel, feitos no KiCad. Cada pasta tem também um PDF do esque
 | [`modulo_grande/`](modulo_grande/) | Módulo grande: 24 entradas e 16 LEDs ([PDF](modulo_grande/modulo_grande.pdf)) | etiqueta + 3 × 74HC165, 2 × 74HC595 |
 | [`backplane/`](backplane/) | Backplane: liga até 12 módulos ao Mega ([PDF](backplane/backplane.pdf)) | — |
 
-A parte física (carcaça, aparência, korry switches e o lugar do joystick) está em [construcao.md](construcao.md).
+A parte física (carcaça, aparência, painéis e o lugar do joystick) está em [construcao.md](construcao.md). Peças feitas em casa e usadas em vários painéis têm pasta própria, com a ficha e os desenhos: [`korry/`](korry/README.md).
 
 As três placas de módulo usam o mesmo cabo flat e encaixam em qualquer slot. Cada uma tem uma **etiqueta**, um 74HC165 a mais ligado a uma chave DIP de 8 vias: é por ela que o Mega descobre sozinho qual módulo está em cada slot.
 
