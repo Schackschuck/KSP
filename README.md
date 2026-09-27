@@ -86,6 +86,8 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Pé da nave medido pelas pernas do trem**, não pela caixa da nave inteira | Nas versões lançadas do kRPC (até a 0.6.0), a caixa de uma peça junta tudo o que está pendurado nela, como a chama do motor ligado. A caixa da nave inteira descia metros abaixo do pé, e a freada terminava alta. |
 | **SAS do KSP aponta a nave no pouso**, não o piloto automático do kRPC | O piloto automático do kRPC vem ajustado para levar 3 s até o ângulo pedido e não conta a força do ar. No segundo teste, a nave caindo de ré balançou até 31° na freada. O SAS o jogo ajusta para cada nave. Retrógrado enquanto a nave desce rápido; devagar, perto do chão, o retrógrado pula de um lado para o outro, então no fim o SAS só segura a atitude. |
 | **Scripts de voo numa pasta própria** (`scripts/`), fora da ponte | Cada script roda sozinho pela linha de comando, no PC ou no Pi, com ou sem o cockpit. A ponte só dispara o script quando o botão do painel é apertado; o script não depende dela nem do painel. |
+| **Script liga segurando o korry 5 s**, e aborta segurando de novo 5 s, sem chave ARM | Um toque sem querer não entrega a nave ao script, e o mesmo gesto aborta, sem procurar outro botão. Economiza a chave ARM com capa e um botão por script. Quem conta o tempo é a ponte, como no encoder do piloto automático, e o korry pisca âmbar enquanto conta. |
+| **A ponte abre o script num processo próprio** e aborta com o Ctrl+C | O script continua sendo o mesmo da linha de comando, e o Ctrl+C já corta o motor e devolve a nave. O estado volta pelo UDP, como no fly by wire, e o código de saída diz se a nave pousou. |
 | **Um joystick só** (Logitech Extreme 3D Pro) na USB do Pi, lido pela ponte, com uma chave de 3 posições para o modo | Já está em casa e tem 3 eixos, acelerador, 12 botões e um chapéu. Passando pela ponte, dá para ter zona morta, os modos VOO, CÂMERA e TRANSLAÇÃO, e saber quando o piloto mexe no manche para tirar o controle de um script. Não precisa abrir o joystick. |
 | **Uma tela no meio para todos os módulos**, a tela multifunção, no lugar de um LCD por módulo | Os olhos vão sempre ao mesmo lugar, os painéis ficam menores e só com botões, e sai um LCD por módulo da lista de compras. A página troca sozinha para o módulo em uso e volta depois, então não é preciso escolher a página na mão. Quem decide a troca é a ponte, que já recebe todos os eventos do painel: a tela continua só desenhando. |
 | **Korry switches** (botões iluminados com legenda, de avião) nos sistemas que o jogo também muda | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: corpo impresso em 3D e tampa de acrílico cortada a laser. Na seção de sistemas de controle, todos; nas outras, a decidir. |
@@ -102,6 +104,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de telemetria;
                   tela multifunção: ponte (mfd.py), simulador, navball e a página do celular (celular/);
                   painel de sistemas de controle (sistemas.py), com a página de botões (celular/painel.html);
+                  painel de scripts (painel_scripts.py): o korry POUSO abre o scripts/pouso.py;
                   editor de nós de manobra com botões na página (manobras.py); testes em bridge/tests/
 scripts/          scripts de voo (pouso, fly by wire...), que rodam com ou sem o cockpit; testes em scripts/tests/
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
@@ -227,12 +230,20 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 ### Fase 5 — Protocolo v1 + scripts de voo
 
-**Status: script de pouso escrito, em teste no jogo.** No primeiro teste, em Kerbin, a freada terminou alta e a nave tocou o chão inclinada e tombou. Corrigido: o pé agora é medido pelas pernas do trem. No segundo teste o pé ficou certo (0,4 m de erro no toque), mas a nave balançou até 31° na freada: o piloto automático do kRPC não segurava a nave. Agora quem aponta a nave é o SAS do KSP (falta testar de novo). [`scripts/pouso.py`](scripts/pouso.py) faz a queima de suicídio numa descida vertical, em qualquer planeta, contando o arrasto do ar; roda pela linha de comando enquanto o botão não existe. [`scripts/tests/test_pouso.py`](scripts/tests/test_pouso.py) testa a mesma guiagem numa nave simulada, sem o KSP, em planetas com e sem atmosfera.
+**Status: script de pouso escrito, em teste no jogo; o korry POUSO já dispara o script pela página de botões.** No primeiro teste, em Kerbin, a freada terminou alta e a nave tocou o chão inclinada e tombou. Corrigido: o pé agora é medido pelas pernas do trem. No segundo teste o pé ficou certo (0,4 m de erro no toque), mas a nave balançou até 31° na freada: o piloto automático do kRPC não segurava a nave. Agora quem aponta a nave é o SAS do KSP (falta testar de novo). [`scripts/pouso.py`](scripts/pouso.py) faz a queima de suicídio numa descida vertical, em qualquer planeta, contando o arrasto do ar; roda pela linha de comando ou pelo korry POUSO do [painel de scripts](hardware/construcao.md#painel-de-scripts), e a tela multifunção mostra o pouso numa página própria ([docs/mfd.md](docs/mfd.md#painel-de-scripts-e-a-página-do-pouso)). [`scripts/tests/test_pouso.py`](scripts/tests/test_pouso.py) testa a mesma guiagem numa nave simulada, sem o KSP, em planetas com e sem atmosfera.
 
 - Migrar para o protocolo binário (COBS + CRC).
-- Chave "ARM" + botão "SUICIDE BURN" que dispara o script de pouso autônomo no computador de bordo.
-- Chave "ARM" + botão "EXEC" que executa o nó de manobra da fase 4: aponta a nave para o nó, acelera o tempo até perto dele, queima e corta quando o Δv restante chega a zero.
-- Painel e tela mostram o estado do script (armado, queimando, pousado, abortado). O pouso e o EXEC já seguem a [base comum dos scripts](#base-comum).
+- **Painel de scripts** ([desenho](hardware/construcao.md#painel-de-scripts)): um korry por script, em faixas na ordem do voo (SUBIDA, ORBITA, DESCIDA). Por enquanto só o POUSO; os outros cinco lugares ficam vagos, com a tampa lisa. Segurar o korry 5 s abre o script; segurar de novo 5 s aborta. O korry pisca âmbar enquanto conta, fica verde com o script voando e vermelho se ele foi abortado ou falhou.
+- Korry "EXEC" (um lugar vago do painel de scripts) que executa o nó de manobra da fase 4: aponta a nave para o nó, acelera o tempo até perto dele, queima e corta quando o Δv restante chega a zero.
+- Painel e tela mostram o estado do script (armando, voando, pousado, abortado). A página POUSO da tela, inspirada na tela do booster da SpaceX, mostra a nave descendo até o alvo, a fase, a altura, a descida, o empuxo/peso e quanto do empuxo a freada precisa. O pouso e o EXEC seguem a [base comum dos scripts](#base-comum).
+
+**A fazer no painel de scripts:**
+
+- [x] Ponte (`bridge/painel_scripts.py`): segurar `BTN POUSO` 5 s abre o `scripts/pouso.py` num processo; segurar de novo aborta; a linha `SCR POUSO` acende o korry.
+- [x] `scripts/pouso.py`: estado por UDP (linhas `POU`), código de saída e `--demo` com uma nave simulada.
+- [x] Página POUSO no simulador e no celular; korry POUSO na página de botões (`bridge/celular/painel.html`).
+- [ ] Testar no jogo: o korry abre o pouso, a página acompanha, e segurar de novo aborta com o motor cortado.
+- [ ] Firmware do Mega: o korry POUSO no módulo da ação executiva, mandando `BTN POUSO 1` e `0`, e o LED de duas cores pela linha `SCR POUSO`.
 - Os outros scripts (piloto automático de avião, subida até a órbita, pouso de precisão...) estão em [Scripts de voo](#scripts-de-voo) e não entram no critério desta fase.
 
 **Pronto quando:** um booster pousa sozinho a partir de um botão no painel, e um nó de manobra é executado pelo botão EXEC.
@@ -276,7 +287,7 @@ Os scripts ficam em [`scripts/`](scripts/), fora da ponte: cada um roda sozinho 
 
 ### Base comum
 
-- **Um script ativo por vez.** No cockpit, liga com a chave ARM + o botão do script. ABORT, ou mexer no joystick, devolve o controle ao piloto na hora.
+- **Um script ativo por vez.** No cockpit, liga segurando o korry do script 5 s, e segurar de novo 5 s aborta. ABORT, ou mexer no joystick, também devolve o controle ao piloto na hora (a fazer).
 - O painel e a tela mostram o estado do script (armado, ativo, terminado, abortado). Como nos outros LEDs, o LED mostra o que o script está fazendo, não o botão que foi apertado.
 - **Guiagem separada do kRPC**, como em `pouso.py`: recebe uma leitura da nave e devolve comandos. Assim ela é testada numa nave simulada, sem o KSP, antes de ir para o jogo.
 - **Diretor de voo:** todo script pode rodar no automático ou só como guia. No modo guia, a tela mostra para onde apontar e quanto acelerar, e o piloto voa pelo joystick. Serve para testar a guiagem sem entregar a nave e para aprender a pilotar junto.
@@ -339,7 +350,7 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
 
 ### Subida até a órbita
 
-- O piloto escolhe a altitude da órbita e a inclinação nos encoders e aperta ARM + LAUNCH.
+- O piloto escolhe a altitude da órbita e a inclinação nos encoders e segura o korry LANCAR (vago no painel de scripts) 5 s.
 - O script decola, faz a curva de gravidade, solta os estágios quando o combustível acaba e corta o motor quando o apoastro chega na altitude escolhida.
 - No apoastro, circulariza com um nó de manobra executado pelo EXEC da fase 5.
 - Junto com o pouso, fecha o ciclo: do chão até a órbita e de volta.

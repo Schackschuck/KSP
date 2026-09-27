@@ -107,7 +107,7 @@ Distâncias e tempos são inteiros de 32 bits. Acima de 2,1 milhões de km, o qu
 
 ### Scripts → ponte da tela
 
-Um script de voo pode pôr um marcador na navball sem depender da ponte. Hoje, só o fly by wire faz isso, e manda no mesmo pacote o estado do painel de sistemas ([abaixo](#ponte-da-tela--fly-by-wire)).
+Um script de voo pode mandar coisas para a tela sem depender da ponte. O fly by wire põe um marcador na navball e manda no mesmo pacote o estado do painel de sistemas ([abaixo](#ponte-da-tela--fly-by-wire)); o pouso manda o estado dele para a página POUSO ([abaixo](#pouso--ponte-da-tela)).
 
 - O script manda a **própria linha do protocolo da tela** (`FBW 52 2700` ou `FBW OFF`), num pacote **UDP** para a porta **50100** do computador da ponte, 10 vezes por segundo. Sem a ponte aberta, o pacote se perde e o script segue voando.
 - A ponte (`bridge/mfd.py`) escuta em todas as redes (o script pode rodar noutro computador), confere a linha e a repassa para a tela na vez dos marcadores. Linhas que não entende, ela mostra no terminal e descarta.
@@ -185,7 +185,7 @@ As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão 
 | `APL <HDG\|ALT\|VS> <0\|1\|2>` | Modo do piloto: `0` desligado, `1` ligado, `2` armado (o ALT subindo ou descendo até a altitude) | Luz do modo, verde com `1` ou `2` | Azul armado, verde ligado |
 | `APV <HDG\|ALT\|VS> <valor>` | O valor escolhido: rumo em graus (0 a 359), altitude em metros, velocidade vertical em décimos de m/s | — | O valor da linha |
 | `APC <HDG\|ALT\|VS> <0\|1>` | A linha do cursor, e `1` se ela está escolhida (girar muda o valor) | — | O cursor, ou a caixa âmbar no valor |
-| `PAG <NAV\|SAS\|AP>` | A página que a tela mostra | — | Troca a página |
+| `PAG <NAV\|SAS\|AP\|POUSO>` | A página que a tela mostra. `POUSO` é a do [painel de scripts](#painel-de-scripts) | — | Troca a página |
 
 - **A página é da ponte.** Apertar um modo, o SAS ou o RCS abre a página `SAS`; mexer no encoder abre a `AP`. Uns 10 s depois do último toque no painel, a ponte manda `PAG NAV`.
 - **O valor muda de 1 em 1** (1°, 10 m, 0,1 m/s) girando devagar, e de 10 em 10 girando rápido: com mais de um clique numa linha, ou menos de 80 ms desde a última.
@@ -202,3 +202,54 @@ O `fbw.py` manda por UDP para a porta **50100** da ponte da tela, 10 vezes por s
 | `APV <HDG\|ALT\|VS> <valor>` | Quando muda e 1 vez por segundo | O valor escolhido no menu |
 
 Sem notícia do `fbw.py` por 1 s, a ponte manda `LEI OFF`, `TRAVA OFF`, `ESTOL 0` e os `APL` em `0`, e não manda nada a ele. O `fbw.py` só liga um modo voando na lei do FBW; o que ele faz em cada modo está em [docs/fbw.md](fbw.md#piloto-automático).
+
+## Painel de scripts
+
+Linhas do painel de scripts ([desenho](../hardware/construcao.md#painel-de-scripts)): um korry por script, e por enquanto só o POUSO. Quem responde é a ponte da tela (`bridge/mfd.py`, com a lógica em `bridge/painel_scripts.py`), pelo mesmo caminho do painel de sistemas: enquanto o painel não existe, o korry fica na página de botões `bridge/celular/painel.html`, na porta 8001. Uso e testes em [docs/mfd.md](mfd.md#painel-de-scripts-e-a-página-do-pouso).
+
+### Painel → ponte
+
+| Mensagem | Quando | Significado |
+|---|---|---|
+| `BTN POUSO 1` | O korry POUSO foi apertado | Começa a contar. Com 5 s apertado, a ponte abre o `scripts/pouso.py`; com o pouso voando, aborta |
+| `BTN POUSO 0` | O korry foi solto | Solto antes de 5 s, não faz nada. Depois dos 5 s, continuar apertado não conta de novo: vale só depois de soltar |
+
+- **O tempo é da ponte**, como no aperto longo do encoder do piloto automático: o painel só manda o aperto e a soltura.
+- **Um script ativo por vez.** Com um script voando, segurar o korry de outro não faz nada.
+- Os lugares vagos do painel não mandam nada até ganharem um script.
+
+### Ponte → painel e tela
+
+Vai quando muda e também 1 vez por segundo, calculada 20 vezes por segundo, para o painel e para a tela.
+
+| Mensagem | Significado | No korry | Na tela |
+|---|---|---|---|
+| `SCR POUSO OFF` | Parado | Apagado | `PARADO` |
+| `SCR POUSO LIGA <s>` | Segurando para abrir; faltam `<s>` segundos (5 a 1) | Âmbar piscando | `SEGURE 3 S / PARA POUSAR` |
+| `SCR POUSO ATIVO` | O script está voando | Verde | A fase do pouso |
+| `SCR POUSO DESL <s>` | Segurando para abortar; faltam `<s>` segundos | Verde e âmbar piscando | `SEGURE 3 S / PARA ABORTAR` |
+| `SCR POUSO FIM` | O script terminou e a nave pousou. Por 10 s, depois `OFF` | Apagado | `POUSADA` |
+| `SCR POUSO ABORT` | Abortado pelo piloto. Por 10 s | Vermelho | `ABORTADO` |
+| `SCR POUSO FALHA` | O script parou sem pousar (sem nave, nave perdida, erro). Por 10 s | Vermelho | `FALHOU` |
+
+- **A página POUSO** abre na tela no primeiro aperto do korry, fica aberta enquanto o script voa e até 10 s depois do fim. Um toque no painel de sistemas no meio do pouso abre a página dele, que volta para a do pouso 10 s depois, e não para a navball.
+- **O script roda num processo próprio**, o mesmo da linha de comando (`python scripts/pouso.py <IP do KSP> --tela 127.0.0.1`). Abortar manda o Ctrl+C (no Windows, o `CTRL_BREAK`, que o script transforma em Ctrl+C): o script corta o motor e devolve a nave antes de sair. Se ele não sair em 5 s, a ponte encerra o processo. Fechar a ponte aborta o script.
+- **O código de saída do script** diz o fim: `0` pousou (`FIM`), `130` interrompido, e qualquer outro, `FALHA`. O que o script escreve aparece no terminal da ponte, com `[pouso]` na frente.
+
+### Pouso → ponte da tela
+
+O `scripts/pouso.py` manda por UDP para a porta **50100** da ponte da tela, 10 vezes por segundo, num pacote só, uma linha por vez. A ponte confere cada linha e repassa para a tela. Sem notícia do pouso por 1 s, a ponte manda `POU OFF`, e a tela apaga os números. O pouso não recebe nada da ponte: o aborto vem pelo Ctrl+C.
+
+| Mensagem | Valores | Na página POUSO |
+|---|---|---|
+| `POU FASE <QUEDA\|QUEIMA\|TOQUE\|POUSADA>` | A fase da guiagem: caindo sem motor, freando, descida final a 2 m/s, pousada | O indicador embaixo à esquerda: azul na queda (armado), verde depois. O trem aparece baixado na queima |
+| `POU ALT <décimos de m>` | Altura do pé da nave até o chão | `ALT` e a altura da nave no desenho, em escala logarítmica até 10 km |
+| `POU VV <décimos de m/s>` | Velocidade vertical, negativa descendo | `VEL`, sem o sinal |
+| `POU MOTOR <0 a 100>` | Acelerador, em % | `MOTOR` e o tamanho da chama |
+| `POU TWR <centésimos>` | Empuxo/peso com o ar do chão | `TWR` |
+| `POU FREADA <%>` ou `POU FREADA OFF` | Quanto do empuxo máximo a freada precisa agora. `999`: nem o motor todo dá. `OFF`: sem motor ativo | A barra `FREADA` |
+| `POU IGN <%>` | A freada em que o motor acende (85%) | A marca âmbar na barra |
+| `POU SAS <RETRO\|ESTAB>` | O modo do SAS que a guiagem pediu | `SAS` |
+| `POU INCL <graus>` | Ângulo entre o nariz e a vertical | `INCL` |
+| `POU AVISO <EMPUXO\|MOTOR\|NARIZ\|OFF>` | O aviso mais importante: empuxo insuficiente, nenhum motor ativo, nariz longe da vertical | O aviso em vermelho, piscando |
+| `POU OFF` | Só da ponte para a tela: o pouso não está mandando | Apaga os números e a nave |

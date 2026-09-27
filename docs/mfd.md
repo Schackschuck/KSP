@@ -50,7 +50,8 @@ A ponte não sabe qual tela está do outro lado. Quando o firmware existir, bast
 | [`bridge/celular/index.html`](../bridge/celular/index.html) | A página do celular: o "firmware" do navegador, com a mesma navball e o mesmo layout |
 | [`bridge/navball.py`](../bridge/navball.py) | A conta da navball, escrita para ser passada para C |
 | [`bridge/sistemas.py`](../bridge/sistemas.py) | O painel de sistemas de controle: modos do SAS, SAS, RCS, FBW, o menu do piloto automático e a troca de página |
-| [`bridge/celular/painel.html`](../bridge/celular/painel.html) | A página de botões do painel de sistemas, no lugar do painel de verdade |
+| [`bridge/painel_scripts.py`](../bridge/painel_scripts.py) | O painel de scripts: o korry POUSO segurado 5 s abre e aborta o `scripts/pouso.py` num processo |
+| [`bridge/celular/painel.html`](../bridge/celular/painel.html) | A página de botões dos painéis de sistemas e de scripts, no lugar do painel de verdade |
 | [`docs/protocolo.md`](protocolo.md#tela-multifunção-mikromedia) | O protocolo da tela, mensagem por mensagem |
 
 ## Instalar
@@ -232,6 +233,50 @@ Com `python mfd.py --demo --celular`, a página de botões e as páginas novas d
 - [ ] Com o `fbw.py` voando: os korry FBW e TRAVA ALT, e o encoder segurado, mudam o FBW, e as luzes acompanham.
 - [ ] No celular de verdade: arrastar em volta do anel gira o encoder sem rolar a página.
 
+## Painel de scripts e a página do pouso
+
+O [painel de scripts](../hardware/construcao.md#painel-de-scripts) tem um korry por script de voo; por enquanto, só o POUSO, que dispara o [`scripts/pouso.py`](../scripts/pouso.py). Ele fica na mesma página de botões do painel de sistemas (porta **8001**), embaixo, com os lugares vagos dos próximos scripts.
+
+- **Segurar o POUSO 5 s** abre o pouso. O korry pisca âmbar enquanto conta, e a tela abre a página POUSO com `SEGURE 3 S / PARA POUSAR`. Soltar antes não faz nada.
+- Com o pouso voando, o korry fica **verde** e a página acompanha a descida. **Segurar de novo 5 s aborta:** o script corta o motor e devolve a nave; o korry fica **vermelho** por 10 s.
+- Quando a nave pousa, a página mostra `POUSADA` por 10 s e volta para a navball. Se o script para sem pousar (sem nave ativa, sem chão, nave perdida), o korry fica vermelho e a página mostra `FALHOU`; o motivo aparece no terminal da ponte, nas linhas `[pouso]`.
+
+O script roda num processo próprio, o mesmo da linha de comando, e manda o estado dele para a ponte por UDP ([protocolo](protocolo.md#painel-de-scripts)). A ponte passa para ele o IP do KSP que ela mesma usa.
+
+![A página do pouso no simulador: a nave freando a 250 m do chão, com o motor a 72%, a fase QUEIMA e a barra da freada](img/mfd_pouso.png)
+
+**A página POUSO**, inspirada na tela do booster da SpaceX:
+
+| Onde | O quê |
+|---|---|
+| No meio | A nave descendo pela linha tracejada até o alvo, na altura do pé numa escala logarítmica (1, 10, 100 e 1000 m ocupam o mesmo espaço). A chama cresce com o acelerador, e o trem aparece baixado na freada |
+| Em cima, à esquerda | `ALT` (altura do pé até o chão), `VEL` (descida) e `TWR` (empuxo/peso no chão) |
+| Em cima, à direita | `SAS` (RETRO ou ESTAB, o que a guiagem pediu), `MOTOR` e `INCL` (graus do nariz até a vertical) |
+| Embaixo, à esquerda | A fase: `QUEDA` em azul (esperando a hora de acender), `QUEIMA` e `TOQUE` em verde, e o fim: `POUSADA`, `ABORTADO` ou `FALHOU` |
+| Embaixo, à direita | `FREADA`: quanto do empuxo a freada precisa agora. O motor acende quando a barra chega na marca âmbar (85%); acima de 100%, vermelho: não dá mais para parar |
+| No alto do meio | Os avisos do script, piscando: `EMPUXO INSUFICIENTE`, `SEM MOTOR ATIVO`, `NARIZ LONGE DA VERTICAL` |
+
+### Testar o pouso sem o KSP
+
+Com `python mfd.py --demo --celular` (ou sem `--celular`, no simulador), segurar o POUSO abre o `pouso.py --demo`, que pousa uma nave de mentira em Kerbin: começa a 4 km, descendo a 200 m/s, e pousa em uns 30 s. É o script de verdade, com a mesma guiagem, o mesmo UDP e o mesmo aborto.
+
+| Você faz | Resultado esperado |
+|---|---|
+| Segura o POUSO 2 s e solta | O korry pisca âmbar e a tela abre a página POUSO com `SEGURE 3 S`. Soltando, nada abre; 10 s depois, a tela volta para a navball |
+| Segura o POUSO 5 s | O terminal mostra `[pouso] aberto` e as linhas do script. O korry fica verde, a página mostra `QUEDA` em azul, e a barra da freada sobe até a marca |
+| Espera | `QUEIMA` em verde, a chama acende e o trem baixa; perto do chão, `TOQUE`; depois `POUSADA`, e o korry apaga. 10 s depois, a navball |
+| Segura de novo 5 s no meio da descida | `SEGURE ... PARA ABORTAR`; depois `[pouso] Interrompido`, o korry vermelho e `ABORTADO` na página |
+| Aperta um modo do SAS no meio do pouso | A roda do SAS abre e, 10 s depois, volta para a página do pouso |
+
+Os testes automáticos ficam em `bridge/tests/test_scripts.py`, e um deles abre o `pouso.py --demo` de verdade e aborta.
+
+**Pronto quando:**
+
+- [ ] Com o KSP: segurar o POUSO 5 s com a nave caindo abre o pouso, e a página acompanha até `POUSADA`.
+- [ ] Com o KSP: segurar de novo 5 s aborta, com o motor cortado e o SAS segurando a atitude.
+- [ ] Com o KSP e a nave no chão: o korry fica vermelho e o terminal diz que a nave já está pousada.
+- [ ] No celular de verdade: o toque longo no korry não abre o menu do navegador nem seleciona texto.
+
 ## Testar com o KSP
 
 Com o jogo na cena de voo e o servidor kRPC iniciado:
@@ -359,7 +404,7 @@ Com raio de 72 pontos, são cerca de 16 mil pontos por quadro, cada um com umas 
 2. **Manual e esquemático** da mikromedia for ARM, no site da MikroE: controlador e pinos da tela e do touch, e como gravar. Pode ser pelo bootloader serial do LPC2148, pela PROG, com o Flash Magic ou o `lpc21isp`; ou pelo bootloader USB da MikroE, pela outra porta. **Antes de gravar qualquer coisa**, baixar o `.hex` do demo de fábrica, se estiver disponível: gravar um programa novo apaga o demo.
 3. **Firmware, fase 6:** piscar um LED, depois a serial (eco, e em seguida este protocolo), depois a tela (pintar, texto), a navball e o touch. Quando a placa responder `READY`, rodar `python mfd.py --porta COMx`.
 4. **Manobras pela tela** (ideia para depois): informações do próximo nó (Δv, tempo de queima, T− até o nó) e um editor de manobras pelo toque, junto com o editor de encoders da fase 4.
-5. **Painel de sistemas de verdade:** quando o módulo existir, as mesmas linhas chegam pela serial do Mega, pela ponte do painel (`ponte.py`), e as duas pontes precisam virar uma, ou a do painel repassar as linhas para esta.
+5. **Painéis de sistemas e de scripts de verdade:** quando os módulos existirem, as mesmas linhas chegam pela serial do Mega, pela ponte do painel (`ponte.py`), e as duas pontes precisam virar uma, ou a do painel repassar as linhas para esta.
 
 ## Histórico
 

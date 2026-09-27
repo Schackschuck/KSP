@@ -38,8 +38,8 @@ Um console de mesa em cunha: a parte de baixo, perto das mãos, quase deitada; a
  ├───────────┴──────┬─────────────────────┼──────────────────────────┤
  │ SISTEMAS (korry) │ EDITOR DE MANOBRAS  │  ACTION GROUPS 1–10       │
  ├──────────────────┼─────────────────────┼──────────────────────────┤
- │ EVA   │ CÂMERA   │ NAVEGAÇÃO           │  AÇÃO EXECUTIVA           │  ← perto das mãos
- │       │          │                     │  STAGE, ABORT, ARM, EXEC  │
+ │ EVA   │ CÂMERA   │ NAVEGAÇÃO           │  AÇÃO EXECUTIVA + SCRIPTS │  ← perto das mãos
+ │       │          │                     │  STAGE, ABORT, POUSO...   │
  └──────────────────┴─────────────────────┴──────────────────────────┘
                                                          ┌──────────┐
                                                          │ Extreme  │  joystick à direita,
@@ -47,7 +47,7 @@ Um console de mesa em cunha: a parte de baixo, perto das mãos, quase deitada; a
                                                          └──────────┘
 ```
 
-- **Mão direita no joystick, mão esquerda no painel.** Por isso o que se aperta com pressa (STAGE, ABORT, ARM) fica embaixo, ao alcance da mão esquerda, e o que se mexe com calma (action groups, câmera) pode ficar mais longe.
+- **Mão direita no joystick, mão esquerda no painel.** Por isso o que se aperta com pressa (STAGE, ABORT, os scripts) fica embaixo, ao alcance da mão esquerda, e o que se mexe com calma (action groups, câmera) pode ficar mais longe.
 - **Inclinação:** uns 15° na parte de baixo e 45° a 60° na parte das telas. Testar no protótipo de papelão antes de cortar.
 - **Profundidade:** a caixa precisa de altura por dentro para os módulos, o backplane, o Mega, o Pi e os cabos flat. As chaves alavanca e os botões arcade ocupam uns 30 a 40 mm atrás do painel.
 - **Tela do Pi:** a compra foi adiada, mas a caixa deixa um espaço para ela na parte de cima (ou o celular num suporte impresso, enquanto isso).
@@ -149,6 +149,25 @@ O painel que junta o SAS, o RCS, o fly by wire e o piloto automático de avião:
 
 São 17 entradas (10 modos, 4 korry e as 3 do encoder: A, B e o aperto) e 31 LEDs (20 dos modos, 2 do SAS, 2 do RCS, 2 do FBW, 1 da TRAVA, as 3 luzes do piloto e a do ESTOL): uma placa grande, com 4 × 74HC595. Ver a [tabela de placas](README.md#qual-placa-e-qual-etiqueta-em-cada-seção).
 
+## Painel de scripts
+
+Os scripts de voo que pilotam a nave sozinhos, um korry por script. Tamanho padrão de 150 × 150 mm, com as peças no tamanho de catálogo. O que o script faz está no roteiro da [fase 5](../README.md#fase-5--protocolo-v1--scripts-de-voo) e no [protocolo](../docs/protocolo.md#painel-de-scripts).
+
+![Painel de scripts: três faixas na ordem do voo, SUBIDA, ORBITA e DESCIDA, com o korry POUSO aceso em verde embaixo e cinco korry vagos](img/scripts.svg)
+
+- **Na ordem do voo:** três faixas de cima para baixo, como a nave: SUBIDA (do chão até a órbita), ORBITA (nós de manobra e encontro) e DESCIDA (da órbita até o chão). O POUSO fica embaixo, o mais perto da mão. A legenda de apoio à direita diz o que a faixa faz.
+- **Segurar 5 s:** o korry só liga o script depois de 5 s apertado, e segurar de novo 5 s aborta: o script corta o motor e devolve a nave ao piloto. Soltar antes não faz nada. Assim não precisa de chave ARM, e um toque sem querer não entrega a nave. Enquanto conta, a tela multifunção abre a página do script e mostra quantos segundos faltam.
+- **A luz mostra o script, não o aperto:** apagado parado; **âmbar piscando** enquanto conta para ligar; **verde** com o script voando (piscando âmbar enquanto conta para abortar); **vermelho** por 10 s se o script foi abortado ou falhou. Quando a nave pousa, apaga, e a tela mostra `POUSADA`.
+- **Lugares vagos:** cinco korry com a tampa lisa, sem legenda, esperando os próximos scripts do [roteiro](../README.md#scripts-de-voo). No desenho, em cinza escuro, o script previsto para cada um: LANCAR (subida até a órbita), EXEC (executa o nó de manobra), ENCONTRO, PRECISAO (pouso de precisão) e um livre. A legenda é gravada numa tampa nova quando o script existir; o furo, o korry e os fios já ficam prontos.
+- **Sem tela:** a fase, a altura, a descida e a freada aparecem na página POUSO da tela multifunção ([docs/mfd.md](../docs/mfd.md#painel-de-scripts-e-a-página-do-pouso)).
+
+| Peça | Qtd | Na frente | Furo no painel | Atrás do painel | Onde |
+|---|---|---|---|---|---|
+| [Korry feito em casa](korry/README.md), legenda única, LED vermelho e verde (os dois juntos dão o âmbar) | 6 | 22,5 × 22,5 mm | 23 × 23 mm | ~24 mm | POUSO e os cinco vagos |
+| Parafuso M3 | 4 | cabeça Ø 5,5 mm | Ø 3,2 mm | inserto roscado | Cantos |
+
+São 6 entradas e 12 LEDs (dois por korry). O painel fica ao lado da ação executiva (STAGE e ABORT) e divide a placa com ela: juntos, 8 entradas e 14 LEDs, numa placa média. Ver a [tabela de placas](README.md#qual-placa-e-qual-etiqueta-em-cada-seção).
+
 ## Korry switches
 
 O **korry** é o botão iluminado quadrado dos aviões: a legenda fica no próprio botão e acende. Muitos têm a legenda dividida em duas metades, cada uma com a sua luz: em cima o sistema (`SAS`), embaixo um aviso (`OFF`, `FAULT`).
@@ -160,7 +179,7 @@ O korry combina com o princípio do painel: **o botão só manda "apertei", e a 
 Com uma chave alavanca, a chave pode ficar para cima com o SAS desligado pelo jogo, e o piloto tem que olhar o LED para saber a verdade. O korry não tem posição: cada toque pede "troque o estado", e a legenda acesa é sempre o que o jogo diz. Não há como a chave e o jogo discordarem.
 
 - **Bons candidatos:** tudo que o jogo também pode mudar sozinho, ou pelo teclado. SAS, RCS, luzes, freios, trem de pouso, action groups, modos do piloto automático de avião (HDG, ALT, V/S, SPD).
-- **Continuam como chave alavanca com capa:** ARM e tudo que precisa de duas ações de propósito. STAGE e ABORT continuam como botões grandes, com capa.
+- **Continuam como chave alavanca com capa:** o que precisa de duas ações de propósito. STAGE e ABORT continuam como botões grandes, com capa. Os scripts não precisam de chave ARM: o korry do script só liga segurado 5 s ([painel de scripts](#painel-de-scripts)).
 
 ### Como fazer
 
@@ -260,5 +279,6 @@ Ferramenta de CAD: **a decidir.** O OpenSCAD desenha a peça com código, em tex
 - O que fazer com as seções "Analógicos: rotação" e "Analógicos: translação" do backplane. Não vai ter segundo joystick: o Extreme 3D Pro faz rotação, câmera e translação pela chave de modo. Podem ficar só com botões e LEDs (a chave de modo do joystick, por exemplo) ou sair.
 - Em que seção fica a chave de modo do joystick: na da câmera, junto do MAPA, ou numa das analógicas.
 - Alavanca de acelerador própria ou só a do joystick.
+- O lugar do painel de scripts na caixa: ao lado da ação executiva, embaixo à direita, perto da mão esquerda.
 - Ferramenta de CAD.
 - MDF pintado ou acrílico nos painéis definitivos, e se as legendas serão iluminadas.

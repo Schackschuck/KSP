@@ -115,7 +115,7 @@ Assim, não existe tabela de slots no firmware. O Mega avisa a ponte qual módul
 
 | Seção do painel | Entradas | LEDs | Placa | Número | Chaves DIP em ON |
 |---|---|---|---|---|---|
-| Ação executiva (STAGE, ABORT) + scripts (ARM, SUICIDE BURN, EXEC) | 5 | 8 | pequena | 1 | 1, 7 |
+| Ação executiva (STAGE, ABORT) + [scripts](construcao.md#painel-de-scripts) (POUSO e 5 lugares vagos) | 8 | 14 | média | 1 | 1, 8 |
 | Tempo | 8 | 1 | pequena | 2 | 2, 7 |
 | Analógicos: rotação | 8 | 3 | pequena, slots 1 a 5 | 3 | 1, 2, 7 |
 | Analógicos: translação | 5 | 1 | pequena, slots 1 a 5 | 4 | 3, 7 |
@@ -128,7 +128,7 @@ Assim, não existe tabela de slots no firmware. O Mega avisa a ponte qual módul
 | Câmera (com o MAPA) | 11 | 0 | média | 11 | 1, 2, 4, 8 |
 | Editor de manobras | 16 | 3 | média | 12 | 3, 4, 8 |
 
-São 6 pequenas, 5 médias e 1 grande, que ocupam os 12 slots. A grande é a de sistemas de controle: os 10 modos do SAS têm LED de duas cores, e ela passou a ter 4 × 74HC595 (32 LEDs) por causa deles ([desenho](construcao.md#painel-de-sistemas-de-controle)). Trem de pouso, luzes e freios saíram dessa seção e ainda não têm lugar. As seções da primeira linha ficam longe uma da outra no painel, mas podem dividir uma placa: os fios dos botões até a placa podem ter uns 30 cm.
+São 5 pequenas, 6 médias e 1 grande, que ocupam os 12 slots. A ação executiva passou para a média com o painel de scripts: 6 korry com LED de duas cores, sem a chave ARM. A grande é a de sistemas de controle: os 10 modos do SAS têm LED de duas cores, e ela passou a ter 4 × 74HC595 (32 LEDs) por causa deles ([desenho](construcao.md#painel-de-sistemas-de-controle)). Trem de pouso, luzes e freios saíram dessa seção e ainda não têm lugar. As seções da primeira linha ficam longe uma da outra no painel, mas podem dividir uma placa: os fios dos botões até a placa podem ter uns 30 cm.
 
 A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e as seções analógicas podem ficar só com botões e LEDs. O editor de manobras ficou com um encoder para o Δv, três korry de eixo, uma tecla para o tempo e uma chave rotativa para o passo, sem LCD próprio (os números vão para a tela multifunção): são 16 entradas e 3 LEDs, e ele passou da placa grande para a média ([desenho](construcao.md#painel-do-editor-de-manobras)). Os korry switches também gastam mais LEDs que entradas. Ver [construcao.md](construcao.md#a-decidir).
 
