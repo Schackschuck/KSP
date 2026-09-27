@@ -88,6 +88,10 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Joystick Logitech Extreme 3D Pro** na USB do Pi, lido pela ponte | Já está em casa e tem 3 eixos, acelerador, 12 botões e um chapéu. Passando pela ponte, dá para ter zona morta, troca entre girar e transladar, e saber quando o piloto mexe no manche para tirar o controle de um script. Não precisa abrir o joystick. |
 | **Korry switches** (botões iluminados com legenda, de avião) nos sistemas que o jogo também muda | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: corpo impresso em 3D e tampa de acrílico cortada a laser. Quais chaves viram korry: a decidir. |
 | **Caixa em MDF cortado a laser, com peças impressas em 3D** | A laser do colégio faz as peças planas e grandes (paredes, painéis com legendas); a impressora de casa, as pequenas e complicadas (korry, knobs, suportes). Cada seção é um painel removível com o seu módulo atrás. |
+| **Fly by wire pelo ponto na navball**: o manche move para onde o avião vai, e não as superfícies | É o jeito do Airbus e dos caças: soltar o manche segura o caminho, e as proteções ficam simples, porque o ponto tem limites. O piloto automático do avião vira um piloto que só mexe no ponto. |
+| **Ganhos do FBW divididos pela autoridade do avião** (torque disponível ÷ inércia, informados pelo kRPC) | A força das superfícies cresce com o quadrado da velocidade: um ganho fixo, bom na decolagem, faz o avião balançar rápido, e cada avião precisaria do seu. Nos testes, o FBW segura o avião com a autoridade informada errada pela metade ou pelo dobro. |
+| **Scripts mandam marcadores à ponte da tela por UDP**, com a própria linha do protocolo da tela | O script continua rodando sozinho: sem a ponte aberta, a linha se perde e nada acontece. A ponte só confere e repassa. |
+| **O `fbw.py` lê o joystick sozinho**, por enquanto | A ponte ainda não lê o joystick. Quando ler, a leitura passa para ela, e o script recebe o manche da ponte. |
 | **ESP32** fica para depois | Candidato a painel sem fio ou módulo extra (fase 8). |
 
 ### Estrutura planejada do repositório
@@ -95,7 +99,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 ```
 bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de telemetria;
                   tela multifunção: ponte (mfd.py), simulador, navball e a página do celular (celular/)
-scripts/          scripts de voo (pouso...), que rodam com ou sem o cockpit; testes em scripts/tests/
+scripts/          scripts de voo (pouso, fly by wire...), que rodam com ou sem o cockpit; testes em scripts/tests/
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
 firmware/passos/  sketches de aprendizado, um por passo da fase 1
 firmware/mfd/     mikromedia for ARM / LPC2148 (C, GCC e make)
@@ -242,7 +246,7 @@ Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de fla
 
 ## Scripts de voo
 
-Scripts que pilotam a nave, ou ajudam o piloto a pilotar, disparados pelo painel e acompanhados na tela. O primeiro é o pouso autônomo da [fase 5](#fase-5--protocolo-v1--scripts-de-voo) ([`scripts/pouso.py`](scripts/pouso.py)). Os outros desta seção são ideias ainda sem código e sem ordem: cada um entra no roteiro quando o hardware de que precisa existir.
+Scripts que pilotam a nave, ou ajudam o piloto a pilotar, disparados pelo painel e acompanhados na tela. O primeiro é o pouso autônomo da [fase 5](#fase-5--protocolo-v1--scripts-de-voo) ([`scripts/pouso.py`](scripts/pouso.py)); o segundo, o [fly by wire de avião](#fly-by-wire-de-avião) ([`scripts/fbw.py`](scripts/fbw.py)). Os outros desta seção são ideias ainda sem código e sem ordem: cada um entra no roteiro quando o hardware de que precisa existir.
 
 Os scripts ficam em [`scripts/`](scripts/), fora da ponte: cada um roda sozinho pela linha de comando, no PC ou no Pi, mesmo sem o painel. No cockpit, a ponte só dispara o script pelo botão e mostra o estado dele no painel e na tela. Os testes, com naves simuladas e sem o KSP, ficam em `scripts/tests/`.
 
@@ -252,6 +256,21 @@ Os scripts ficam em [`scripts/`](scripts/), fora da ponte: cada um roda sozinho 
 - O painel e a tela mostram o estado do script (armado, ativo, terminado, abortado). Como nos outros LEDs, o LED mostra o que o script está fazendo, não o botão que foi apertado.
 - **Guiagem separada do kRPC**, como em `pouso.py`: recebe uma leitura da nave e devolve comandos. Assim ela é testada numa nave simulada, sem o KSP, antes de ir para o jogo.
 - **Diretor de voo:** todo script pode rodar no automático ou só como guia. No modo guia, a tela mostra para onde apontar e quanto acelerar, e o piloto voa pelo joystick. Serve para testar a guiagem sem entregar a nave e para aprender a pilotar junto.
+
+### Fly by wire de avião
+
+**Status: script escrito e testado num avião simulado; falta testar no jogo.** Roteiro de testes, ajuste dos ganhos e problemas comuns em [docs/fbw.md](docs/fbw.md).
+
+Como nos aviões da Airbus, o manche não mexe nas superfícies: ele diz para onde o piloto quer ir. [`scripts/fbw.py`](scripts/fbw.py) lê o joystick (o Extreme 3D Pro, ou um controle de Xbox) e pilota o avião pelo kRPC.
+
+- **O ponto do FBW:** o manche move um ponto na navball, um rumo e um ângulo de subida, e o avião voa até o pró-grado ficar em cima dele. Soltando o manche, o ponto fica onde está. Com o manche solto e o ponto perto do horizonte, o avião trava a altitude.
+- **Proteções:** asas até 60° (menos se a asa não aguenta: a curva abre em vez de o avião descer), subida entre −30° e +30° e ângulo de ataque até 15°.
+- **Lei direta** no chão e com o botão do FBW desligado: o manche vai direto para as superfícies. O FBW assume 1 s depois da decolagem.
+- **O acelerador fica com o piloto.** O acelerador automático (SPD) já existe por dentro, ainda sem interface.
+- **Na tela:** o ponto aparece na navball da [tela multifunção](docs/mfd.md), como os quatro cantos verdes de um quadrado. Com o avião no ponto, o pró-grado fica dentro dele.
+- **Por dentro, três camadas:** a diferença entre o ponto e o pró-grado vira inclinação das asas e carga (g); a carga e a inclinação viram velocidades de giro; os giros viram superfícies, com o ganho dividido pela autoridade do avião.
+
+**Pronto quando:** um avião decola na lei direta e, com o FBW, voa reto, faz curvas, sobe e desce só pelo ponto, sem balançar.
 
 ### Piloto automático de avião
 
@@ -267,12 +286,13 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
   - Um encoder por valor: rumo, altitude, velocidade vertical e velocidade. Lidos como os encoders da [fase 4](#fase-4--instrumentos-físicos); apertar o encoder troca o passo.
   - Os valores escolhidos em displays de 7 segmentos (MAX7219).
   - Um botão com LED por modo. O LED acende quando o modo assumiu no jogo, não quando o botão é apertado.
-- **Na tela:** os modos ligados, os valores escolhidos e um marcador do rumo escolhido na navball.
+- **Na tela:** os modos ligados e os valores escolhidos. Para onde o avião vai já aparece na navball: é o ponto do FBW.
 - **Antes dos encoders existirem:** botões de + e − na tela do celular, que já manda toques para a ponte (`TOQUE <nome>`).
-- **Por dentro:** controladores PID em duas camadas:
-  - a de fora transforma a altitude e o rumo desejados em pitch e inclinação das asas;
-  - a de dentro mexe no pitch, roll e yaw da nave (`control.pitch` etc.) para chegar nesse pitch e nessa inclinação.
-  - A decidir: a camada de dentro pode ser o piloto automático do próprio kRPC (`vessel.auto_pilot`) ou um PID próprio. No pouso, o do kRPC não segurou a nave na freada (ver as decisões).
+- **Por dentro:** o piloto automático fica por cima do [fly by wire](#fly-by-wire-de-avião) e só mexe no ponto, como um piloto que não cansa:
+  - HDG põe o rumo do ponto no rumo escolhido; sem HDG, o ponto fica no rumo em que o avião está;
+  - ALT e V/S mexem no ângulo de subida do ponto (o FBW já trava a altitude com o ponto no horizonte);
+  - SPD liga o acelerador automático que já existe no `fbw.py`;
+  - as proteções do FBW continuam valendo, e mexer no manche devolve o ponto ao piloto.
 - **Precisa de:** 4 encoders e displays como os da fase 4. Para começar, só o celular.
 
 **Pronto quando:** um avião decola na mão, e o piloto automático leva ele até a altitude e o rumo escolhidos no painel e segura lá.

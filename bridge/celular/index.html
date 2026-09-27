@@ -65,6 +65,7 @@ const COR = {
   nave: "#ff8c00", aviso: "#e63c28",
   numeroRumo: "#ffffff", numeroPitch: "#c8d7f0", sombraNumero: "#0a0f1e",
   pro: "#e6d228", nrm: "#c846ff", rdl: "#3cd2e6", tgt: "#ff8cc8", mnv: "#3c82ff",
+  fbw: "#5ae65a",                 // o ponto do fly by wire (scripts/fbw.py)
 };
 
 // Navball: os mesmos valores de bridge/navball.py.
@@ -93,7 +94,7 @@ const NUMEROS_OFF = ["AP", "PE", "TAP", "TPE", "DIST"];
 
 const estado = {
   atitude: null,                  // [pitch, rumo, rolagem] em graus
-  marcadores: { PRO: null, NRM: null, RDL: null, TGT: null, MNV: null },  // [pitch, rumo]
+  marcadores: { PRO: null, NRM: null, RDL: null, TGT: null, MNV: null, FBW: null },  // [pitch, rumo]
   altitude: null,                 // ["ALT" ou "RAD", metros]
   numeros: { VEL: null, AP: null, PE: null, TAP: null, TPE: null, DIST: null, VV: null, ACEL: null },
   estados: { SAS: null, RCS: null, MODO: null },
@@ -367,6 +368,17 @@ const DESENHO_MARCADOR = {
   alvo: (c) => { circuloComHastes(c, COR.tgt, [0, 90, 180, 270], 6, 11); ponto(c, COR.tgt); },
   antialvo: (c) => circuloComHastes(c, COR.tgt, [45, 135, 225, 315], 1, 5),
   manobra: (c) => { circuloComHastes(c, COR.mnv, [90, 210, 330], 6, 11); ponto(c, COR.mnv, 3); },
+  // Quatro cantos de um quadrado: com o avião no ponto, o pró-grado fica
+  // dentro dele, e as hastes do pró-grado passam pelos vãos.
+  fbw: ([cx, cy]) => {
+    for (const sx of [-1, 1]) {
+      for (const sy of [-1, 1]) {
+        const canto = [cx + 8 * sx, cy + 8 * sy];
+        linha(COR.fbw, 2, [cx + 4 * sx, cy + 8 * sy], canto, [cx + 8 * sx, cy + 4 * sy]);
+      }
+    }
+    ponto([cx, cy], COR.fbw);
+  },
 };
 
 // A ordem é a de desenho: o último fica por cima.
@@ -374,6 +386,7 @@ const PARES = [
   ["RDL", "radialFora", "radialDentro"],
   ["NRM", "normal", "antinormal"],
   ["TGT", "alvo", "antialvo"],
+  ["FBW", "fbw", null],             // antes do pró-grado, que fica por cima quando os dois se alinham
   ["PRO", "progrado", "retrogrado"],
   ["MNV", "manobra", null],
 ];

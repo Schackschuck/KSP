@@ -86,6 +86,7 @@ No **celular** (`bridge/mfd_celular.py`), as mesmas linhas vão por HTTP, pelo W
 | `RDL <p> <r>` ou `RDL OFF` | Radial para fora: perpendicular ao movimento, do lado de fora do planeta. `OFF` como o `NRM` | Radial para fora e para dentro, em ciano | 10 por segundo |
 | `TGT <p> <r>` ou `TGT OFF` | Do alvo. `OFF` sem alvo ou com o alvo a menos de 1 m | Alvo e anti-alvo, em rosa, em qualquer modo | 10 por segundo |
 | `MNV <p> <r>` ou `MNV OFF` | Da queima que falta no próximo nó de manobra. `OFF` sem nó ou com a queima terminada | Nó de manobra, em azul (sem oposto) | 10 por segundo |
+| `FBW <p> <r>` ou `FBW OFF` | Para onde o fly by wire (`scripts/fbw.py`) está levando o avião: o ponto do manche, já corrigido pela trava de altitude. `OFF` sem o FBW voando | Ponto do FBW: quatro cantos de um quadrado, em verde (sem oposto), em qualquer modo | 10 por segundo |
 
 **Números**, que valem só até chegar um `MODO` diferente, exceto `VV` e `ACEL`:
 
@@ -104,13 +105,21 @@ No **celular** (`bridge/mfd_celular.py`), as mesmas linhas vão por HTTP, pelo W
 
 Distâncias e tempos são inteiros de 32 bits. Acima de 2,1 milhões de km, o que só acontece com planetas distantes, `DIST`, `AP` e `PE` vão como `OFF`, e a tela mostra `---`.
 
+### Scripts → ponte da tela
+
+Um script de voo pode pôr um marcador na navball sem depender da ponte. Hoje, só o fly by wire faz isso.
+
+- O script manda a **própria linha do protocolo da tela** (`FBW 52 2700` ou `FBW OFF`), num pacote **UDP** para a porta **50100** do computador da ponte, 10 vezes por segundo. Sem a ponte aberta, o pacote se perde e o script segue voando.
+- A ponte (`bridge/mfd.py`) escuta em todas as redes (o script pode rodar noutro computador), confere a linha e a repassa para a tela na vez dos marcadores. Linhas que não entende, ela mostra no terminal e descarta.
+- Se o script parar de mandar por **1 s** (fechou ou travou), a ponte manda `FBW OFF`.
+
 ### Comportamento
 
 - **A tela só desenha.** Toda conta que envolve o jogo é feita na ponte, e a tela recebe as direções prontas. A imagem não vai pela serial: um quadro de 320x240 com 16 bits por ponto tem 150 KB, o que levaria 13 s a 115200 baud. A atitude inteira cabe numa linha de 20 caracteres, e tudo junto dá uns 2 KB/s, menos de 20% da serial.
 - **Marcadores a 10 por segundo, atitude a 20.** Os marcadores são direções fixas no mundo, que mudam devagar; quem faz eles andarem na bola é a atitude da nave. A tela reprojeta todos a cada `ATT`.
 - **Sinal.** Se a tela passar **1 s** sem receber nenhuma mensagem válida, mostra `SEM SINAL` na navball, `---` nos números, esvazia as barras e apaga os botões. O `ALT` (ou o `RAD`), que vai 10 vezes por segundo, serve de "estou vivo". Fora da cena de voo a ponte não manda nada, então a tela também mostra `SEM SINAL`.
 - **O botão mostra o estado do jogo, não o toque**, como os LEDs do painel. `TOQUE SAS` faz a ponte inverter o SAS, e o botão só fica verde quando o jogo confirma. Se a nave não tem SAS, o botão continua apagado, e está certo.
-- **O que depende do modo.** Altitude, `VEL`, as duas barras e os marcadores aparecem sempre. O painel de baixo mostra `AP` e `PE` com o tempo até cada um no `ORB` e `DIST` no `ALVO`; no `SUP` ele não aparece, porque a velocidade vertical já está na barra. Normal e radial não existem no `ALVO`. Quando o `MODO` muda, a tela apaga os números do modo antigo e os marcadores pró-grado, normal e radial, e a ponte manda os novos na mesma hora, logo depois do `MODO`.
+- **O que depende do modo.** Altitude, `VEL`, as duas barras e os marcadores aparecem sempre. O painel de baixo mostra `AP` e `PE` com o tempo até cada um no `ORB` e `DIST` no `ALVO`; no `SUP` ele não aparece, porque a velocidade vertical já está na barra. Normal e radial não existem no `ALVO`; o ponto do FBW, o alvo e a manobra aparecem em qualquer modo. Quando o `MODO` muda, a tela apaga os números do modo antigo e os marcadores pró-grado, normal e radial, e a ponte manda os novos na mesma hora, logo depois do `MODO`.
 - **Altitude pelo radar.** A ponte manda `RAD` no lugar de `ALT` quando o radar fica abaixo de 5 km, e só volta ao `ALT` acima de 5,5 km. Essa folga evita ficar trocando quando o terreno sobe e desce perto do limite.
 - **O modo é da ponte**, e ela troca sozinha como a navball do KSP:
   - `ORB` quando a nave sobe acima de 6% do raio do planeta (36 km em Kerbin), e `SUP` quando desce abaixo de 5,5% (33 km);

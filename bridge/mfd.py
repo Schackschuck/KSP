@@ -14,10 +14,15 @@ Uso:
     python mfd.py --celular          # a tela no navegador do celular, pelo Wi-Fi
     python mfd.py --celular 8080     # idem, noutra porta (padrão: 8000)
     python mfd.py --porta COM7       # a mikromedia de verdade, quando o firmware existir
+
+Os scripts de voo também podem pôr um marcador na navball: o fly by wire
+(scripts/fbw.py) manda o ponto para onde o avião vai, por UDP, e esta ponte
+repassa para a tela.
 """
 
 import argparse
 import math
+import socket
 import sys
 import time
 from dataclasses import dataclass
@@ -37,6 +42,8 @@ DIST_MIN_MARCADOR = 1.0   # m: mais perto que isso (acoplado), o marcador do alv
 QUEIMA_MIN_MARCADOR = 0.1  # m/s: queima do nó de manobra que já acabou
 SENO_MIN_MARCADOR = 0.01  # normal e radial somem quando a nave anda na vertical (0,6°)
 INT32_MAX = 2**31 - 1     # a placa guarda os números em inteiros de 32 bits
+PORTA_SCRIPTS = 50100     # UDP: os scripts de voo (scripts/) mandam para cá o que querem na tela
+VALIDADE_SCRIPTS = 1.0    # s: sem notícia do script por esse tempo, o marcador dele some
 
 # Perto do chão, a altitude passa a ser a do radar (acima do chão, ou do mar).
 # Entra abaixo de RADAR_ENTRA e só sai acima de RADAR_SAI: a folga evita
@@ -137,6 +144,14 @@ def normal_e_radial(posicao, velocidade):
     return (normal[2], normal[1], normal[0]), (radial[2], radial[1], radial[0])
 
 
+def mensagem_ponto(nome, ponto):
+    """<nome> <pitch> <rumo> de um ponto (pitch, rumo) em graus, ou <nome> OFF."""
+    if ponto is None:
+        return f"{nome} OFF"
+    pitch, rumo = ponto
+    return f"{nome} {decimos(pitch)} {decimos(rumo) % 3600}"
+
+
 def mensagem_direcao(nome, vetor, minimo):
     """<nome> <pitch> <rumo> com a direção do vetor (cima, norte, leste),
     ou <nome> OFF se o vetor for curto demais para ter direção."""
@@ -145,8 +160,7 @@ def mensagem_direcao(nome, vetor, minimo):
         return f"{nome} OFF"
     cima, norte, leste = vetor
     pitch = math.degrees(math.asin(max(-1.0, min(1.0, cima / tamanho))))
-    rumo = math.degrees(math.atan2(leste, norte))
-    return f"{nome} {decimos(pitch)} {decimos(rumo) % 3600}"
+    return mensagem_ponto(nome, (pitch, math.degrees(math.atan2(leste, norte))))
 
 
 class ModoNavball:
@@ -209,7 +223,8 @@ class Transmissor:
         self._proximo[tarefa] = agora + intervalo
         return True
 
-    def enviar(self, t, modo, agora):
+    def enviar(self, t, modo, agora, ponto_fbw=None):
+        """ponto_fbw: (pitch, rumo) do ponto do fly by wire, ou None."""
         enviar = self.tela.enviar
 
         # 1. Estados. Vão antes dos números: quando o modo muda, a tela apaga
@@ -244,6 +259,7 @@ class Transmissor:
             posicao_alvo = t.posicao_alvo if t.alvo is not None else (0.0, 0.0, 0.0)
             enviar(mensagem_direcao("TGT", posicao_alvo, DIST_MIN_MARCADOR))
             enviar(mensagem_direcao("MNV", t.manobra or (0.0, 0.0, 0.0), QUEIMA_MIN_MARCADOR))
+            enviar(mensagem_ponto("FBW", ponto_fbw))
 
         # 3. Números. A altitude vai sempre: ela também serve de "estou vivo".
         if self._chegou_a_vez("numeros", INTERVALO_NUMEROS, agora):
@@ -264,6 +280,64 @@ class Transmissor:
             enviar(f"PE {metros(t.periastro)}")
             enviar(f"TAP {segundos(t.tempo_apoastro)}")
             enviar(f"TPE {segundos(t.tempo_periastro)}")
+
+
+def _inteiro(texto):
+    """O inteiro escrito no texto, ou None. Só aceita dígitos com sinal opcional."""
+    corpo = texto[1:] if texto[:1] in ("+", "-") else texto
+    return int(texto) if corpo.isascii() and corpo.isdigit() else None
+
+
+class Scripts:
+    """O que os scripts de voo (scripts/) querem mostrar na tela, por UDP.
+
+    Hoje, só o fly by wire (scripts/fbw.py), que manda 10 vezes por segundo
+    a própria linha do protocolo da tela: FBW <pitch> <rumo> ou FBW OFF. A
+    ponte confere a linha e a repassa na vez dos marcadores. Se o script
+    parar de mandar (fechou ou travou), o marcador some em VALIDADE_SCRIPTS.
+    """
+
+    def __init__(self, porta=PORTA_SCRIPTS):
+        self._fbw = None
+        self._quando = -math.inf
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # Qualquer rede: o script pode rodar noutro computador (ex.: no PC, com a ponte no Pi).
+            self._socket.bind(("", porta))
+        except OSError as e:
+            print(f"Não foi possível escutar os scripts na porta {porta} (outra ponte aberta?): {e}")
+            self._socket.close()
+            self._socket = None
+            return
+        self._socket.setblocking(False)
+
+    def _ler(self):
+        while self._socket is not None:
+            try:
+                dados, _ = self._socket.recvfrom(64)
+            except OSError:
+                return  # nada na fila (ou, no Windows, um aviso de pacote perdido)
+            linha = dados.decode("ascii", errors="replace").strip()
+            partes = linha.split(" ")
+            numeros = [_inteiro(p) for p in partes[1:]]
+            if partes == ["FBW", "OFF"]:
+                self._fbw, self._quando = None, time.monotonic()
+            elif partes[0] == "FBW" and len(numeros) == 2 and None not in numeros and abs(numeros[0]) <= 900:
+                self._fbw = (numeros[0] / 10, (numeros[1] / 10) % 360)
+                self._quando = time.monotonic()
+            else:
+                print(f"Linha desconhecida de um script: {linha[:40]}")
+
+    def ponto_fbw(self):
+        """(pitch, rumo) do ponto do fly by wire, em graus, ou None."""
+        self._ler()
+        if time.monotonic() - self._quando > VALIDADE_SCRIPTS:
+            return None
+        return self._fbw
+
+    def fechar(self):
+        if self._socket is not None:
+            self._socket.close()
 
 
 class NaveKrpc:
@@ -439,6 +513,8 @@ class Demo:
 
     Ela passa pelos 5 km do radar e pelos 33 e 36 km da troca SUP ⇄ ORB, a
     cada minuto ganha um alvo por 30 s e, a cada 90 s, um nó de manobra por 30 s.
+    A cada 2 minutos, o ponto do fly by wire aparece por 40 s, andando em volta
+    do pró-grado, como se um script estivesse mandando.
     """
 
     RAIO_KERBIN = 600_000  # m
@@ -447,6 +523,7 @@ class Demo:
     def __init__(self):
         self._inicio = time.monotonic()
         self._sistemas = {nome: False for nome in SISTEMAS}
+        self._progrado = (0.0, 0.0)   # (pitch, rumo) do movimento na última leitura
 
     def ler(self):
         t = time.monotonic() - self._inicio
@@ -463,6 +540,7 @@ class Demo:
             rapidez * math.cos(p) * math.cos(r),
             rapidez * math.cos(p) * math.sin(r),
         )
+        self._progrado = (math.degrees(p), math.degrees(r))
         # O chão de Kerbin anda ~175 m/s para leste no equador.
         velocidades = {"SUP": sup, "ORB": (sup[0], sup[1], sup[2] + 175)}
 
@@ -503,6 +581,14 @@ class Demo:
             sistemas=dict(self._sistemas),
         )
 
+    def ponto_fbw(self):
+        """Faz o papel dos scripts (Scripts.ponto_fbw) na demonstração."""
+        t = time.monotonic() - self._inicio
+        if t % 120 >= 40:
+            return None
+        pitch, rumo = self._progrado
+        return (pitch + 6 * math.sin(t * 0.7), (rumo + 12 * math.cos(t * 0.4)) % 360)
+
     def alternar(self, nome):
         self._sistemas[nome] = not self._sistemas[nome]
         print(f"{nome}: {'ligar' if self._sistemas[nome] else 'desligar'}")
@@ -529,7 +615,7 @@ def tratar_mensagem(linha, fonte, transmissor, modo):
         print(f"Mensagem desconhecida da tela: {linha}")
 
 
-def voar(tela, transmissor, fonte, continua_valida):
+def voar(tela, transmissor, fonte, scripts, continua_valida):
     """Mantém a tela atualizada até continua_valida() dizer que não."""
     modo = ModoNavball()
     proxima_verificacao = 0.0
@@ -544,7 +630,7 @@ def voar(tela, transmissor, fonte, continua_valida):
         if atual != anterior:
             print(f"Modo da navball: {atual}")
 
-        transmissor.enviar(t, atual, agora)
+        transmissor.enviar(t, atual, agora, scripts.ponto_fbw())
 
         if agora >= proxima_verificacao:
             if not continua_valida():
@@ -554,7 +640,7 @@ def voar(tela, transmissor, fonte, continua_valida):
         time.sleep(0.01)
 
 
-def acompanhar_nave(conn, tela, transmissor, nave):
+def acompanhar_nave(conn, tela, transmissor, scripts, nave):
     """Acompanha uma nave até ela deixar de ser a ativa ou trocar de planeta.
 
     Ao trocar de planeta (ex.: entrar na esfera de influência da Mun), os
@@ -568,6 +654,7 @@ def acompanhar_nave(conn, tela, transmissor, nave):
             tela,
             transmissor,
             fonte,
+            scripts,
             lambda: conn.space_center.active_vessel == nave and nave.orbit.body == fonte.corpo,
         )
     finally:
@@ -640,15 +727,18 @@ def main():
     conn = None if args.demo else conectar_krpc(args.address)
     tela = abrir_tela(args)
     transmissor = Transmissor(tela)
+    scripts = None
     try:
         if args.demo:
             print("Demonstração: a nave se mexe sozinha. Clique nos botões da tela.")
-            voar(tela, transmissor, Demo(), lambda: True)
+            demo = Demo()
+            voar(tela, transmissor, demo, demo, lambda: True)
         else:
+            scripts = Scripts()
             while True:
                 nave = esperar_nave(conn, tela)
                 try:
-                    acompanhar_nave(conn, tela, transmissor, nave)
+                    acompanhar_nave(conn, tela, transmissor, scripts, nave)
                 except (ValueError, RuntimeError):
                     # A nave deixou de existir ou o jogo saiu da cena de voo.
                     pass
@@ -658,6 +748,8 @@ def main():
         print("\nA tela foi desconectada.")
     finally:
         tela.fechar()
+        if scripts is not None:
+            scripts.fechar()
         if conn is not None:
             conn.close()
 
