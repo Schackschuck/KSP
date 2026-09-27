@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de manobras</title>
+<link rel="icon" href="data:,">
+<style>
+  body { font-family: monospace; margin: 8px; background: #fff; color: #000; }
+  button { font-family: monospace; font-size: 16px; min-width: 64px; min-height: 40px; margin: 2px; }
+  h3 { margin: 12px 0 4px; font-size: 14px; }
+  table { border-collapse: collapse; font-size: 14px; }
+  td { border: 1px solid #999; padding: 2px 6px; }
+  #aviso { min-height: 1.4em; font-weight: bold; margin: 6px 0; }
+  #conexao { color: #c00; }
+</style>
+</head>
+<body>
+<!--
+  Editor de nos de manobra: os botoes fazem o papel dos encoders e botoes do
+  painel (fase 4) e mandam as mesmas linhas do protocolo para a ponte
+  (bridge/manobras.py): ENC <nome> <cliques> e BTN <nome> 1. A ponte faz
+  toda a conta; a pagina so mostra as tabelas que ela manda.
+-->
+<div id="conexao"></div>
+
+<h3>ENCODERS (- / + / passo)</h3>
+<div id="encoders"></div>
+
+<h3>BOTOES</h3>
+<div>
+  <button data-btn="NOVO">NOVO</button>
+  <button data-btn="APAGAR">APAGAR</button>
+  <button data-btn="ANT">ANT</button>
+  <button data-btn="PROX">PROX</button>
+</div>
+<div>
+  <button data-btn="AP">AP</button>
+  <button data-btn="PE">PE</button>
+  <button data-btn="CIRC">CIRC</button>
+  <button data-btn="MAPA">MAPA</button>
+</div>
+
+<h3>CAMERA DO MAPA (temporario: vai para o joystick)</h3>
+<div>
+  <button data-btn="CAM_ESQ">ESQ</button>
+  <button data-btn="CAM_DIR">DIR</button>
+  <button data-btn="CAM_CIMA">CIMA</button>
+  <button data-btn="CAM_BAIXO">BAIXO</button>
+</div>
+<div>
+  <button data-btn="CAM_PERTO">PERTO</button>
+  <button data-btn="CAM_LONGE">LONGE</button>
+  <button data-btn="CAM_FOCO">FOCO</button>
+</div>
+
+<div id="aviso"></div>
+<div id="secoes"></div>
+
+<script>
+"use strict";
+
+const ENCODERS = [["PRO", "Pro-grado"], ["NRM", "Normal"], ["RAD", "Radial"], ["TEMPO", "Tempo do no"]];
+const REPETIR_DEPOIS = 400;  // ms segurando o botao ate comecar a repetir, como girar o encoder
+const REPETIR_CADA = 100;    // ms entre repeticoes
+const ATUALIZAR = 250;       // ms entre leituras do estado
+
+function enviar(linha) {
+  fetch("/linha", { method: "POST", body: linha }).catch(() => {});
+}
+
+// Botao que repete enquanto esta apertado (os + e - dos encoders).
+function repetir(botao, linha) {
+  let espera = null, repeticao = null;
+  const parar = () => { clearTimeout(espera); clearInterval(repeticao); };
+  botao.addEventListener("pointerdown", (ev) => {
+    ev.preventDefault();
+    enviar(linha);
+    espera = setTimeout(() => { repeticao = setInterval(() => enviar(linha), REPETIR_CADA); }, REPETIR_DEPOIS);
+  });
+  for (const fim of ["pointerup", "pointerleave", "pointercancel"]) botao.addEventListener(fim, parar);
+}
+
+const caixaEncoders = document.getElementById("encoders");
+for (const [nome, rotulo] of ENCODERS) {
+  const linha = document.createElement("div");
+  const menos = document.createElement("button");
+  const mais = document.createElement("button");
+  const passo = document.createElement("button");
+  menos.textContent = nome + " -";
+  mais.textContent = nome + " +";
+  passo.id = "passo_" + nome;
+  passo.textContent = "PASSO";
+  passo.title = rotulo;
+  repetir(menos, `ENC ${nome} -1`);
+  repetir(mais, `ENC ${nome} 1`);
+  passo.addEventListener("click", () => enviar(`BTN ${nome} 1`));
+  linha.append(menos, mais, passo);
+  caixaEncoders.append(linha);
+}
+
+for (const botao of document.querySelectorAll("[data-btn]")) {
+  botao.addEventListener("click", () => enviar(`BTN ${botao.dataset.btn} 1`));
+}
+
+function mostrar(estado) {
+  for (const [nome, passo] of Object.entries(estado.passos || {})) {
+    const b = document.getElementById("passo_" + nome);
+    if (b) b.textContent = "PASSO " + passo;
+  }
+  document.getElementById("aviso").textContent = estado.aviso || "";
+  const caixa = document.getElementById("secoes");
+  caixa.replaceChildren();
+  for (const secao of estado.secoes || []) {
+    const titulo = document.createElement("h3");
+    titulo.textContent = secao.titulo;
+    const tabela = document.createElement("table");
+    for (const linha of secao.linhas) {
+      const tr = tabela.insertRow();
+      for (const valor of linha) tr.insertCell().textContent = valor;
+    }
+    caixa.append(titulo, tabela);
+  }
+}
+
+async function atualizar() {
+  try {
+    const resposta = await fetch("/estado", { cache: "no-store" });
+    mostrar(await resposta.json());
+    document.getElementById("conexao").textContent = "";
+  } catch (e) {
+    document.getElementById("conexao").textContent = "SEM CONEXAO COM A PONTE";
+  }
+  setTimeout(atualizar, ATUALIZAR);
+}
+atualizar();
+</script>
+</body>
+</html>

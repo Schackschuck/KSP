@@ -98,7 +98,8 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 
 ```
 bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de telemetria;
-                  tela multifunção: ponte (mfd.py), simulador, navball e a página do celular (celular/)
+                  tela multifunção: ponte (mfd.py), simulador, navball e a página do celular (celular/);
+                  editor de nós de manobra com botões na página (manobras.py); testes em bridge/tests/
 scripts/          scripts de voo (pouso, fly by wire...), que rodam com ou sem o cockpit; testes em scripts/tests/
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
 firmware/passos/  sketches de aprendizado, um por passo da fase 1
@@ -188,12 +189,15 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 ### Fase 4 — Instrumentos físicos
 
+**Status: editor de manobras escrito, com botões numa página no lugar dos encoders; falta testar no jogo.** [`bridge/manobras.py`](bridge/manobras.py) cria e edita os nós pelo kRPC e mostra os números do nó e da órbita (antes e depois) no navegador do PC ou do celular: [docs/manobras.md](docs/manobras.md). A página manda as mesmas linhas que o painel vai mandar. Por enquanto a página também gira a câmera do mapa, **o que tem que sair dela:** no cockpit, a câmera do mapa vai ser mexida pelo joystick.
+
 - Displays de 7 segmentos com MAX7219 para os números mais importantes.
 - Encoder rotativo para escolher o que cada display mostra.
 - **Editor de nós de manobra** (pelo kRPC: `control.add_node`, `node.prograde` etc.):
   - 4 encoders: pró-grado, normal, radial e tempo (mover o nó ao longo da órbita). Apertar o encoder troca o passo: 0,1 / 1 / 10 / 100 m/s por clique.
-  - Botões NOVO, APAGAR, AP e PE (levar o nó ao apoastro ou ao periastro) e CIRC (nó de circularização no apoastro, com o Δv calculado pela ponte).
+  - Botões NOVO, APAGAR, AP e PE (levar o nó ao apoastro ou ao periastro), CIRC (circulariza no ponto do nó, com o Δv calculado pela ponte), ANT e PROX (trocar de nó) e MAPA (liga e desliga o mapa do jogo).
   - O LCD mostra Δv, tempo de queima, T− até o nó e o Ap/Pe resultante.
+  - A câmera do mapa (girar, aproximar, trocar o foco entre nave, nó e planeta) fica no joystick, não no editor.
   - Encoders lidos pela mesma cadeia de 74HC165 dos módulos: o Mega lê a cadeia inteira mil vezes por segundo numa **interrupção de timer**, e assim o redesenho do LCD (~20 ms) não faz perder cliques. O painel acumula os cliques e manda `ENC <nome> <cliques>`.
 - Barra de combustível com LEDs WS2812.
 - Ponteiro analógico com motor de passo X27.168.
@@ -402,7 +406,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 
 - [ ] 3–4× módulos MAX7219 com 8 dígitos de 7 segmentos
 - [ ] 6× encoders rotativos (KY-040): 4 para o editor de manobras, 2 para escolher o que os displays mostram
-- [ ] 5× botões para o editor de manobras (NOVO, APAGAR, AP, PE, CIRC), se não sobrarem da fase 2
+- [ ] 8× botões para o editor de manobras (NOVO, APAGAR, AP, PE, CIRC, ANT, PROX, MAPA), se não sobrarem da fase 2
 - [ ] 1 m de fita WS2812B (60 LEDs/m) + resistor 330 Ω + capacitor 1000 µF
 - [ ] 2–4× motores de passo X27.168 (ponteiros)
 - [ ] 1× fonte 5V 3A + conector/borne
