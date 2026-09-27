@@ -130,7 +130,7 @@ Assim, não existe tabela de slots no firmware. O Mega avisa a ponte qual módul
 
 São 6 pequenas, 5 médias e 1 grande, que ocupam os 12 slots. As seções da primeira linha ficam longe uma da outra no painel, mas podem dividir uma placa: os fios dos botões até a placa podem ter uns 30 cm.
 
-A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e as seções analógicas podem ficar só com botões e LEDs. O editor de manobras passou a ter chaves de alavanca no lugar dos encoders e ficou com 14 entradas: cabe numa placa média (16), e aí sobra a grande. Os korry switches também gastam mais LEDs que entradas. Ver [construcao.md](construcao.md#a-decidir).
+A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e as seções analógicas podem ficar só com botões e LEDs. O editor de manobras passou a ter teclas basculantes com mola no lugar dos encoders, sem LCD próprio (os números vão para a tela multifunção), e ficou com 14 entradas: cabe numa placa média (16), e aí sobra a grande. Os korry switches também gastam mais LEDs que entradas. Ver [construcao.md](construcao.md#a-decidir).
 
 ## No módulo
 

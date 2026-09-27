@@ -2,7 +2,7 @@
 
 **Pronto quando:** dá para planejar uma circularização pelo editor, olhando o nó no mapa do jogo, sem tocar no mouse.
 
-O editor de nós de manobra da [fase 4](../README.md#fase-4--instrumentos-físicos) vai ter 4 chaves de alavanca com mola, alguns botões e um LCD no painel. Enquanto o hardware não existe, as chaves e os botões viram botões numa página web, e o LCD vira tabelas com os números do nó. A página abre no navegador do PC ou do celular, pelo Wi-Fi.
+O editor de nós de manobra da [fase 4](../README.md#fase-4--instrumentos-físicos) vai ter 4 teclas basculantes com mola (como a do TIME WARP) e alguns botões no painel, sem tela própria: os números do nó vão para uma página do editor na tela multifunção, que abre sozinha quando o editor é usado. Enquanto o hardware não existe, as teclas e os botões viram botões numa página web, com as tabelas do nó embaixo. A página abre no navegador do PC ou do celular, pelo Wi-Fi.
 
 ```
  KSP + kRPC (PC)
@@ -14,7 +14,7 @@ O editor de nós de manobra da [fase 4](../README.md#fase-4--instrumentos-físic
  bridge/celular/manobras.html: botões + tabelas, no navegador
 ```
 
-A página manda **as mesmas linhas que o painel vai mandar** pela serial (`INC PRO 1`, `BTN NOVO 1`, ver o [protocolo](protocolo.md#editor-de-nós-de-manobra)). Quando as chaves existirem, a ponte lê essas linhas da serial no lugar da página, e as contas continuam as mesmas.
+A página manda **as mesmas linhas que o painel vai mandar** pela serial (`INC PRO 1`, `BTN NOVO 1`, ver o [protocolo](protocolo.md#editor-de-nós-de-manobra)). Quando as teclas existirem, a ponte lê essas linhas da serial no lugar da página, e as contas continuam as mesmas.
 
 ![O editor no celular: ajustes, botões, câmera do mapa e as tabelas do nó e da órbita, depois de um CIRC no apoastro](img/manobras.png)
 
@@ -36,7 +36,7 @@ Ele mostra o endereço para abrir no navegador. A tela multifunção usa a porta
 
 | Botão | O que faz |
 |---|---|
-| `PRO -` / `PRO +` | Δv pró-grado, um passo por toque. Segurando, repete (10 por segundo), como a chave com mola do painel |
+| `PRO -` / `PRO +` | Δv pró-grado, um passo por toque. Segurando, repete (10 por segundo), como a tecla com mola do painel |
 | `NRM -` / `NRM +` | Δv normal |
 | `RAD -` / `RAD +` | Δv radial (para fora do planeta) |
 | `TEMPO -` / `TEMPO +` | Move o nó ao longo da órbita. Não deixa o nó a menos de 5 s de agora |
@@ -88,7 +88,7 @@ Se a nave troca de esfera de influência antes do nó, o `CIRC` recusa: a órbit
 
 **CÂMERA DO MAPA**: vista (mapa ou voo), foco, distância, rumo e inclinação.
 
-A última mensagem (resultado de um botão, erro do jogo) fica 6 s acima das tabelas. Os textos são ASCII, sem acentos, como vão ficar no LCD.
+A última mensagem (resultado de um botão, erro do jogo) fica 6 s acima das tabelas. Os textos são ASCII, sem acentos, como na tela multifunção.
 
 ## Câmera do mapa: temporário
 
@@ -101,7 +101,7 @@ A última mensagem (resultado de um botão, erro do jogo) fica 6 s acima das tab
 
 ## Decisões
 
-- **A página não faz conta.** Recebe as tabelas prontas, em texto. O que o LCD vai mostrar sai da mesma função (`Editor.estado`).
+- **A página não faz conta.** Recebe as tabelas prontas, em texto. O que a página do editor na tela multifunção vai mostrar sai da mesma função (`Editor.estado`).
 - **Página que pergunta, e não fluxo de eventos** como a tela multifunção: o editor atualiza 4 vezes por segundo, e um `GET /estado` por vez é mais simples. Os toques vão numa fila, e só a volta principal usa o kRPC.
 - **O nó escolhido é guardado pelo objeto do nó, não pela posição na lista.** Mover um nó com o `TEMPO` para depois de outro muda a ordem, e os ajustes continuam no mesmo nó.
 - **`NOVO` no apoastro,** porque é onde quase todo nó começa; o `TEMPO` leva para outro lugar.
