@@ -44,7 +44,7 @@ A ponte não sabe qual tela está do outro lado. Quando o firmware existir, bast
 
 | Arquivo | O que é |
 |---|---|
-| [`bridge/mfd.py`](../bridge/mfd.py) | A ponte kRPC ⇄ tela: lê o jogo, manda as mensagens e executa os toques |
+| [`bridge/mfd.py`](../bridge/mfd.py) | A ponte kRPC ⇄ tela: lê o jogo, manda as mensagens e executa os toques; repassa o ponto do [fly by wire](fbw.md) |
 | [`bridge/mfd_simulador.py`](../bridge/mfd_simulador.py) | O simulador: faz o papel do firmware da mikromedia |
 | [`bridge/mfd_celular.py`](../bridge/mfd_celular.py) | O servidor da tela no celular: serve a página e troca as mensagens pelo Wi-Fi |
 | [`bridge/celular/index.html`](../bridge/celular/index.html) | A página do celular: o "firmware" do navegador, com a mesma navball e o mesmo layout |
@@ -75,6 +75,7 @@ O layout se inspira na navball do KSP2: a bola no centro, cercada por um aro esc
   | Ciano | Radial para fora: perpendicular ao movimento, do lado de fora do planeta | Radial para dentro |
   | Rosa | Alvo, quando há um alvo escolhido no jogo | Anti-alvo |
   | Azul | Nó de manobra: a direção da queima que falta | — |
+  | Verde (quatro cantos) | Ponto do [fly by wire](fbw.md): para onde o avião está sendo levado. Com o avião no ponto, o pró-grado fica dentro do quadrado | — |
 
 - **Caixa amarela, à esquerda:** a velocidade, com o modo no título (`VEL SUP`, `VEL ORB` ou `VEL ALVO`). **Tocar nela troca o modo**, como no KSP2.
 - **Caixa magenta, à direita:** `ALT`, acima do nível do mar. Abaixo de 5 km do chão vira `RADAR`, a altura acima do chão ou do mar; volta para `ALT` acima de 5,5 km.
@@ -98,12 +99,12 @@ cd bridge
 python mfd.py --demo
 ```
 
-A nave de mentira desce até perto do chão e sobe até 55 km a cada 2 minutos. A cada minuto, ela ganha um alvo por 30 segundos, e a cada minuto e meio, um nó de manobra por 30 segundos.
+A nave de mentira desce até perto do chão e sobe até 55 km a cada 2 minutos. A cada minuto, ela ganha um alvo por 30 segundos, e a cada minuto e meio, um nó de manobra por 30 segundos. A cada 2 minutos, o ponto verde do fly by wire aparece por 40 segundos, andando em volta do pró-grado.
 
 | Você faz | Resultado esperado |
 |---|---|
 | Roda o comando | A janela abre. A navball gira devagar, sobe, desce e rola, com os números do rumo e do pitch andando junto, e os números das caixas e as barras mudam. |
-| Espera | `ALT` vira `RADAR` perto do chão. O modo passa sozinho para `ORB` acima de 36 km e volta para `SUP` abaixo de 33 km, e o painel de baixo muda junto. Quando o alvo aparece, vai para `ALVO`, com `DIST` e os marcadores rosa; quando o alvo some, volta. O marcador azul da manobra aparece e some. O terminal mostra cada troca. |
+| Espera | `ALT` vira `RADAR` perto do chão. O modo passa sozinho para `ORB` acima de 36 km e volta para `SUP` abaixo de 33 km, e o painel de baixo muda junto. Quando o alvo aparece, vai para `ALVO`, com `DIST` e os marcadores rosa; quando o alvo some, volta. O marcador azul da manobra aparece e some, e o ponto verde do fly by wire também. O terminal mostra cada troca. |
 | Clica em **SAS** | O terminal mostra `SAS: ligar` e o botão fica verde. Outro clique apaga. |
 | Clica em **RCS** | Igual ao SAS |
 | Clica na **caixa da velocidade** | Passa para o próximo modo. `ALVO` só entra na roda enquanto há alvo. |
@@ -197,15 +198,16 @@ A ponte do painel (`ponte.py`) pode rodar ao mesmo tempo, em outro terminal: o k
 A cada volta do laço principal (`voar()` no `mfd.py`, a cada ~10 ms):
 
 1. **A fonte lê o jogo** e devolve uma `Telemetria`: atitude, velocidades nos três modos, altitude e radar, posição, órbita, acelerador, alvo, nó de manobra e o estado do SAS e do RCS. A fonte é a `NaveKrpc` (streams do kRPC) ou a `Demo` (a nave de mentira).
-2. **As linhas da tela são tratadas:** `READY` faz a ponte reenviar tudo; `TOQUE SAS` e `TOQUE RCS` invertem o sistema no jogo; `TOQUE MODO` passa para o próximo modo.
-3. **O `ModoNavball` escolhe o modo** (`SUP`, `ORB` ou `ALVO`), com as trocas automáticas pela altitude e pelo alvo.
-4. **O `Transmissor` decide o que mandar e quando:**
+2. **O ponto do fly by wire** chega dos scripts por UDP (`Scripts`), se o `fbw.py` estiver voando. Na demonstração, a `Demo` inventa um.
+3. **As linhas da tela são tratadas:** `READY` faz a ponte reenviar tudo; `TOQUE SAS` e `TOQUE RCS` invertem o sistema no jogo; `TOQUE MODO` passa para o próximo modo.
+4. **O `ModoNavball` escolhe o modo** (`SUP`, `ORB` ou `ALVO`), com as trocas automáticas pela altitude e pelo alvo.
+5. **O `Transmissor` decide o que mandar e quando:**
 
    | O quê | Frequência |
    |---|---|
    | `MODO`, `SAS` e `RCS` | Quando mudam, e todos 1 vez por segundo. O `MODO` vai antes dos números |
    | `ATT` | 20 por segundo |
-   | Marcadores: `PRO`, `NRM`, `RDL`, `TGT` e `MNV` | 10 por segundo |
+   | Marcadores: `PRO`, `NRM`, `RDL`, `TGT`, `MNV` e `FBW` | 10 por segundo |
    | Números: `ALT` ou `RAD`, `VEL`, `VV`, `ACEL` e `DIST` | 10 por segundo |
    | Órbita: `AP`, `PE`, `TAP` e `TPE`, só no modo `ORB` | 2 por segundo |
 
@@ -217,6 +219,7 @@ As peças:
 | `Telemetria` | `mfd.py` | Tudo o que a ponte precisa saber da nave numa volta do laço |
 | `ModoNavball` | `mfd.py` | O modo da navball e as trocas automáticas |
 | `Transmissor` | `mfd.py` | Transforma a telemetria em mensagens, cada uma na sua frequência |
+| `Scripts` | `mfd.py` | Recebe dos scripts de voo, por UDP, o que eles querem na navball (hoje, o ponto do FBW) |
 | `Simulador` | `mfd_simulador.py` | Tela: janela no PC, na resolução da placa |
 | `TelaCelular` | `mfd_celular.py` | Tela: servidor HTTP que liga a ponte à página do celular |
 | página | `celular/index.html` | O "firmware" do navegador: interpreta o protocolo e desenha |

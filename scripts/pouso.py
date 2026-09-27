@@ -34,6 +34,7 @@ Ctrl+C corta o motor e devolve o controle ao piloto.
 
 import argparse
 import math
+import os
 import sys
 import time
 from dataclasses import dataclass
@@ -511,6 +512,8 @@ def main():
     args = parser.parse_args()
 
     # Importado só aqui: os testes usam a guiagem sem precisar do kRPC nem da serial.
+    # A ponte fica em bridge/, ao lado de scripts/.
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bridge"))
     from ponte import conectar_krpc
 
     conn = conectar_krpc(args.address)

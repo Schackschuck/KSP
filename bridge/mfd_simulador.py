@@ -103,6 +103,7 @@ COR_NRM = rgb565(200, 70, 255)
 COR_RDL = rgb565(60, 210, 230)
 COR_TGT = rgb565(255, 140, 200)
 COR_MNV = rgb565(60, 130, 255)
+COR_FBW = rgb565(90, 230, 90)    # o ponto do fly by wire (scripts/fbw.py)
 
 # Números pintados na navball. O rumo vai a cada 30°, logo acima do
 # horizonte, com letras nos pontos cardeais (L = leste, O = oeste). O pitch
@@ -178,7 +179,7 @@ class Simulador:
 
         # O que a tela sabe, só a partir das mensagens. None = ainda não chegou.
         self._atitude = None       # (pitch, rumo, rolagem) em graus
-        self._marcadores = dict.fromkeys(("PRO", "NRM", "RDL", "TGT", "MNV"))  # (pitch, rumo)
+        self._marcadores = dict.fromkeys(("PRO", "NRM", "RDL", "TGT", "MNV", "FBW"))  # (pitch, rumo)
         self._altitude = None      # ("ALT" ou "RAD", metros)
         self._numeros = dict.fromkeys(NUMEROS_DO_MODO + ("VV", "ACEL"))
         self._estados = {"SAS": None, "RCS": None, "MODO": None}
@@ -334,13 +335,15 @@ class Simulador:
                     self._texto(texto, SOMBRA_NUMERO, centro=(cx + 1, cy + 1), fonte=self._fonte_pequena)
                     self._texto(texto, cor, centro=(cx, cy), fonte=self._fonte_pequena)
 
-        # Cada marcador tem um par do lado oposto da bola (menos a manobra).
+        # Cada marcador tem um par do lado oposto da bola (menos a manobra e
+        # o ponto do FBW).
         # Um marcador só aparece se estiver na metade visível da bola. A
         # ordem é a de desenho: o último fica por cima.
         pares = (
             ("RDL", self._radial_fora, self._radial_dentro),
             ("NRM", self._normal, self._antinormal),
             ("TGT", self._alvo, self._antialvo),
+            ("FBW", self._ponto_fbw, None),   # antes do pró-grado, que fica por cima quando os dois se alinham
             ("PRO", self._progrado, self._retrogrado),
             ("MNV", self._manobra, None),
         )
@@ -407,6 +410,17 @@ class Simulador:
     def _manobra(self, centro):
         self._circulo_com_hastes(centro, COR_MNV, (90, 210, 330), 6, 11)
         pygame.draw.circle(self._tela, COR_MNV, centro, 3)
+
+    def _ponto_fbw(self, centro):
+        """Quatro cantos de um quadrado: com o avião no ponto, o pró-grado fica
+        dentro dele, e as hastes do pró-grado passam pelos vãos."""
+        cx, cy = centro
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                canto = (cx + 8 * sx, cy + 8 * sy)
+                pygame.draw.line(self._tela, COR_FBW, canto, (cx + 4 * sx, cy + 8 * sy), 2)
+                pygame.draw.line(self._tela, COR_FBW, canto, (cx + 8 * sx, cy + 4 * sy), 2)
+        pygame.draw.circle(self._tela, COR_FBW, centro, 1)
 
     def _simbolo_nave(self):
         """O "W" laranja no centro: para onde o nariz aponta. Fica sempre parado."""
