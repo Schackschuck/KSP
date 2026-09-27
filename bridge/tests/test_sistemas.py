@@ -188,6 +188,9 @@ class TestSistemas(unittest.TestCase):
         self.assertEqual(luzes["SEMMP"], "SEMMP 0")        # RCS desligado: não avisa
         self.assertEqual(s.luzes(True, False, "PRO", 1.0, False, False, fbw)["SASM"], "SASM PRO V")
         self.assertEqual(s.luzes(False, False, "PRO", 1.0, False, False, fbw)["SASM"], "SASM OFF")
+        luzes_estol = s.luzes(True, False, "PRO", 1.0, False, False, {"ESTOL": "ESTOL 1"})
+        self.assertEqual(luzes_estol["ESTOL"], "ESTOL 1")                     # a luz do painel
+        self.assertEqual(s.tela(luzes_estol, 1.0, True)["ESTOL"], "ESTOL 1")  # e o alarme da tela
         tela = s.tela(luzes, 20.04, True)
         self.assertEqual(tela["SASE"], "SASE 200")
         self.assertEqual(tela["PAG"], "PAG NAV")
@@ -280,6 +283,11 @@ class TestConversaComOFbw(unittest.TestCase):
         self.tela.enviar(guiagem)
         self.assertTrue(self.esperar(lambda: self.ponte.estado_fbw()["LEI"] == "LEI FBW"))
         self.assertEqual(self.ponte.estado_fbw()["TRAVA"], "TRAVA 1830")
+        self.assertEqual(self.ponte.estado_fbw()["ESTOL"], "ESTOL 0")
+        guiagem.estol = True
+        self.tela.enviar(guiagem)
+        self.assertTrue(self.esperar(lambda: self.ponte.estado_fbw()["ESTOL"] == "ESTOL 1"))
+        guiagem.estol = False   # no alpha floor o piloto automático não liga
         self.assertEqual(self.ponte.ponto_fbw(), (2.0, 90.0))
 
         self.ponte.comando_fbw("CMD HDG")

@@ -24,17 +24,20 @@ module.exports = function () {
   s += P.korry(12.75, 114, K, K, "FBW", "DIRETA", C.green, null);
   s += P.korry(38.25, 114, K, K, "TRAVA ALT", null, C.unlit);
 
-  // PILOTO AUTO: um encoder só, mexido pelo menu da tela; uma luz por modo
+  // PILOTO AUTO: um encoder só, mexido pelo menu da tela; uma luz por modo e o ESTOL
   s += P.group(69.5, 82, 70.5, 58, "PILOTO AUTO");
   s += P.encoderArc(94, 109, 18.5) + P.encoder(94, 109, 15);
   s += t(94, 131, "APERTAR: ESCOLHE", 1.9, "middle", apoio);
   s += t(94, 135, "SEGURAR: LIGA", 1.9, "middle", apoio);
   [["HDG", C.green], ["ALT", null], ["V/S", C.green]].forEach(function (m, j) {
-    var y = 99 + j * 10;
+    var y = 94 + j * 9;
     s += t(128.5, y + .9, m[0], 2.4, "end") + P.led(133, y, !!m[1], m[1] || C.green);
   });
+  // ESTOL: vermelha, o alpha floor do fly by wire (acende piscando, com alarme na tela)
+  s += '<line x1="118" y1="' + 126 + '" x2="137" y2="126" stroke="#b9bfc5" stroke-width=".25"/>';
+  s += t(128.5, 132.4, "ESTOL", 2.4, "end", C.red) + P.led(133, 131.5, false, C.red);
 
   return P.svg(150, 150, P.panel(150, 150, "SISTEMAS DE CONTROLE", s),
     "Painel de sistemas de controle, 150 por 150 mm: dez korry de modo do SAS com o PRO aceso em verde, " +
-    "korry SAS, RCS, FBW e TRAVA ALT, e o encoder do piloto automatico com as luzes HDG, ALT e V/S");
+    "korry SAS, RCS, FBW e TRAVA ALT, e o encoder do piloto automatico com as luzes HDG, ALT e V/S e a luz vermelha ESTOL");
 };

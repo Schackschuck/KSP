@@ -63,7 +63,7 @@ Sempre as mesmas peças, no mesmo tamanho, para os painéis combinarem e as peç
 | Peça | Na frente | Furo | Para quê |
 |---|---|---|---|
 | [Korry](korry/README.md) | 22,5 × 22,5 mm | 23 × 23 mm | Tudo que liga, desliga ou escolhe: a legenda acesa é o estado do jogo. Nos modos do SAS, a legenda é o marcador da navball, com a palavra embaixo |
-| LED de 3 mm com anel de metal | anel Ø 5 mm | Ø 5 mm | Mostrar um estado sem gastar um botão: os modos do piloto automático |
+| LED de 3 mm com anel de metal | anel Ø 5 mm | Ø 5 mm | Mostrar um estado sem gastar um botão: os modos do piloto automático (verde) e o ESTOL (vermelho, piscando) |
 | Encoder EC11 com knob de alumínio | knob Ø 30 mm | Ø 7 mm | Ajustar um valor. Horário soma, anti-horário tira, com um arco `-` / `+` gravado em volta |
 | Chave rotativa, 12 posições com batente | knob de ponteiro Ø 22 mm | Ø 9,5 mm | Escolher entre poucas opções fixas, com a legenda gravada em volta |
 | Tecla basculante com mola para o centro | 21 × 15 mm | 19 × 13 mm | Mover para um lado ou outro, como o TIME WARP. Segurando, repete |

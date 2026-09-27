@@ -121,7 +121,7 @@ Assim, não existe tabela de slots no firmware. O Mega avisa a ponte qual módul
 | Analógicos: translação | 5 | 1 | pequena, slots 1 a 5 | 4 | 3, 7 |
 | Acelerador | 4 | 2 | pequena, slots 1 a 5 | 5 | 1, 3, 7 |
 | Telemetria | 4 | 0 | pequena | 6 | 2, 3, 7 |
-| Sistemas de controle (SAS, RCS, FBW e piloto automático) | 17 | 30 | grande | 7 | 1, 2, 3, 7, 8 |
+| Sistemas de controle (SAS, RCS, FBW e piloto automático) | 17 | 31 | grande | 7 | 1, 2, 3, 7, 8 |
 | Action groups 1 a 10 | 10 | 10 | média | 8 | 4, 8 |
 | EVA | 11 | 12 | média | 9 | 1, 4, 8 |
 | Navegação | 10 | 0 | média | 10 | 2, 4, 8 |

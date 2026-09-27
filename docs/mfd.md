@@ -186,6 +186,7 @@ Dá para abrir a tela num celular e os botões noutro, ou os dois no mesmo, em a
 - **SAS, RCS:** verdes ligados. A metade de baixo acende em âmbar com o SAS ligado sem carga elétrica (`SEM EC`) ou o RCS ligado sem monopropelente (`SEM MP`).
 - **FBW:** verde voando no FBW; `DIRETA` em âmbar no ar na lei direta. **TRAVA ALT:** verde com a altitude travada.
 - **HDG, ALT, V/S:** verdes com o modo ligado (o ALT também armado).
+- **ESTOL:** vermelha, piscando, com o [alpha floor](fbw.md#alpha-floor) do FBW ligado (o avião devagar demais para a asa). Junto, a tela toca dois bipes por segundo: no celular, o som só é liberado depois do primeiro toque na tela (o mesmo que põe em tela cheia); no simulador, pela placa de som do PC.
 
 ### As páginas do painel na tela
 
@@ -221,6 +222,7 @@ Com `python mfd.py --demo --celular`, a página de botões e as páginas novas d
 | Aperta o centro e gira | O valor da linha fica na caixa âmbar e muda. Girando rápido, anda de 10 em 10 |
 | Segura o centro 1 s | O modo da linha liga: a luz ao lado do encoder acende, e a página mostra LIGADO (ou ARMADO no ALT, e LIGADO 6 s depois) |
 | Aperta FBW | `LEI DIRETA` na página, `DIRETA` âmbar no korry, e os modos desligam |
+| Espera, com o FBW ligado | A cada 2 minutos, por 8 s, o avião de mentira "estola": a luz ESTOL pisca, os modos desligam e a tela toca o alarme (no celular, depois de tocar na tela uma vez) |
 
 **Pronto quando:**
 
