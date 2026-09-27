@@ -6,7 +6,7 @@ Esquemáticos do painel, feitos no KiCad. Cada pasta tem também um PDF do esque
 |---|---|---|
 | [`modulo_pequeno/`](modulo_pequeno/) | Módulo pequeno: 8 entradas e 8 LEDs ([PDF](modulo_pequeno/modulo_pequeno.pdf)) | etiqueta + 1 × 74HC165, 1 × 74HC595 |
 | [`modulo_medio/`](modulo_medio/) | Módulo médio: 16 entradas e 16 LEDs ([PDF](modulo_medio/modulo_medio.pdf)) | etiqueta + 2 × 74HC165, 2 × 74HC595 |
-| [`modulo_grande/`](modulo_grande/) | Módulo grande: 24 entradas e 16 LEDs ([PDF](modulo_grande/modulo_grande.pdf)) | etiqueta + 3 × 74HC165, 2 × 74HC595 |
+| [`modulo_grande/`](modulo_grande/) | Módulo grande: 24 entradas e 32 LEDs ([PDF](modulo_grande/modulo_grande.pdf)) | etiqueta + 3 × 74HC165, 4 × 74HC595 (o esquema ainda tem 2: ver [Próximos passos](#próximos-passos)) |
 | [`backplane/`](backplane/) | Backplane: liga até 12 módulos ao Mega ([PDF](backplane/backplane.pdf)) | — |
 
 A parte física (carcaça, aparência, painéis e o lugar do joystick) está em [construcao.md](construcao.md). Peças feitas em casa e usadas em vários painéis têm pasta própria, com a ficha e os desenhos: [`korry/`](korry/README.md). A [identidade visual](identidade_visual.md) diz como todo painel tem que parecer, e os desenhos dos painéis são gerados por código em [`desenho/`](desenho/README.md).
@@ -121,14 +121,14 @@ Assim, não existe tabela de slots no firmware. O Mega avisa a ponte qual módul
 | Analógicos: translação | 5 | 1 | pequena, slots 1 a 5 | 4 | 3, 7 |
 | Acelerador | 4 | 2 | pequena, slots 1 a 5 | 5 | 1, 3, 7 |
 | Telemetria | 4 | 0 | pequena | 6 | 2, 3, 7 |
-| Sistemas de controle | 12 | 12 | média | 7 | 1, 2, 3, 8 |
+| Sistemas de controle (SAS, RCS, FBW e piloto automático) | 17 | 30 | grande | 7 | 1, 2, 3, 7, 8 |
 | Action groups 1 a 10 | 10 | 10 | média | 8 | 4, 8 |
 | EVA | 11 | 12 | média | 9 | 1, 4, 8 |
 | Navegação | 10 | 0 | média | 10 | 2, 4, 8 |
 | Câmera (com o MAPA) | 11 | 0 | média | 11 | 1, 2, 4, 8 |
 | Editor de manobras | 16 | 3 | média | 12 | 3, 4, 8 |
 
-São 6 pequenas e 6 médias, que ocupam os 12 slots. A grande fica para uma seção que precise de mais de 16 entradas. As seções da primeira linha ficam longe uma da outra no painel, mas podem dividir uma placa: os fios dos botões até a placa podem ter uns 30 cm.
+São 6 pequenas, 5 médias e 1 grande, que ocupam os 12 slots. A grande é a de sistemas de controle: os 10 modos do SAS têm LED de duas cores, e ela passou a ter 4 × 74HC595 (32 LEDs) por causa deles ([desenho](construcao.md#painel-de-sistemas-de-controle)). Trem de pouso, luzes e freios saíram dessa seção e ainda não têm lugar. As seções da primeira linha ficam longe uma da outra no painel, mas podem dividir uma placa: os fios dos botões até a placa podem ter uns 30 cm.
 
 A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e as seções analógicas podem ficar só com botões e LEDs. O editor de manobras ficou com um encoder para o Δv, três korry de eixo, uma tecla para o tempo e uma chave rotativa para o passo, sem LCD próprio (os números vão para a tela multifunção): são 16 entradas e 3 LEDs, e ele passou da placa grande para a média ([desenho](construcao.md#painel-do-editor-de-manobras)). Os korry switches também gastam mais LEDs que entradas. Ver [construcao.md](construcao.md#a-decidir).
 
@@ -138,7 +138,7 @@ A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e
 |---|---|---|---|---|
 | Etiqueta | SW1 | SW1 | SW1 | Chave DIP de 8 vias, conforme a tabela acima. |
 | Botões e chaves | J2 (IN0–IN7) | J2, J3 (IN0–IN15) | J2, J3, J4 (IN0–IN23) | Entre o INn e o GND do próprio conector. Apertado ou ligado lê **0** (pull-up de 10 kΩ). |
-| LEDs | J3 (LED0–LED7) | J4, J5 (LED0–LED15) | J5, J6 (LED0–LED15) | Anodo no LEDn, catodo no GND. O resistor de 1 kΩ já está na placa: uns 3 mA por LED, para os 8 LEDs de um 74HC595 ficarem abaixo de 70 mA. |
+| LEDs | J3 (LED0–LED7) | J4, J5 (LED0–LED15) | J5, J6 (LED0–LED15) e, quando o esquema tiver os 4 × 74HC595, mais dois conectores (LED16–LED31) | Anodo no LEDn, catodo no GND. O resistor de 1 kΩ já está na placa: uns 3 mA por LED, para os 8 LEDs de um 74HC595 ficarem abaixo de 70 mA. |
 | Joystick ou acelerador | J4 | J6 | J7 | Pontas do potenciômetro em +5V e GND, cursor em AN_A, AN_B ou AN_C. |
 
 **Os LEDs mostram o estado do jogo.** Nenhum LED é ligado a um botão: o Mega acende cada LED com o que a ponte manda do kRPC. Até o LED de um botão iluminado vai numa saída LEDn, separado do contato do botão.
@@ -151,7 +151,7 @@ A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e
 |---|---|---|
 | Pequena | 2: U1 (etiqueta), U2 (IN0–IN7) | 1: U3 (LED0–LED7) |
 | Média | 3: U1 (etiqueta), U2 (IN0–IN7), U3 (IN8–IN15) | 2: U4 (LED0–LED7), U5 (LED8–LED15) |
-| Grande | 4: U1 (etiqueta), U2 (IN0–IN7), U3 (IN8–IN15), U4 (IN16–IN23) | 2: U5 (LED0–LED7), U6 (LED8–LED15) |
+| Grande | 4: U1 (etiqueta), U2 (IN0–IN7), U3 (IN8–IN15), U4 (IN16–IN23) | 4: U5 (LED0–LED7), U6 (LED8–LED15), U7 (LED16–LED23), U8 (LED24–LED31) |
 
 **Entradas:**
 1. Um pulso baixo em PL copia todas as entradas, e as etiquetas, para os 74HC165.
@@ -163,8 +163,8 @@ A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e
 
 **Uma varredura em uma transferência só:**
 - Como as duas cadeias compartilham o SCK, dá para ler e escrever junto.
-- Cada placa tem mais bytes de entrada que de saída. Então, depois de conhecer os módulos na partida, basta transferir o total de bytes de entrada, com os bytes de saída no fim.
-- Com as 12 placas da tabela, são 30 bytes: uns 120 µs a 2 MHz.
+- Cada placa tem pelo menos tantos bytes de entrada quanto de saída. Então, depois de conhecer os módulos na partida, basta transferir o total de bytes de entrada, com os bytes de saída no fim.
+- Com as 12 placas da tabela, são 31 bytes: uns 125 µs a 2 MHz.
 - Feito mil vezes por segundo numa interrupção de timer, dá tempo de ler até os encoders.
 - Um byte a mais no fim confere a marca de fim da fila.
 
@@ -198,16 +198,16 @@ A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e
 
 **Módulo grande:**
 - U1 (etiqueta) a U4: 74HC165.
-- U5–U6: 74HC595.
+- U5–U8: 74HC595 (o esquema ainda tem só U5 e U6).
 - RN1–RN4: rede resistiva 10 kΩ SIP 9 pinos.
 - SW1: chave DIP de 8 vias.
-- R1–R16: 1 kΩ.
-- C1–C6: 100 nF.
-- C7: 10 µF.
+- R1–R32: 1 kΩ.
+- C1–C8: 100 nF.
+- C9: 10 µF.
 - J1: conector IDC 2x8 macho com trava.
 - J2–J6: barra de pinos 1x10.
 - J7: barra de pinos 1x5.
-- 6 soquetes DIP-16.
+- 8 soquetes DIP-16.
 
 **Backplane:**
 - J1: barra de pinos 1x7.
@@ -223,6 +223,7 @@ A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e
 ## Próximos passos
 
 1. Revisar os esquemas no KiCad e rodar o ERC.
-2. Firmware do Mega: ler a fila de módulos pelas etiquetas e avisar a ponte.
-3. Testar o primeiro módulo direto no Mega. Depois, montar o backplane em placa perfurada.
-4. A PCB fica para a fase 7: são três placas de módulo diferentes, e cada uma é fabricada em quantidade.
+2. Pôr no esquema da placa grande os dois 74HC595 a mais (U7 e U8, LED16 a LED31), para a seção de sistemas de controle.
+3. Firmware do Mega: ler a fila de módulos pelas etiquetas e avisar a ponte.
+4. Testar o primeiro módulo direto no Mega. Depois, montar o backplane em placa perfurada.
+5. A PCB fica para a fase 7: são três placas de módulo diferentes, e cada uma é fabricada em quantidade.

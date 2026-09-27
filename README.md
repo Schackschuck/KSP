@@ -88,7 +88,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Scripts de voo numa pasta própria** (`scripts/`), fora da ponte | Cada script roda sozinho pela linha de comando, no PC ou no Pi, com ou sem o cockpit. A ponte só dispara o script quando o botão do painel é apertado; o script não depende dela nem do painel. |
 | **Um joystick só** (Logitech Extreme 3D Pro) na USB do Pi, lido pela ponte, com uma chave de 3 posições para o modo | Já está em casa e tem 3 eixos, acelerador, 12 botões e um chapéu. Passando pela ponte, dá para ter zona morta, os modos VOO, CÂMERA e TRANSLAÇÃO, e saber quando o piloto mexe no manche para tirar o controle de um script. Não precisa abrir o joystick. |
 | **Uma tela no meio para todos os módulos**, a tela multifunção, no lugar de um LCD por módulo | Os olhos vão sempre ao mesmo lugar, os painéis ficam menores e só com botões, e sai um LCD por módulo da lista de compras. A página troca sozinha para o módulo em uso e volta depois, então não é preciso escolher a página na mão. Quem decide a troca é a ponte, que já recebe todos os eventos do painel: a tela continua só desenhando. |
-| **Korry switches** (botões iluminados com legenda, de avião) nos sistemas que o jogo também muda | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: corpo impresso em 3D e tampa de acrílico cortada a laser. Quais chaves viram korry: a decidir. |
+| **Korry switches** (botões iluminados com legenda, de avião) nos sistemas que o jogo também muda | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: corpo impresso em 3D e tampa de acrílico cortada a laser. Na seção de sistemas de controle, todos; nas outras, a decidir. |
 | **Caixa em MDF cortado a laser, com peças impressas em 3D** | A laser do colégio faz as peças planas e grandes (paredes, painéis com legendas); a impressora de casa, as pequenas e complicadas (korry, knobs, suportes). Cada seção é um painel removível com o seu módulo atrás. |
 | **Fly by wire pelo ponto na navball**: o manche move para onde o avião vai, e não as superfícies | É o jeito do Airbus e dos caças: soltar o manche segura o caminho, e as proteções ficam simples, porque o ponto tem limites. O piloto automático do avião vira um piloto que só mexe no ponto. |
 | **Ganhos do FBW divididos pela autoridade do avião** (torque disponível ÷ inércia, informados pelo kRPC) | A força das superfícies cresce com o quadrado da velocidade: um ganho fixo, bom na decolagem, faz o avião balançar rápido, e cada avião precisaria do seu. Nos testes, o FBW segura o avião com a autoridade informada errada pela metade ou pelo dobro. |
@@ -173,8 +173,9 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 **Status: em andamento.** Chaves, botões e LEDs estão prontos para montar: pinagem, código e testes em [docs/fase2.md](docs/fase2.md). O joystick e o acelerador serão o Logitech Extreme 3D Pro, que já está em casa; falta o código na ponte.
 
 - Chaves para SAS, RCS, trem de pouso, luzes e freios; STAGE e ABORT com capa de proteção. Depois, action groups.
+- **Painel de sistemas de controle** ([desenho](hardware/construcao.md#painel-de-sistemas-de-controle)): os 10 modos do SAS em korry de duas cores (azul virando, verde segurando), korry SAS, RCS, FBW e TRAVA ALT, e o encoder do [piloto automático](#piloto-automático-de-avião). Numa placa grande com 4 × 74HC595. Apertar um modo do SAS abre a roda dos modos na tela multifunção, só para ver. Trem de pouso, luzes e freios saíram desta seção: lugar a decidir.
 - A posição da chave é o estado desejado (para cima = ligado); o LED de cada sistema mostra o estado no jogo.
-- **Painel em módulos:** cada seção vira uma placa, ligada por cabo flat a um backplane de 12 slots no Mega. A placa pequena tem 8 entradas e 8 LEDs (1 × 74HC165 + 1 × 74HC595); a média, 16 e 16 (2 + 2); a grande, 24 e 16 (3 + 2). Os LEDs só mostram o que vem do jogo: nenhum é ligado a um botão. Cada módulo tem uma etiqueta numa chave DIP, e o Mega descobre sozinho o que está encaixado. Esquemáticos, etiquetas e qual placa vai em cada seção em [hardware/](hardware/README.md).
+- **Painel em módulos:** cada seção vira uma placa, ligada por cabo flat a um backplane de 12 slots no Mega. A placa pequena tem 8 entradas e 8 LEDs (1 × 74HC165 + 1 × 74HC595); a média, 16 e 16 (2 + 2); a grande, 24 e 32 (3 + 4). Os LEDs só mostram o que vem do jogo: nenhum é ligado a um botão. Cada módulo tem uma etiqueta numa chave DIP, e o Mega descobre sozinho o que está encaixado. Esquemáticos, etiquetas e qual placa vai em cada seção em [hardware/](hardware/README.md).
 - Enquanto o primeiro módulo não fica pronto, os controles básicos continuam direto nos pinos do Mega, como em [docs/fase2.md](docs/fase2.md).
 - Próximo passo: o firmware do Mega lendo a fila de módulos pelas etiquetas, e testar o primeiro módulo direto no Mega.
 - **Joystick:** o Logitech Extreme 3D Pro, na USB do Pi, lido pela ponte e mandado ao jogo pelo kRPC. O acelerador é a alavanca da base dele. Mapeamento proposto em [hardware/construcao.md](hardware/construcao.md#joystick-logitech-extreme-3d-pro).
@@ -296,26 +297,34 @@ Como nos aviões da Airbus, o manche não mexe nas superfícies: ele diz para on
 
 ### Piloto automático de avião
 
+**Status: painel desenhado; código a fazer.**
+
+**A fazer, para ficar igual ao painel desenhado** ([desenho](hardware/construcao.md#painel-de-sistemas-de-controle), [mensagens](docs/protocolo.md#painel-de-sistemas-de-controle)):
+
+- [ ] Página de botões no celular, no lugar do painel, como a do editor de manobras.
+- [ ] Ponte da tela (`bridge/mfd.py`): modos do SAS, SAS e RCS no jogo; azul ou verde pelo erro até o marcador; o menu do piloto; as páginas do SAS e do piloto, com a volta à navball.
+- [ ] Tela do celular e simulador: a roda dos modos do SAS e a página do piloto.
+- [ ] `scripts/fbw.py`: HDG, ALT e V/S mexendo no ponto; FBW e TRAVA pelo painel; estado e comandos por UDP com a ponte da tela; testes no avião simulado.
+
 Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing, o FCU do Airbus).
 
-- **Modos**, cada um ligado e desligado pelo seu botão:
+- **Modos:**
   - **HDG:** vira para o rumo escolhido e segura.
-  - **ALT:** segura a altitude escolhida.
+  - **ALT:** sobe ou desce até a altitude escolhida e segura. Enquanto não chega, fica **armado** (azul na tela); ao chegar, nivela e fica verde.
   - **V/S:** sobe ou desce com a velocidade vertical escolhida. Com o ALT ligado junto, nivela ao chegar na altitude escolhida.
-  - **SPD:** acelerador automático, segura a velocidade escolhida.
+  - **SPD:** acelerador automático, segura a velocidade escolhida. Fica para depois, como mais uma linha do menu.
   - Sem HDG ligado, mantém as asas niveladas.
-- **No painel:**
-  - Um encoder por valor: rumo, altitude, velocidade vertical e velocidade. Lidos como os encoders da [fase 4](#fase-4--instrumentos-físicos); apertar o encoder troca o passo.
-  - Os valores escolhidos em displays de 7 segmentos (MAX7219).
-  - Um botão com LED por modo. O LED acende quando o modo assumiu no jogo, não quando o botão é apertado.
-- **Na tela:** os modos ligados e os valores escolhidos. Para onde o avião vai já aparece na navball: é o ponto do FBW.
-- **Antes dos encoders existirem:** botões de + e − na tela do celular, que já manda toques para a ponte (`TOQUE <nome>`).
+- **No painel de [sistemas de controle](hardware/construcao.md#painel-de-sistemas-de-controle)**, junto do SAS, do RCS e do FBW:
+  - **Um encoder só**, mexido pelo menu da página do piloto na tela multifunção: girar move o cursor entre HDG, ALT e V/S; apertar escolhe a linha, e girar muda o valor (horário soma); apertar de novo sai; segurar 1 s liga ou desliga o modo da linha. Girando devagar, o valor muda de 1 em 1 (1°, 10 m, 0,1 m/s); rápido, de 10 em 10.
+  - **Uma luz verde por modo**, ao lado do encoder, acesa quando o modo está ligado no FBW. Sem displays de 7 segmentos: os valores ficam na tela.
+  - Korry **FBW** (liga e desliga o FBW, como o botão do joystick) e **TRAVA ALT** (trava e destrava a altitude do momento).
+- **Na tela:** a página do piloto, com os modos (azul armado, verde ligado) e os valores escolhidos, abre sozinha quando o encoder é mexido e volta para a navball uns 10 s depois. Para onde o avião vai já aparece na navball: é o ponto do FBW.
 - **Por dentro:** o piloto automático fica por cima do [fly by wire](#fly-by-wire-de-avião) e só mexe no ponto, como um piloto que não cansa:
   - HDG põe o rumo do ponto no rumo escolhido; sem HDG, o ponto fica no rumo em que o avião está;
   - ALT e V/S mexem no ângulo de subida do ponto (o FBW já trava a altitude com o ponto no horizonte);
   - SPD liga o acelerador automático que já existe no `fbw.py`;
   - as proteções do FBW continuam valendo, e mexer no manche devolve o ponto ao piloto.
-- **Precisa de:** 4 encoders e displays como os da fase 4. Para começar, só o celular.
+- **Precisa de:** o encoder e as luzes do painel de sistemas. Para começar, uma página de botões no celular faz o papel do painel.
 
 **Pronto quando:** um avião decola na mão, e o piloto automático leva ele até a altitude e o rumo escolhidos no painel e segura lá.
 
@@ -407,8 +416,8 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [x] 2–3× capas de proteção para chave ("missile switch cover")
 - [x] 4–6× botões arcade (24 ou 30 mm), de preferência com LED
 - [ ] Por módulo pequeno (6 no painel): 2× 74HC165, 1× 74HC595, 2× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 8× resistor 1 kΩ, 3× capacitor 100 nF, 1× capacitor 10 µF, 3 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
-- [ ] Por módulo médio (6 no painel): 3× 74HC165, 2× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 16× resistor 1 kΩ, 5× capacitor 100 nF, 1× capacitor 10 µF, 5 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
-- [ ] Por módulo grande (nenhum no painel por enquanto): 4× 74HC165, 2× 74HC595, 4× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 16× resistor 1 kΩ, 6× capacitor 100 nF, 1× capacitor 10 µF, 6 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
+- [ ] Por módulo médio (5 no painel): 3× 74HC165, 2× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 16× resistor 1 kΩ, 5× capacitor 100 nF, 1× capacitor 10 µF, 5 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
+- [ ] Por módulo grande (1 no painel, o de sistemas de controle): 4× 74HC165, 4× 74HC595, 4× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 32× resistor 1 kΩ, 8× capacitor 100 nF, 1× capacitor 10 µF, 8 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
 - [ ] Backplane: 12× conector IDC 2x8, 5× resistor 47 Ω, 13× resistor 10 kΩ, capacitores de 470 µF e 100 nF, borne de 2 vias e jumper de 3 pinos
 - [x] Joystick: Logitech Extreme 3D Pro (3 eixos + acelerador, na USB do Pi)
 - [ ] 1× potenciômetro deslizante 10 kΩ linear, curso ≥ 60 mm (opcional: só para uma alavanca de acelerador própria)
@@ -422,10 +431,11 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 
 ### Fase 4 — Instrumentos físicos
 
-- [ ] 3–4× módulos MAX7219 com 8 dígitos de 7 segmentos
+- [ ] 3–4× módulos MAX7219 com 8 dígitos de 7 segmentos (o piloto automático não usa mais: os valores vão para a tela)
 - [ ] 2× encoders rotativos (KY-040), para escolher o que os displays mostram
 - [ ] Editor de manobras ([peças e medidas](hardware/construcao.md#painel-do-editor-de-manobras)): 1× encoder EC11 com knob de alumínio de 30 mm; 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm; 1× tecla basculante (*rocker*) com mola para o centro, (ON)-OFF-(ON), de 21 × 15 mm; 2× botões de metal de 12 mm sem trava; 6 korry (peças na fase 2)
 - [ ] 1 botão para o MAPA, na seção da câmera, se não sobrar da fase 2
+- [ ] Sistemas de controle ([peças e medidas](hardware/construcao.md#painel-de-sistemas-de-controle)): 1× encoder EC11 com botão e knob de alumínio de 30 mm; 10× LED azul e verde de 3 mm, difuso, catodo comum (korry dos modos); 3× LED verde de 3 mm com anel de metal; 14 korry (peças na fase 2); 1 módulo grande
 - [ ] 1× chave de 3 posições (ON-OFF-ON, sem mola) para o modo do joystick: VOO, CÂMERA e TRANSLAÇÃO
 - [ ] 1 m de fita WS2812B (60 LEDs/m) + resistor 330 Ω + capacitor 1000 µF
 - [ ] 2–4× motores de passo X27.168 (ponteiros)

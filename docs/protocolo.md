@@ -154,3 +154,50 @@ O painel do editor ([hardware/construcao.md](../hardware/construcao.md#painel-do
 
 - **O eixo escolhido fica na ponte**, como o estado de qualquer sistema. O painel não sabe qual é; a ponte acende o LED do korry certo, pelo mesmo caminho dos outros LEDs.
 - **A página do celular** continua mandando `INC PRO`, `INC NRM` e `INC RAD` até ganhar os botões de eixo e o par `-`/`+` do encoder. A ponte aceita as duas formas.
+
+## Painel de sistemas de controle
+
+Linhas do painel de sistemas de controle ([desenho](../hardware/construcao.md#painel-de-sistemas-de-controle)): os modos do SAS, SAS, RCS, FBW, trava de altitude e o encoder do [piloto automático](../README.md#piloto-automático-de-avião). **Planejado, ainda não feito na ponte.** Quem responde é a ponte da tela (`bridge/mfd.py`), que já tem o jogo, a tela e o fly by wire; enquanto o painel não existe, uma página de botões no celular manda as mesmas linhas.
+
+### Painel → ponte
+
+| Mensagem | Quando | Significado |
+|---|---|---|
+| `BTN SAS_<modo> 1` | Um korry de modo foi apertado | Escolhe o modo do SAS. Modos: `ESTAB`, `MAN`, `PRO`, `RETRO`, `NRM`, `ANRM`, `RFORA`, `RDENTRO`, `ALVO`, `AALVO`. Um modo que o jogo não aceita não muda nada |
+| `BTN SAS 1`, `BTN RCS 1` | O korry foi apertado | Inverte o sistema no jogo |
+| `BTN FBW 1` | O korry FBW foi apertado | Liga ou desliga o FBW, como o botão do joystick |
+| `BTN TRAVA 1` | O korry TRAVA ALT foi apertado | Trava a altitude do momento, ou destrava |
+| `ENC AP <cliques>` | O encoder girou | Cliques com sinal, horário positivo. Vários cliques podem ir numa linha só |
+| `BTN AP 1`, `BTN AP 0` | O encoder foi apertado e solto | Solto antes de 1 s: escolhe ou sai da linha do menu. Segurado 1 s: liga ou desliga o modo da linha, na hora, sem esperar soltar |
+
+### Ponte → painel e tela
+
+As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão quando mudam e também 1 vez por segundo.
+
+| Mensagem | Valores | No painel | Na tela |
+|---|---|---|---|
+| `SASM <modo> <A\|V>` ou `SASM OFF` | O modo do SAS no jogo e a cor: `A` (azul) com a nave ainda virando para o marcador, `V` (verde) com ela a menos de 2° dele. `OFF` com o SAS desligado | O korry do modo, na cor | O modo na roda do SAS |
+| `SASE <décimos>` ou `SASE OFF` | Ângulo entre o nariz e o marcador do modo. `OFF` sem SAS ou sem marcador | — | `ERRO` na página do SAS |
+| `SEMEC <0\|1>`, `SEMMP <0\|1>` | `1` com o SAS ligado sem carga elétrica, ou o RCS ligado sem monopropelente | Metade de baixo do SAS e do RCS, em âmbar | — |
+| `LEI <FBW\|DIRETA\|CHAO\|OFF>` | A lei do fly by wire: `FBW`, `DIRETA` no ar, `CHAO` (direta no chão). `OFF` sem o `fbw.py` aberto | `FBW` verde; `DIRETA` âmbar | Linha do FBW, na página do piloto |
+| `TRAVA <metros>` ou `TRAVA OFF` | A altitude travada pelo FBW | TRAVA ALT verde | Linha do FBW |
+| `APL <HDG\|ALT\|VS> <0\|1\|2>` | Modo do piloto: `0` desligado, `1` ligado, `2` armado (o ALT subindo ou descendo até a altitude) | Luz do modo, verde com `1` ou `2` | Azul armado, verde ligado |
+| `APV <HDG\|ALT\|VS> <valor>` | O valor escolhido: rumo em graus (0 a 359), altitude em metros, velocidade vertical em décimos de m/s | — | O valor da linha |
+| `APC <HDG\|ALT\|VS> <0\|1>` | A linha do cursor, e `1` se ela está escolhida (girar muda o valor) | — | O cursor, ou a caixa âmbar no valor |
+| `PAG <NAV\|SAS\|AP>` | A página que a tela mostra | — | Troca a página |
+
+- **A página é da ponte.** Apertar um modo, o SAS ou o RCS abre a página `SAS`; mexer no encoder abre a `AP`. Uns 10 s depois do último toque no painel, a ponte manda `PAG NAV`.
+- **O valor muda de 1 em 1** (1°, 10 m, 0,1 m/s) girando devagar, e de 10 em 10 girando rápido: com mais de um clique numa linha, ou menos de 80 ms desde a última.
+- **O menu é da ponte**, como o eixo do editor de manobras: o painel só manda cliques e apertos.
+
+### Ponte da tela ⇄ fly by wire
+
+O `fbw.py` já manda o ponto por UDP para a porta **50100** da ponte da tela. **Planejado:** no mesmo pacote, o estado do FBW e do piloto, uma linha por vez, 10 vezes por segundo: `FBW`, `LEI`, `TRAVA` e `APL`, como na tabela acima. A ponte responde para o endereço de onde o pacote veio:
+
+| Mensagem | Quando | Significado |
+|---|---|---|
+| `CMD FBW`, `CMD TRAVA` | Os korry FBW e TRAVA ALT | Liga ou desliga |
+| `CMD HDG`, `CMD ALT`, `CMD VS` | O encoder segurado 1 s | Liga ou desliga o modo |
+| `APV <HDG\|ALT\|VS> <valor>` | Quando muda e 1 vez por segundo | O valor escolhido no menu |
+
+Sem notícia do `fbw.py` por 1 s, a ponte manda `LEI OFF`, `TRAVA OFF` e os `APL` em `0`.

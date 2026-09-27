@@ -46,12 +46,13 @@ Sempre com o mesmo significado:
 
 | Cor | Significa | Exemplos |
 |---|---|---|
-| Verde | Sistema ligado, tudo normal | SAS, RCS, trem baixado |
-| Branco | Informação, modo escolhido | Modo do SAS, página da tela |
+| Verde | Sistema ligado, tudo normal; o modo assumiu | SAS, RCS, trem baixado; modo do SAS segurando |
+| Azul | Armado: escolhido, mas ainda não assumiu | Modo do SAS com a nave virando para o marcador; ALT do piloto automático subindo até a altitude |
+| Branco | Informação, modo escolhido | Página da tela |
 | Âmbar | Atenção | Combustível baixo, script armado, pedido recusado |
 | Vermelho | Perigo | ABORT, script abortado |
 
-**A luz mostra o estado do jogo**, nunca a posição da chave nem o toque.
+**A luz mostra o estado do jogo**, nunca a posição da chave nem o toque. O azul e o verde seguem os modos do piloto automático do Airbus: azul armado, verde ativo.
 
 **Exceção: cores do KSP** onde a cor diz *qual* coisa é, e não um estado. Nos eixos do nó de manobra: verde-amarelo `#c6e04a` para o pró-grado, magenta `#d24fe0` para o normal e ciano `#40c9e3` para o radial, como as alças do nó no jogo.
 
@@ -61,7 +62,8 @@ Sempre as mesmas peças, no mesmo tamanho, para os painéis combinarem e as peç
 
 | Peça | Na frente | Furo | Para quê |
 |---|---|---|---|
-| [Korry](korry/README.md) | 22,5 × 22,5 mm | 23 × 23 mm | Tudo que liga, desliga ou escolhe: a legenda acesa é o estado do jogo |
+| [Korry](korry/README.md) | 22,5 × 22,5 mm | 23 × 23 mm | Tudo que liga, desliga ou escolhe: a legenda acesa é o estado do jogo. Nos modos do SAS, a legenda é o marcador da navball, com a palavra embaixo |
+| LED de 3 mm com anel de metal | anel Ø 5 mm | Ø 5 mm | Mostrar um estado sem gastar um botão: os modos do piloto automático |
 | Encoder EC11 com knob de alumínio | knob Ø 30 mm | Ø 7 mm | Ajustar um valor. Horário soma, anti-horário tira, com um arco `-` / `+` gravado em volta |
 | Chave rotativa, 12 posições com batente | knob de ponteiro Ø 22 mm | Ø 9,5 mm | Escolher entre poucas opções fixas, com a legenda gravada em volta |
 | Tecla basculante com mola para o centro | 21 × 15 mm | 19 × 13 mm | Mover para um lado ou outro, como o TIME WARP. Segurando, repete |

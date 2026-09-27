@@ -16,9 +16,8 @@ O botão iluminado quadrado dos aviões, feito em casa: a legenda fica no própr
 | Painel | Korry | Legenda |
 |---|---|---|
 | Editor de manobras ([desenho](../construcao.md#painel-do-editor-de-manobras)) | 6 | PRO, NRM e RAD: uma legenda, acesa no eixo escolhido. NOVO, APAGAR e CIRC: uma legenda, sem LED |
-| Sistemas de controle | a decidir | SAS, RCS, luzes, freios, trem: duas metades |
+| Sistemas de controle ([desenho](../construcao.md#painel-de-sistemas-de-controle)) | 14 | 10 modos do SAS: o marcador da navball com a palavra embaixo, LED azul e verde. SAS, RCS e FBW: duas metades. TRAVA ALT: uma legenda |
 | Action groups | a decidir | 1 a 10: uma legenda |
-| Piloto automático de avião | a decidir | HDG, ALT, V/S, SPD: uma legenda |
 
 São uns 30 no cockpit inteiro. Vale fazer em série: uma peça bem resolvida, repetida.
 
@@ -78,8 +77,9 @@ São uns 30 no cockpit inteiro. Vale fazer em série: uma peça bem resolvida, r
 - **Cada korry gasta 1 entrada e 0, 1 ou 2 saídas de LED:**
   - duas metades: 2 saídas;
   - legenda única acesa: 1 saída, com os dois LEDs em paralelo nela;
-  - legenda única sem luz (NOVO, APAGAR, CIRC): nenhuma, e os LEDs nem são montados.
-- **A cor é a do LED**, escolhida na montagem, porque a tampa é branca. Uma cor fixa por metade, das cores da [identidade visual](../identidade_visual.md#cores-das-luzes): verde, branco, âmbar ou vermelho. A exceção são os korry de eixo do editor, nas cores das alças do nó no KSP (verde-amarelo, magenta e ciano), porque a cor ali diz qual é o eixo, e não um estado.
+  - legenda única sem luz (NOVO, APAGAR, CIRC): nenhuma, e os LEDs nem são montados;
+  - legenda única de duas cores (os modos do SAS): 2 saídas, com um LED azul e verde de catodo comum. O pino 3 (LC) acende o azul, o 4 (LB) o verde; o conector e o circuito não mudam.
+- **A cor é a do LED**, escolhida na montagem, porque a tampa é branca. Uma cor fixa por metade, das cores da [identidade visual](../identidade_visual.md#cores-das-luzes): verde, azul, branco, âmbar ou vermelho. Os modos do SAS têm as duas cores no mesmo LED. A exceção são os korry de eixo do editor, nas cores das alças do nó no KSP (verde-amarelo, magenta e ciano), porque a cor ali diz qual é o eixo, e não um estado.
 
 ### Brilho
 
@@ -99,11 +99,12 @@ Como em todo o painel, **a luz mostra o estado do jogo, nunca o toque**. O korry
 | Cima | O sistema está ligado no jogo | `SAS` verde: o SAS está ligado |
 | Baixo, na caixa | Algo pede atenção | `FAULT` âmbar: o pedido foi recusado, por exemplo a nave não tem SAS. A ponte acende por uns segundos |
 | Única | O estado ou modo está escolhido | `PRO` verde-amarelo: o encoder mexe no pró-grado |
+| Única, duas cores | Azul: o modo foi escolhido e ainda não assumiu. Verde: assumiu | Modo do SAS: azul com a nave virando, verde com ela no marcador |
 
 ## Lista de peças (um korry)
 
 - 1 botão tátil 6 × 6 mm, de 5 mm de altura.
-- 0 a 2 LEDs de 3 mm, difusos, de alto brilho, na cor da legenda.
+- 0 a 2 LEDs de 3 mm, difusos, de alto brilho, na cor da legenda. Nos modos do SAS, 1 LED azul e verde de 3 mm, difuso, de catodo comum.
 - 1 plaquinha de 22 × 22 mm (placa perfurada no protótipo).
 - 1 barra de pinos de 4 vias (ou JST-XH de 4 vias) e cabo de 4 fios.
 - Corpo, divisória e base impressos em PLA preto.
