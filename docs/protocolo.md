@@ -128,12 +128,15 @@ Um script de voo pode pôr um marcador na navball sem depender da ponte. Hoje, s
 
 ## Editor de nós de manobra
 
-Linhas do editor da fase 4 ([docs/manobras.md](manobras.md)). Hoje quem manda é a página `bridge/celular/manobras.html`, por HTTP (`POST /linha`, uma linha por pedido); quando os encoders existirem, o painel manda as mesmas linhas pela serial. Tudo é painel → ponte: o que o LCD mostra ainda não tem mensagem própria (a página recebe as tabelas prontas em JSON pelo `GET /estado`).
+Linhas do editor da fase 4 ([docs/manobras.md](manobras.md)). Hoje quem manda é a página `bridge/celular/manobras.html`, por HTTP (`POST /linha`, uma linha por pedido); quando as chaves existirem, o painel manda as mesmas linhas pela serial. Tudo é painel → ponte: o que o LCD mostra ainda não tem mensagem própria (a página recebe as tabelas prontas em JSON pelo `GET /estado`).
 
 | Mensagem | Quando | Significado |
 |---|---|---|
-| `ENC <nome> <cliques>` | O encoder girou | Cliques com sinal (`+` horário), acumulados desde a última mensagem. Nomes: `PRO`, `NRM`, `RAD`, `TEMPO` |
-| `BTN <nome> 1` | Um botão foi apertado | Apertar o encoder usa o nome dele (`BTN PRO 1`): troca o passo |
+| `INC <nome> <passos>` | Uma chave de ajuste foi para `+` ou `-` | Passos com sinal (`+` positivo). Nomes: `PRO`, `NRM`, `RAD`, `TEMPO` |
+| `BTN <nome> 1` | Um botão foi apertado | |
 | `BTN <nome> 0` | Um botão foi solto | Ignorada pelo editor |
 
-Botões: `NOVO`, `APAGAR`, `AP`, `PE`, `CIRC`, `ANT`, `PROX` e `MAPA`. **Temporários**, até o joystick mexer na câmera do mapa: `CAM_ESQ`, `CAM_DIR`, `CAM_CIMA`, `CAM_BAIXO`, `CAM_PERTO`, `CAM_LONGE` e `CAM_FOCO`. Uma linha que o editor não reconhece aparece na página como `ERR <linha>`.
+- **Chaves de ajuste:** alavancas com mola para o centro, (ON)-OFF-(ON), uma por ajuste, com duas entradas cada (`+` e `-`). O painel manda `INC <nome> 1` (ou `-1`) na hora em que a chave sai do centro e, segurando, repete a cada 100 ms depois de 400 ms, como a página. **A repetição fica no firmware**, e não na ponte: se a ponte repetisse até chegar o "soltei", um "soltei" perdido deixaria o nó andando sozinho. Várias repetições acumuladas podem ir numa linha só (`INC PRO 3`).
+- **Botões:** `PASSO` (um só para os quatro ajustes), `NOVO`, `APAGAR`, `ANT`, `PROX` e `CIRC`. `MAPA` fica na seção da câmera do painel, mas vem para o editor com o mesmo nome.
+- **Temporários**, até o joystick mexer na câmera do mapa no modo CÂMERA: `CAM_ESQ`, `CAM_DIR`, `CAM_CIMA`, `CAM_BAIXO`, `CAM_PERTO`, `CAM_LONGE` e `CAM_FOCO`.
+- Uma linha que o editor não reconhece aparece na página como `ERR <linha>`.

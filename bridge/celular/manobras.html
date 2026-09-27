@@ -17,15 +17,16 @@
 </head>
 <body>
 <!--
-  Editor de nos de manobra: os botoes fazem o papel dos encoders e botoes do
+  Editor de nos de manobra: os botoes fazem o papel das chaves e botoes do
   painel (fase 4) e mandam as mesmas linhas do protocolo para a ponte
-  (bridge/manobras.py): ENC <nome> <cliques> e BTN <nome> 1. A ponte faz
+  (bridge/manobras.py): INC <nome> <passos> e BTN <nome> 1. A ponte faz
   toda a conta; a pagina so mostra as tabelas que ela manda.
 -->
 <div id="conexao"></div>
 
-<h3>ENCODERS (- / + / passo)</h3>
-<div id="encoders"></div>
+<h3>AJUSTES (segurar repete)</h3>
+<div id="ajustes"></div>
+<div><button id="passo" data-btn="PASSO">PASSO</button></div>
 
 <h3>BOTOES</h3>
 <div>
@@ -33,15 +34,12 @@
   <button data-btn="APAGAR">APAGAR</button>
   <button data-btn="ANT">ANT</button>
   <button data-btn="PROX">PROX</button>
-</div>
-<div>
-  <button data-btn="AP">AP</button>
-  <button data-btn="PE">PE</button>
   <button data-btn="CIRC">CIRC</button>
-  <button data-btn="MAPA">MAPA</button>
 </div>
 
-<h3>CAMERA DO MAPA (temporario: vai para o joystick)</h3>
+<h3>CAMERA</h3>
+<div><button data-btn="MAPA">MAPA</button></div>
+<div>(temporario: no cockpit, o joystick no modo CAMERA)</div>
 <div>
   <button data-btn="CAM_ESQ">ESQ</button>
   <button data-btn="CAM_DIR">DIR</button>
@@ -60,8 +58,8 @@
 <script>
 "use strict";
 
-const ENCODERS = [["PRO", "Pro-grado"], ["NRM", "Normal"], ["RAD", "Radial"], ["TEMPO", "Tempo do no"]];
-const REPETIR_DEPOIS = 400;  // ms segurando o botao ate comecar a repetir, como girar o encoder
+const AJUSTES = ["PRO", "NRM", "RAD", "TEMPO"];
+const REPETIR_DEPOIS = 400;  // ms segurando o botao ate comecar a repetir, como a chave com mola do painel
 const REPETIR_CADA = 100;    // ms entre repeticoes
 const ATUALIZAR = 250;       // ms entre leituras do estado
 
@@ -69,7 +67,7 @@ function enviar(linha) {
   fetch("/linha", { method: "POST", body: linha }).catch(() => {});
 }
 
-// Botao que repete enquanto esta apertado (os + e - dos encoders).
+// Botao que repete enquanto esta apertado (os + e - dos ajustes).
 function repetir(botao, linha) {
   let espera = null, repeticao = null;
   const parar = () => { clearTimeout(espera); clearInterval(repeticao); };
@@ -81,22 +79,17 @@ function repetir(botao, linha) {
   for (const fim of ["pointerup", "pointerleave", "pointercancel"]) botao.addEventListener(fim, parar);
 }
 
-const caixaEncoders = document.getElementById("encoders");
-for (const [nome, rotulo] of ENCODERS) {
+const caixaAjustes = document.getElementById("ajustes");
+for (const nome of AJUSTES) {
   const linha = document.createElement("div");
   const menos = document.createElement("button");
   const mais = document.createElement("button");
-  const passo = document.createElement("button");
   menos.textContent = nome + " -";
   mais.textContent = nome + " +";
-  passo.id = "passo_" + nome;
-  passo.textContent = "PASSO";
-  passo.title = rotulo;
-  repetir(menos, `ENC ${nome} -1`);
-  repetir(mais, `ENC ${nome} 1`);
-  passo.addEventListener("click", () => enviar(`BTN ${nome} 1`));
-  linha.append(menos, mais, passo);
-  caixaEncoders.append(linha);
+  repetir(menos, `INC ${nome} -1`);
+  repetir(mais, `INC ${nome} 1`);
+  linha.append(menos, mais);
+  caixaAjustes.append(linha);
 }
 
 for (const botao of document.querySelectorAll("[data-btn]")) {
@@ -104,10 +97,8 @@ for (const botao of document.querySelectorAll("[data-btn]")) {
 }
 
 function mostrar(estado) {
-  for (const [nome, passo] of Object.entries(estado.passos || {})) {
-    const b = document.getElementById("passo_" + nome);
-    if (b) b.textContent = "PASSO " + passo;
-  }
+  const passos = estado.passos || {};
+  if (passos.PRO) document.getElementById("passo").textContent = `PASSO ${passos.PRO} / ${passos.TEMPO}`;
   document.getElementById("aviso").textContent = estado.aviso || "";
   const caixa = document.getElementById("secoes");
   caixa.replaceChildren();

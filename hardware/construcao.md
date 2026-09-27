@@ -96,7 +96,8 @@ Cada seção do painel é **um painel frontal removível, com o seu módulo para
 ### Peças impressas
 
 - Korry switches (abaixo).
-- Knobs dos encoders do editor de manobras (eixo de 6 mm com lado chato), com um risco que marca a posição.
+- Knobs dos encoders dos displays (eixo de 6 mm com lado chato), com um risco que marca a posição.
+- Capas das alavancas do editor de manobras, uma cor ou forma por ajuste (PRO, NRM, RAD, TEMPO), para achar sem olhar.
 - Moldura da mikromedia e suporte do celular.
 - Suportes das placas, do Mega e do Pi, com os furos no lugar certo.
 - Passa-cabos e presilhas para os cabos flat.
@@ -174,29 +175,40 @@ O Extreme 3D Pro já está em casa e substitui o joystick de 3 eixos e o potenci
  Extreme 3D Pro ──USB──▶ Raspberry Pi (ponte) ──kRPC──▶ KSP
 ```
 
-- **Por que assim:** o joystick passa pelo mesmo lugar que o painel. A ponte pode aplicar zona morta, curva de resposta e troca de modo (girar ou transladar), e sabe na hora quando o piloto mexe no manche. Isso é o que devolve o controle ao piloto quando um script está voando (ver a [base comum dos scripts](../README.md#base-comum)).
+- **Por que assim:** o joystick passa pelo mesmo lugar que o painel. A ponte pode aplicar zona morta, curva de resposta e os modos (voo, câmera e translação), e sabe na hora quando o piloto mexe no manche. Isso é o que devolve o controle ao piloto quando um script está voando (ver a [base comum dos scripts](../README.md#base-comum)).
 - **Sem abrir o joystick:** ele continua inteiro e pode voltar a ser usado em outros jogos.
 - **Leitura:** pelo `pygame`, que a ponte já usa, ou pelo `evdev`, direto no Linux. Decidir quando for escrever o código.
 - **Durante o desenvolvimento no PC:** com o joystick ligado no PC, o KSP também o lê. Deixar os eixos do joystick sem nada nas configurações de controle do KSP, senão os comandos chegam em dobro.
 - **O Pi 4 tem 4 portas USB:** Mega, mikromedia e joystick cabem, e sobra uma.
 
-### Mapeamento proposto
+### Um joystick, três modos
 
-Só uma proposta, para testar no jogo e mudar à vontade. O código fica para outra tarefa.
+**Um joystick só**, sem um segundo para a translação: uma **chave de 3 posições no painel** (ON-OFF-ON, sem mola, 2 entradas) escolhe o que o manche faz. A ponte lê a chave e manda o manche para um lugar ou outro.
 
-| Controle do joystick | Modo rotação | Modo translação (RCS) |
+| Posição | Modo | O manche mexe em |
 |---|---|---|
-| Y (frente e trás) | Pitch | Para cima e para baixo |
-| X (lados) | Roll | Para os lados |
-| Torção | Yaw | Frente e trás |
-| Alavanca da base | Acelerador | Acelerador |
-| Chapéu | Câmera (girar em volta da nave) | Câmera |
-| Gatilho | Segurar para girar devagar (precisão) | Idem |
-| Botão do polegar | Troca rotação ⇄ translação | Troca rotação ⇄ translação |
-| Botões da base | Livres: action groups, trocar de nave, mapa | — |
+| Cima | **VOO** | A atitude da nave (ou do avião, pelo [fly by wire](../docs/fbw.md)) |
+| Meio | **CÂMERA** | A câmera: a de voo, ou a do mapa quando ele está aberto. Substitui os botões de câmera provisórios do [editor de manobras](../docs/manobras.md#câmera-do-mapa-temporário) |
+| Baixo | **TRANSLAÇÃO** | O RCS, para mover a nave sem girar: frente, trás, lados, cima e baixo. É o modo do acoplamento (no KSP, *docking mode*) |
 
+Só uma proposta de mapeamento, para testar no jogo e mudar à vontade. O código fica para outra tarefa.
+
+| Controle do joystick | VOO | CÂMERA | TRANSLAÇÃO (RCS) |
+|---|---|---|---|
+| Y (frente e trás) | Pitch | Inclina a câmera (cima e baixo) | Para cima e para baixo |
+| X (lados) | Roll | Gira a câmera em volta do foco | Para os lados |
+| Torção | Yaw | Aproxima e afasta (zoom) | Frente e trás |
+| Alavanca da base | Acelerador | Acelerador | Acelerador |
+| Chapéu | Olhar em volta, sem sair do modo | No mapa: troca o foco (nave, nó de manobra, planeta) | Olhar em volta |
+| Gatilho | Segurar para mexer devagar (precisão) | Idem | Idem |
+| Botão do polegar | Livre (a troca de modo foi para a chave) | Livre | Livre |
+| Botões da base | Livres: action groups, trocar de nave | — | — |
+
+- **Fora do modo VOO, a nave não recebe o manche:** a ponte manda pitch, roll e yaw zerados, e o SAS segura a atitude. No modo CÂMERA dá para olhar em volta com a nave parada no rumo.
+- **A chave mostra o modo:** um LED por posição, ou o modo escrito na tela multifunção. Mudar de modo com o manche fora do centro não pode dar um tranco: a ponte só passa o manche para o modo novo depois que ele volta ao centro.
+- **TRANSLAÇÃO pede o RCS ligado.** Se estiver desligado, a ponte avisa (LED do RCS piscando ou na tela); ligar sozinha fica a decidir.
 - **STAGE e ABORT não vão no joystick:** ficam só no painel, debaixo das capas, para não serem apertados sem querer.
-- **Troca de modo:** o [acoplamento assistido](../README.md#acoplamento-assistido) pede uma chave que troca o joystick entre girar e transladar. Pode ser o botão do polegar, uma chave no painel ou os dois. O LED da chave, ou a tela, mostra o modo atual.
+- **O botão MAPA** (liga e desliga o mapa) fica na seção da câmera do painel, junto da chave de modo.
 
 ### Acelerador
 
@@ -226,7 +238,8 @@ Ferramenta de CAD: **a decidir.** O OpenSCAD desenha a peça com código, em tex
 ## A decidir
 
 - Quais chaves viram korry, e a revisão da tabela de seções por causa dos LEDs a mais.
-- O que fazer com as seções "Analógicos: rotação" e "Analógicos: translação" do backplane, agora que a rotação vem pelo joystick na USB. Podem ficar só com os botões e LEDs, ou ser usadas para um segundo joystick de translação.
+- O que fazer com as seções "Analógicos: rotação" e "Analógicos: translação" do backplane. Não vai ter segundo joystick: o Extreme 3D Pro faz rotação, câmera e translação pela chave de modo. Podem ficar só com botões e LEDs (a chave de modo do joystick, por exemplo) ou sair.
+- Em que seção fica a chave de modo do joystick: na da câmera, junto do MAPA, ou numa das analógicas.
 - Alavanca de acelerador própria ou só a do joystick.
 - Ferramenta de CAD.
 - MDF pintado ou acrílico nos painéis definitivos, e se as legendas serão iluminadas.

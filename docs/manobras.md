@@ -2,7 +2,7 @@
 
 **Pronto quando:** dá para planejar uma circularização pelo editor, olhando o nó no mapa do jogo, sem tocar no mouse.
 
-O editor de nós de manobra da [fase 4](../README.md#fase-4--instrumentos-físicos) vai ter 4 encoders, alguns botões e um LCD no painel. Enquanto o hardware não existe, os encoders e os botões viram botões numa página web, e o LCD vira tabelas com os números do nó. A página abre no navegador do PC ou do celular, pelo Wi-Fi.
+O editor de nós de manobra da [fase 4](../README.md#fase-4--instrumentos-físicos) vai ter 4 chaves de alavanca com mola, alguns botões e um LCD no painel. Enquanto o hardware não existe, as chaves e os botões viram botões numa página web, e o LCD vira tabelas com os números do nó. A página abre no navegador do PC ou do celular, pelo Wi-Fi.
 
 ```
  KSP + kRPC (PC)
@@ -14,9 +14,9 @@ O editor de nós de manobra da [fase 4](../README.md#fase-4--instrumentos-físic
  bridge/celular/manobras.html: botões + tabelas, no navegador
 ```
 
-A página manda **as mesmas linhas que o painel vai mandar** pela serial (`ENC PRO 1`, `BTN NOVO 1`, ver o [protocolo](protocolo.md#editor-de-nós-de-manobra)). Quando os encoders existirem, a ponte lê essas linhas da serial no lugar da página, e as contas continuam as mesmas.
+A página manda **as mesmas linhas que o painel vai mandar** pela serial (`INC PRO 1`, `BTN NOVO 1`, ver o [protocolo](protocolo.md#editor-de-nós-de-manobra)). Quando as chaves existirem, a ponte lê essas linhas da serial no lugar da página, e as contas continuam as mesmas.
 
-![O editor no celular: encoders, botões, câmera do mapa e as tabelas do nó e da órbita, depois de um CIRC no apoastro](img/manobras.png)
+![O editor no celular: ajustes, botões, câmera do mapa e as tabelas do nó e da órbita, depois de um CIRC no apoastro](img/manobras.png)
 
 **Onde estamos:** escrito e testado com um kRPC de mentira ([`bridge/tests/test_manobras.py`](../bridge/tests/test_manobras.py)), sem o jogo. Falta testar no KSP (lista no fim).
 
@@ -36,24 +36,25 @@ Ele mostra o endereço para abrir no navegador. A tela multifunção usa a porta
 
 | Botão | O que faz |
 |---|---|
-| `PRO -` / `PRO +` | Δv pró-grado, um passo por toque. Segurando, repete (10 por segundo), como girar o encoder |
+| `PRO -` / `PRO +` | Δv pró-grado, um passo por toque. Segurando, repete (10 por segundo), como a chave com mola do painel |
 | `NRM -` / `NRM +` | Δv normal |
 | `RAD -` / `RAD +` | Δv radial (para fora do planeta) |
 | `TEMPO -` / `TEMPO +` | Move o nó ao longo da órbita. Não deixa o nó a menos de 5 s de agora |
-| `PASSO` | Apertar o encoder: troca o passo. Δv: 0.1 → 1 → 10 → 100 m/s. Tempo: 1 s → 10 s → 1 min → 10 min |
+| `PASSO` | Um só para os quatro ajustes: troca o passo de todos juntos. Δv: 0.1 → 1 → 10 → 100 m/s. Tempo: 1 s → 10 s → 1 min → 10 min |
 | `NOVO` | Nó novo, com Δv zero, no próximo apoastro **depois do último nó** (sem apoastro: no periastro; sem os dois: daqui a 2 min) |
 | `APAGAR` | Apaga o nó escolhido; fica escolhido o seguinte |
 | `ANT` / `PROX` | Troca o nó escolhido, quando há mais de um |
-| `AP` / `PE` | Leva o nó escolhido ao próximo apoastro ou periastro da órbita em que ele está. Sem nó, cria um |
 | `CIRC` | Acerta o nó escolhido para a órbita ficar circular no ponto onde ele está. Sem nó, cria um no apoastro |
-| `MAPA` | Liga e desliga o mapa do jogo, para ver o nó sendo criado |
+| `MAPA` | Liga e desliga o mapa do jogo, para ver o nó sendo criado. No painel, fica na seção da câmera |
 | `ESQ` `DIR` `CIMA` `BAIXO` `PERTO` `LONGE` `FOCO` | Câmera do mapa: **temporário**, ver abaixo |
 
-"A órbita em que o nó está" é a da nave para o primeiro nó, e a que sai do nó anterior para os outros. Assim `AP` num segundo nó leva ele ao apoastro da órbita já mudada pelo primeiro.
+"A órbita em que o nó está" é a da nave para o primeiro nó, e a que sai do nó anterior para os outros. Assim o `NOVO` depois de um nó põe o novo no apoastro da órbita já mudada pelo primeiro.
+
+Não há botões `AP` e `PE`: o `NOVO` já cria o nó no apoastro, e o `TEMPO` leva o nó a qualquer ponto. A linha "Posição" da tabela avisa quando o nó está no AP ou no PE.
 
 ### Circularizar (CIRC)
 
-Um toque deixa a órbita circular no ponto do nó, em qualquer ponto da órbita, não só no apoastro: `AP` + `CIRC` é a circularização de sempre; `TEMPO` + `CIRC` circulariza em outra altitude.
+Um toque deixa a órbita circular no ponto do nó, em qualquer ponto da órbita, não só no apoastro: `NOVO` + `CIRC` (ou só `CIRC`, sem nó) é a circularização de sempre no apoastro; `TEMPO` + `CIRC` circulariza em outra altitude.
 
 1. **Conta fechada.** No ponto do nó, a nave está a uma distância *r* do centro, com velocidade *v* (vis-viva) inclinada *γ* acima do horizonte (ângulo de voo, tan γ = e·sen ν / (1 + e·cos ν)). A órbita circular ali pede velocidade √(μ/r), só na horizontal. A diferença, passada para o quadro do nó (pró-grado inclinado γ), é:
    - pró-grado = √(μ/r)·cos γ − v
@@ -69,9 +70,9 @@ Se a nave troca de esfera de influência antes do nó, o `CIRC` recusa: a órbit
 **NÓ DE MANOBRA** (o escolhido)
 
 - Qual nó, de quantos.
-- Pró-grado, normal e radial, com o passo de cada encoder.
+- Pró-grado, normal e radial, com o passo.
 - Δv total e Δv restante (o que falta, durante a queima).
-- T− até o nó, com o passo do encoder de tempo.
+- T− até o nó, com o passo do `TEMPO`.
 - Início da queima: T− até começar, com **metade da queima antes do nó**, como o EXEC da fase 5 vai fazer.
 - Duração da queima, pela equação do foguete: empuxo disponível, Isp e massa agora. A nave fica mais leve queimando, por isso a queima longa leva menos que massa × Δv / empuxo.
 - Posição: anomalia verdadeira do nó na órbita, e `(no AP)` ou `(no PE)` quando ele está a menos de 1° deles.
@@ -91,27 +92,29 @@ A última mensagem (resultado de um botão, erro do jogo) fica 6 s acima das tab
 
 ## Câmera do mapa: temporário
 
-**Tem que mudar:** no cockpit, a câmera do mapa vai ser mexida pelo **joystick**, não pelo editor de manobras. Os botões `ESQ`, `DIR`, `CIMA`, `BAIXO`, `PERTO`, `LONGE` e `FOCO` só existem porque o joystick não está aqui agora. Quando ele estiver, saem da página, das linhas `BTN CAM_*` e de `Editor._camera` em `bridge/manobras.py`. O botão `MAPA` fica.
+**Tem que mudar:** no cockpit, a câmera do mapa vai ser mexida pelo **joystick, no modo CÂMERA** (a chave de 3 posições do joystick está em [hardware/construcao.md](../hardware/construcao.md#joystick-logitech-extreme-3d-pro)). Os botões `ESQ`, `DIR`, `CIMA`, `BAIXO`, `PERTO`, `LONGE` e `FOCO` só existem porque o joystick não está aqui agora. Quando ele estiver, saem da página, das linhas `BTN CAM_*` e de `Editor._camera` em `bridge/manobras.py`. O botão `MAPA` fica, na seção da câmera do painel.
 
 - `ESQ` / `DIR`: gira 15° em volta do foco. `CIMA` / `BAIXO`: 10° na inclinação.
 - `PERTO` / `LONGE`: distância ÷ ou × 1,5, dentro dos limites do jogo.
-- `FOCO`: nave → nó escolhido → planeta → nave. Com o foco no nó, dá para ver a órbita nova de perto enquanto mexe nos encoders.
+- `FOCO`: nave → nó escolhido → planeta → nave. Com o foco no nó, dá para ver a órbita nova de perto enquanto mexe nos ajustes.
 - Só funcionam com o mapa ligado.
 
 ## Decisões
 
 - **A página não faz conta.** Recebe as tabelas prontas, em texto. O que o LCD vai mostrar sai da mesma função (`Editor.estado`).
 - **Página que pergunta, e não fluxo de eventos** como a tela multifunção: o editor atualiza 4 vezes por segundo, e um `GET /estado` por vez é mais simples. Os toques vão numa fila, e só a volta principal usa o kRPC.
-- **O nó escolhido é guardado pelo objeto do nó, não pela posição na lista.** Mover um nó com o `TEMPO` para depois de outro muda a ordem, e os encoders continuam no mesmo nó.
-- **`NOVO` no apoastro,** porque é onde quase todo nó começa; o `TEMPO`, o `AP` e o `PE` levam para outro lugar.
+- **O nó escolhido é guardado pelo objeto do nó, não pela posição na lista.** Mover um nó com o `TEMPO` para depois de outro muda a ordem, e os ajustes continuam no mesmo nó.
+- **`NOVO` no apoastro,** porque é onde quase todo nó começa; o `TEMPO` leva para outro lugar.
+- **Um `PASSO` só**, em vez de um por ajuste: menos botões no painel. O mesmo índice vale para o Δv e para o tempo (1 m/s anda junto com 10 s).
+- **Sem `AP` e `PE`:** o `TEMPO` já faz isso, e são dois botões a menos.
 - **Tempo até um ponto pela equação de Kepler** (anomalia média), feita aqui e não pelo kRPC, porque o `time_to_apoapsis` do kRPC conta a partir de agora, e o segundo nó está numa órbita que só começa no primeiro. Funciona em elipse e hipérbole.
 
 ## Testar com o KSP
 
 - [ ] `NOVO` cria o nó no apoastro, e ele aparece no mapa.
-- [ ] Os encoders mexem no nó, e os números batem com os do jogo (Δv, Ap/Pe depois).
+- [ ] Os ajustes mexem no nó, e os números batem com os do jogo (Δv, Ap/Pe depois).
 - [ ] O passo troca, e segurar o botão repete.
-- [ ] `AP` e `PE` levam o nó ao lugar certo; num segundo nó, ao da órbita já mudada.
+- [ ] Um `NOVO` depois de outro nó cai no apoastro da órbita já mudada.
 - [ ] `CIRC` no apoastro deixa Ap − Pe perto de zero no jogo, e a queima executada termina circular.
 - [ ] `CIRC` fora do apoastro (depois de mexer no `TEMPO`) também.
 - [ ] A duração da queima bate com a que o jogo mostra na navball.
@@ -126,4 +129,4 @@ A última mensagem (resultado de um botão, erro do jogo) fica 6 s acima das tab
 python bridge/tests/test_manobras.py -v
 ```
 
-Conferem o `CIRC` em elipses, hipérboles e órbitas quase circulares, em vários pontos; o tempo até um ponto da órbita contra uma integração numérica; a duração da queima; e o editor inteiro contra um kRPC de mentira (órbitas de Kepler em 3D, nós que aplicam a queima no quadro do nó como o jogo): `NOVO`, `CIRC`, encoders e passos, vários nós, câmera e linhas erradas.
+Conferem o `CIRC` em elipses, hipérboles e órbitas quase circulares, em vários pontos; o tempo até um ponto da órbita contra uma integração numérica; a duração da queima; e o editor inteiro contra um kRPC de mentira (órbitas de Kepler em 3D, nós que aplicam a queima no quadro do nó como o jogo): `NOVO`, `CIRC`, ajustes e passo, vários nós, câmera e linhas erradas.
