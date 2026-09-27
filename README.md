@@ -57,6 +57,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 ### Princípios
 
 - **O LED mostra o estado do jogo, não a posição da chave.** A chave só avisa para onde foi ("SAS para cima"); o computador de bordo decide o que fazer e o jogo confirma. Assim o painel nunca fica dessincronizado (ex.: SAS desligado pelo jogo).
+- **Uma tela só, no meio do painel: a tela multifunção.** Os módulos não têm tela própria. Cada módulo que precisa mostrar números (editor de manobras, piloto automático, rendezvous...) tem uma página na tela multifunção. Quando o piloto mexe num módulo, a ponte troca a tela para a página dele; uns segundos depois do último toque no módulo (uns 10 s, a ajustar), a tela volta sozinha para a página de antes, em geral a navball.
 - **Protocolo serial em duas versões:**
   - **v0 — texto**, uma mensagem por linha. Fácil de depurar no Serial Monitor.
     ```
@@ -86,6 +87,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **SAS do KSP aponta a nave no pouso**, não o piloto automático do kRPC | O piloto automático do kRPC vem ajustado para levar 3 s até o ângulo pedido e não conta a força do ar. No segundo teste, a nave caindo de ré balançou até 31° na freada. O SAS o jogo ajusta para cada nave. Retrógrado enquanto a nave desce rápido; devagar, perto do chão, o retrógrado pula de um lado para o outro, então no fim o SAS só segura a atitude. |
 | **Scripts de voo numa pasta própria** (`scripts/`), fora da ponte | Cada script roda sozinho pela linha de comando, no PC ou no Pi, com ou sem o cockpit. A ponte só dispara o script quando o botão do painel é apertado; o script não depende dela nem do painel. |
 | **Um joystick só** (Logitech Extreme 3D Pro) na USB do Pi, lido pela ponte, com uma chave de 3 posições para o modo | Já está em casa e tem 3 eixos, acelerador, 12 botões e um chapéu. Passando pela ponte, dá para ter zona morta, os modos VOO, CÂMERA e TRANSLAÇÃO, e saber quando o piloto mexe no manche para tirar o controle de um script. Não precisa abrir o joystick. |
+| **Uma tela no meio para todos os módulos**, a tela multifunção, no lugar de um LCD por módulo | Os olhos vão sempre ao mesmo lugar, os painéis ficam menores e só com botões, e sai um LCD por módulo da lista de compras. A página troca sozinha para o módulo em uso e volta depois, então não é preciso escolher a página na mão. Quem decide a troca é a ponte, que já recebe todos os eventos do painel: a tela continua só desenhando. |
 | **Korry switches** (botões iluminados com legenda, de avião) nos sistemas que o jogo também muda | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: corpo impresso em 3D e tampa de acrílico cortada a laser. Quais chaves viram korry: a decidir. |
 | **Caixa em MDF cortado a laser, com peças impressas em 3D** | A laser do colégio faz as peças planas e grandes (paredes, painéis com legendas); a impressora de casa, as pequenas e complicadas (korry, knobs, suportes). Cada seção é um painel removível com o seu módulo atrás. |
 | **Fly by wire pelo ponto na navball**: o manche move para onde o avião vai, e não as superfícies | É o jeito do Airbus e dos caças: soltar o manche segura o caminho, e as proteções ficam simples, porque o ponto tem limites. O piloto automático do avião vira um piloto que só mexe no ponto. |
@@ -194,11 +196,11 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - Displays de 7 segmentos com MAX7219 para os números mais importantes.
 - Encoder rotativo para escolher o que cada display mostra. Lido pela mesma cadeia de 74HC165 dos módulos: o Mega lê a cadeia inteira mil vezes por segundo numa **interrupção de timer**, e assim o redesenho do LCD (~20 ms) não faz perder cliques. O painel acumula os cliques e manda `ENC <nome> <cliques>`.
 - **Editor de nós de manobra** (pelo kRPC: `control.add_node`, `node.prograde` etc.):
-  - 4 chaves de alavanca com mola para o centro, (ON)-OFF-(ON), com `+` e `-`: pró-grado, normal, radial e tempo (mover o nó ao longo da órbita). Segurando, repete. O painel manda `INC <nome> <passos>`.
+  - 4 teclas basculantes com mola para o centro, como a do TIME WARP: uma tecla só por ajuste, com seta para cima (`+`) e para baixo (`-`), que volta ao meio quando solta. Pró-grado, normal, radial e tempo (mover o nó ao longo da órbita). Segurando, repete. Por dentro é uma chave (ON)-OFF-(ON), com 2 entradas, e o painel manda `INC <nome> <passos>`.
   - Um botão PASSO para as quatro: 0,1 / 1 / 10 / 100 m/s no Δv e 1 s / 10 s / 1 min / 10 min no tempo.
   - Botões NOVO (nó novo no apoastro), APAGAR, ANT e PROX (trocar de nó) e CIRC (circulariza no ponto do nó, com o Δv calculado pela ponte). Sem AP e PE: o tempo já leva o nó a qualquer ponto.
   - São 14 entradas: 8 das chaves e 6 botões.
-  - O LCD mostra Δv, tempo de queima, T− até o nó e o Ap/Pe resultante.
+  - **Sem tela no módulo:** Δv, tempo de queima, T− até o nó e o Ap/Pe resultante aparecem numa página do editor na tela multifunção, que abre sozinha quando uma tecla ou botão do editor é usado (ver os [princípios](#princípios)).
   - O botão MAPA (liga e desliga o mapa do jogo) fica na seção da câmera. A câmera do mapa (girar, aproximar, trocar o foco entre nave, nó e planeta) fica no joystick, no modo CÂMERA, não no editor.
 - Barra de combustível com LEDs WS2812.
 - Ponteiro analógico com motor de passo X27.168.
@@ -231,7 +233,7 @@ Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de fla
   2. Serial: eco de caracteres; depois, receber o protocolo da tela ([docs/protocolo.md](docs/protocolo.md#tela-multifunção-mikromedia)), em texto como o simulador, e mais tarde o v1.
   3. Driver da tela: inicializar o controlador, desenhar pixels, retângulos e texto com fonte bitmap. Com 32 KB de RAM não cabe um *framebuffer* (320×240×2 = 150 KB), então o desenho vai direto para a memória do controlador da tela, atualizando só o que mudou.
   4. Touch: leitura pelo ADC e calibração.
-  5. Páginas: a navball do simulador primeiro (a conta está em `bridge/navball.py`, pronta para virar C); depois mapa da órbita, dados de pouso, informações e editor de nós de manobra pelo toque, e uma roda de modos do SAS; troca de página pelo touch.
+  5. Páginas: a navball do simulador primeiro (a conta está em `bridge/navball.py`, pronta para virar C); depois mapa da órbita, dados de pouso, informações, uma página para cada módulo do painel que precisa de números (a começar pelo editor de nós de manobra) e uma roda de modos do SAS. Troca de página pelo touch e pela ponte, que abre a página do módulo em uso e volta depois.
   6. Áudio: alarmes e avisos gravados no microSD (combustível baixo, contagem de altitude no pouso).
 
 **Pronto quando:** a mikromedia mostra telemetria ao vivo recebida do Pi e toca um alarme de combustível baixo.
@@ -335,7 +337,7 @@ Levar a nave até perto de outra em órbita. O script **não pilota até a últi
   3. **Igualar a velocidade:** nó no momento da menor distância, com a queima igual à diferença entre a velocidade do alvo e a da nave nesse instante.
   4. **Aproximação final**, sem nó: aponta para o alvo, se aproxima com uma velocidade que cai com a distância, anula a deriva para os lados e para a uns 50–100 m. Dali segue o acoplamento assistido.
 - **Automático ou diretor de voo:** no automático, o script encadeia as etapas e acelera o tempo entre elas (`warp_to`). Como diretor de voo, ele só propõe cada nó e o piloto ajusta e executa.
-- **Na tela e no LCD do editor de manobras:** a menor distância prevista até o alvo, quando ela acontece e a velocidade relativa nesse ponto, atualizadas enquanto os encoders mexem no nó.
+- **Na página do editor de manobras, na tela multifunção:** a menor distância prevista até o alvo, quando ela acontece e a velocidade relativa nesse ponto, atualizadas enquanto os encoders mexem no nó.
 - **Ordem para fazer**, do mais simples ao mais difícil:
   1. Só mostrar a menor distância prevista enquanto o piloto edita os nós na mão. Sem automação, e já é como se faz rendezvous "de olho" no KSP.
   2. Os nós de igualar o plano e igualar a velocidade, que são contas fechadas.
@@ -407,7 +409,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 
 - [ ] 3–4× módulos MAX7219 com 8 dígitos de 7 segmentos
 - [ ] 2× encoders rotativos (KY-040), para escolher o que os displays mostram
-- [ ] 4× chaves de alavanca com mola para o centro, (ON)-OFF-(ON), para o editor de manobras (PRO, NRM, RAD, TEMPO)
+- [ ] 4× teclas basculantes (*rocker*) com mola para o centro, (ON)-OFF-(ON), para o editor de manobras (PRO, NRM, RAD, TEMPO). Ou uma tecla impressa em 3D sobre 2 botões táteis cada
 - [ ] 6× botões para o editor de manobras (PASSO, NOVO, APAGAR, ANT, PROX, CIRC) e 1 para o MAPA, na seção da câmera, se não sobrarem da fase 2
 - [ ] 1× chave de 3 posições (ON-OFF-ON, sem mola) para o modo do joystick: VOO, CÂMERA e TRANSLAÇÃO
 - [ ] 1 m de fita WS2812B (60 LEDs/m) + resistor 330 Ω + capacitor 1000 µF

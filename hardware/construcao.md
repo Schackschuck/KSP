@@ -97,7 +97,7 @@ Cada seção do painel é **um painel frontal removível, com o seu módulo para
 
 - Korry switches (abaixo).
 - Knobs dos encoders dos displays (eixo de 6 mm com lado chato), com um risco que marca a posição.
-- Capas das alavancas do editor de manobras, uma cor ou forma por ajuste (PRO, NRM, RAD, TEMPO), para achar sem olhar.
+- Teclas basculantes do editor de manobras (como a do TIME WARP, com seta para cima e para baixo), uma cor ou forma por ajuste (PRO, NRM, RAD, TEMPO), para achar sem olhar. Podem ser uma tecla impressa sobre dois botões táteis, com uma mola que a traz de volta ao meio.
 - Moldura da mikromedia e suporte do celular.
 - Suportes das placas, do Mega e do Pi, com os furos no lugar certo.
 - Passa-cabos e presilhas para os cabos flat.
