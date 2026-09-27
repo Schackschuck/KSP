@@ -126,11 +126,11 @@ Assim, não existe tabela de slots no firmware. O Mega avisa a ponte qual módul
 | EVA | 11 | 12 | média | 9 | 1, 4, 8 |
 | Navegação | 10 | 0 | média | 10 | 2, 4, 8 |
 | Câmera (com o MAPA) | 11 | 0 | média | 11 | 1, 2, 4, 8 |
-| Editor de manobras | 14 | 0 | grande | 12 | 3, 4, 7, 8 |
+| Editor de manobras | 16 | 3 | média | 12 | 3, 4, 8 |
 
-São 6 pequenas, 5 médias e 1 grande, que ocupam os 12 slots. As seções da primeira linha ficam longe uma da outra no painel, mas podem dividir uma placa: os fios dos botões até a placa podem ter uns 30 cm.
+São 6 pequenas e 6 médias, que ocupam os 12 slots. A grande fica para uma seção que precise de mais de 16 entradas. As seções da primeira linha ficam longe uma da outra no painel, mas podem dividir uma placa: os fios dos botões até a placa podem ter uns 30 cm.
 
-A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e as seções analógicas podem ficar só com botões e LEDs. O editor de manobras passou a ter teclas basculantes com mola no lugar dos encoders, sem LCD próprio (os números vão para a tela multifunção), e ficou com 14 entradas: cabe numa placa média (16), e aí sobra a grande. Os korry switches também gastam mais LEDs que entradas. Ver [construcao.md](construcao.md#a-decidir).
+A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e as seções analógicas podem ficar só com botões e LEDs. O editor de manobras ficou com um encoder para o Δv, três korry de eixo, uma tecla para o tempo e uma chave rotativa para o passo, sem LCD próprio (os números vão para a tela multifunção): são 16 entradas e 3 LEDs, e ele passou da placa grande para a média ([desenho](construcao.md#painel-do-editor-de-manobras)). Os korry switches também gastam mais LEDs que entradas. Ver [construcao.md](construcao.md#a-decidir).
 
 ## No módulo
 
@@ -164,7 +164,7 @@ A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e
 **Uma varredura em uma transferência só:**
 - Como as duas cadeias compartilham o SCK, dá para ler e escrever junto.
 - Cada placa tem mais bytes de entrada que de saída. Então, depois de conhecer os módulos na partida, basta transferir o total de bytes de entrada, com os bytes de saída no fim.
-- Com as 12 placas da tabela, são 31 bytes: uns 125 µs a 2 MHz.
+- Com as 12 placas da tabela, são 30 bytes: uns 120 µs a 2 MHz.
 - Feito mil vezes por segundo numa interrupção de timer, dá tempo de ler até os encoders.
 - Um byte a mais no fim confere a marca de fim da fila.
 

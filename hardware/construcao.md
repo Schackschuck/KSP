@@ -71,7 +71,7 @@ Cada seção do painel é **um painel frontal removível, com o seu módulo para
 - **Painel frontal:** MDF ou acrílico de 3 mm, cortado e gravado a laser. Furos, legendas e linhas das seções saem no mesmo corte.
 - **Módulo:** preso atrás do painel com espaçadores M3.
 - **Fixação na caixa:** parafusos M3 em insertos roscados, colocados a quente em peças impressas, ou em porcas cativas. Parafuso direto no MDF espana depois de algumas desmontagens.
-- **Tamanho padronizado (ideia):** painéis com a mesma largura e alturas múltiplas de uma medida, como os trilhos Dzus dos aviões (146 mm de largura). Assim um painel troca de lugar com outro, e seções novas cabem sem refazer a caixa.
+- **Tamanho padrão: 150 × 150 mm.** Todo painel de seção tem a mesma frente, então qualquer um troca de lugar com outro, e seções novas cabem sem refazer a caixa. Uma fileira de 4 painéis tem 600 mm. Uma seção que precise de mais espaço ocupa dois quadrados (300 × 150 mm). Parafusos M3 nos cantos, a 6 mm das bordas.
 
 ### Estrutura
 
@@ -97,7 +97,7 @@ Cada seção do painel é **um painel frontal removível, com o seu módulo para
 
 - Korry switches (abaixo).
 - Knobs dos encoders dos displays (eixo de 6 mm com lado chato), com um risco que marca a posição.
-- Teclas basculantes do editor de manobras (como a do TIME WARP, com seta para cima e para baixo), uma cor ou forma por ajuste (PRO, NRM, RAD, TEMPO), para achar sem olhar. Podem ser uma tecla impressa sobre dois botões táteis, com uma mola que a traz de volta ao meio.
+- Tecla do TEMPO do editor de manobras, se a basculante pronta não funcionar bem deitada: uma tecla impressa sobre dois botões táteis, com uma mola que a traz de volta ao meio.
 - Moldura da mikromedia e suporte do celular.
 - Suportes das placas, do Mega e do Pi, com os furos no lugar certo.
 - Passa-cabos e presilhas para os cabos flat.
@@ -112,6 +112,29 @@ Cada chave, botão e encoder tem um diâmetro de rosca e uma espessura máxima d
 1. Medir cada peça com paquímetro e anotar numa tabela aqui.
 2. Cortar uma **plaquinha de teste** com um furo de cada tipo, em vários diâmetros (por exemplo 6,0 / 6,2 / 6,4 mm). A laser queima um pouco de material em volta do corte, e o furo sai maior que o desenho.
 3. Conferir que a porca da chave alavanca e a trava do botão arcade prendem no painel de 3 mm.
+
+## Painel do editor de manobras
+
+O primeiro painel desenhado, no tamanho padrão de 150 × 150 mm e com as peças no tamanho de catálogo. O que cada controle faz está no [roteiro da fase 4](../README.md#fase-4--instrumentos-físicos) e no [protocolo](../docs/protocolo.md#no-painel).
+
+![Painel do editor de manobras: korry PRO, NRM e RAD com o PRO aceso, encoder de ajuste, grupo PERCURSO, chave rotativa do passo e korry NOVO, APAGAR e CIRC](img/editor_manobras.svg)
+
+- **DELTA-V:** três korry escolhem o eixo (PRO, NRM, RAD), e o encoder mexe nele: horário soma, anti-horário tira. A legenda do eixo escolhido acende na cor da alça do nó no KSP: verde-amarelo, magenta e ciano.
+- **PERCURSO:** anda pelo caminho da nave, nos dois sentidos. A tecla do TEMPO, deitada, move o nó pela órbita; ANT e PROX, embaixo dela e no mesmo sentido, trocam de nó.
+- **PASSO:** chave rotativa com a legenda gravada em volta. O ponteiro do knob mostra o passo, sem LED e sem olhar a tela.
+- **NO:** NOVO, APAGAR e CIRC, korry do mesmo tamanho que os de eixo. Os 6 korry do painel são a mesma peça.
+- **Sem tela:** os números do nó vão para a página do editor na tela multifunção.
+
+| Peça | Qtd | Na frente | Furo no painel | Atrás do painel | Onde |
+|---|---|---|---|---|---|
+| Korry feito em casa | 6 | 20 × 20 mm | 20,4 × 20,4 mm | ~25 mm | PRO, NRM, RAD, NOVO, APAGAR, CIRC |
+| Encoder EC11 + knob de alumínio | 1 | knob Ø 30 × 17 mm | Ø 7 mm (rosca M7) | ~20 mm | Ajuste do Δv, 20 cliques por volta |
+| Chave rotativa de 1 polo e 12 posições | 1 | knob Ø 22 mm | Ø 9,5 mm (rosca M9) | ~30 mm, corpo Ø 26 mm | PASSO, com o anel de batente em 4 posições |
+| Tecla basculante (ON)-OFF-(ON) | 1 | 21 × 15 mm | 19 × 13 mm | ~20 mm | TEMPO, montada deitada |
+| Botão de metal de 12 mm, sem trava | 2 | Ø 14 mm | Ø 12 mm | ~20 mm | ANT e PROX |
+| Parafuso M3 | 4 | cabeça Ø 5,5 mm | Ø 3,2 mm | inserto roscado | Cantos |
+
+As medidas são as de catálogo das peças comuns. Conferir cada uma no paquímetro e na plaquinha de teste antes de cortar o painel ([acima](#medir-antes-de-cortar)).
 
 ## Korry switches
 

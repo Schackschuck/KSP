@@ -2,7 +2,7 @@
 
 **Pronto quando:** dá para planejar uma circularização pelo editor, olhando o nó no mapa do jogo, sem tocar no mouse.
 
-O editor de nós de manobra da [fase 4](../README.md#fase-4--instrumentos-físicos) vai ter 4 teclas basculantes com mola (como a do TIME WARP) e alguns botões no painel, sem tela própria: os números do nó vão para uma página do editor na tela multifunção, que abre sozinha quando o editor é usado. Enquanto o hardware não existe, as teclas e os botões viram botões numa página web, com as tabelas do nó embaixo. A página abre no navegador do PC ou do celular, pelo Wi-Fi.
+O editor de nós de manobra da [fase 4](../README.md#fase-4--instrumentos-físicos) vai ter no painel um encoder para o Δv, com três korry para escolher o eixo (PRO, NRM e RAD), uma tecla basculante para o tempo, uma chave rotativa para o passo e os botões do nó, sem tela própria ([desenho](../hardware/construcao.md#painel-do-editor-de-manobras)): os números do nó vão para uma página do editor na tela multifunção, que abre sozinha quando o editor é usado. Enquanto o hardware não existe, as teclas e os botões viram botões numa página web, com as tabelas do nó embaixo. A página abre no navegador do PC ou do celular, pelo Wi-Fi.
 
 ```
  KSP + kRPC (PC)

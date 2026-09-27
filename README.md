@@ -191,15 +191,17 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 ### Fase 4 — Instrumentos físicos
 
-**Status: editor de manobras escrito, com botões numa página no lugar das chaves; falta testar no jogo.** [`bridge/manobras.py`](bridge/manobras.py) cria e edita os nós pelo kRPC e mostra os números do nó e da órbita (antes e depois) no navegador do PC ou do celular: [docs/manobras.md](docs/manobras.md). A página manda as mesmas linhas que o painel vai mandar. Por enquanto a página também gira a câmera do mapa, **o que tem que sair dela:** no cockpit, a câmera do mapa vai ser mexida pelo joystick, no modo CÂMERA.
+**Status: editor de manobras escrito, com botões numa página no lugar das chaves; falta testar no jogo.** [`bridge/manobras.py`](bridge/manobras.py) cria e edita os nós pelo kRPC e mostra os números do nó e da órbita (antes e depois) no navegador do PC ou do celular: [docs/manobras.md](docs/manobras.md). A página manda linhas do protocolo pela rede; o painel vai mandar as suas pela serial, com o encoder no lugar dos pares `+`/`-` do Δv. Por enquanto a página também gira a câmera do mapa, **o que tem que sair dela:** no cockpit, a câmera do mapa vai ser mexida pelo joystick, no modo CÂMERA.
 
 - Displays de 7 segmentos com MAX7219 para os números mais importantes.
 - Encoder rotativo para escolher o que cada display mostra. Lido pela mesma cadeia de 74HC165 dos módulos: o Mega lê a cadeia inteira mil vezes por segundo numa **interrupção de timer**, e assim o redesenho do LCD (~20 ms) não faz perder cliques. O painel acumula os cliques e manda `ENC <nome> <cliques>`.
 - **Editor de nós de manobra** (pelo kRPC: `control.add_node`, `node.prograde` etc.):
-  - 4 teclas basculantes com mola para o centro, como a do TIME WARP: uma tecla só por ajuste, com seta para cima (`+`) e para baixo (`-`), que volta ao meio quando solta. Pró-grado, normal, radial e tempo (mover o nó ao longo da órbita). Segurando, repete. Por dentro é uma chave (ON)-OFF-(ON), com 2 entradas, e o painel manda `INC <nome> <passos>`.
-  - Um botão PASSO para as quatro: 0,1 / 1 / 10 / 100 m/s no Δv e 1 s / 10 s / 1 min / 10 min no tempo.
-  - Botões NOVO (nó novo no apoastro), APAGAR, ANT e PROX (trocar de nó) e CIRC (circulariza no ponto do nó, com o Δv calculado pela ponte). Sem AP e PE: o tempo já leva o nó a qualquer ponto.
-  - São 14 entradas: 8 das chaves e 6 botões.
+  - Painel de 150 × 150 mm, desenho e peças em [hardware/construcao.md](hardware/construcao.md#painel-do-editor-de-manobras).
+  - **Δv por um encoder só**, porque os três eixos nunca são mexidos ao mesmo tempo. Três korry (PRO, NRM e RAD) escolhem o eixo, e a legenda do escolhido acende na cor da alça do nó no KSP. Girar no sentido horário soma o passo; no anti-horário, tira. Um nó novo já vem com o PRO escolhido. O painel manda `ENC DV <cliques>`, e quem sabe o eixo escolhido é a ponte.
+  - **PERCURSO:** uma tecla basculante com mola para o centro, como a do TIME WARP, montada deitada, move o nó ao longo da órbita (para a esquerda, antes; para a direita, depois). Segurando, repete; o painel manda `INC TEMPO <passos>`. Embaixo dela, ANT e PROX trocam de nó.
+  - **PASSO:** chave rotativa de 4 posições, com a legenda gravada em volta: 0,1 / 1 / 10 / 100 m/s no Δv e 1 s / 10 s / 1 min / 10 min no tempo.
+  - Korry NOVO (nó novo no apoastro), APAGAR e CIRC (circulariza no ponto do nó, com o Δv calculado pela ponte). Sem AP e PE: o tempo já leva o nó a qualquer ponto.
+  - São 16 entradas e 3 LEDs (os korry de eixo): cabe numa placa média.
   - **Sem tela no módulo:** Δv, tempo de queima, T− até o nó e o Ap/Pe resultante aparecem numa página do editor na tela multifunção, que abre sozinha quando uma tecla ou botão do editor é usado (ver os [princípios](#princípios)).
   - O botão MAPA (liga e desliga o mapa do jogo) fica na seção da câmera. A câmera do mapa (girar, aproximar, trocar o foco entre nave, nó e planeta) fica no joystick, no modo CÂMERA, não no editor.
 - Barra de combustível com LEDs WS2812.
@@ -337,7 +339,7 @@ Levar a nave até perto de outra em órbita. O script **não pilota até a últi
   3. **Igualar a velocidade:** nó no momento da menor distância, com a queima igual à diferença entre a velocidade do alvo e a da nave nesse instante.
   4. **Aproximação final**, sem nó: aponta para o alvo, se aproxima com uma velocidade que cai com a distância, anula a deriva para os lados e para a uns 50–100 m. Dali segue o acoplamento assistido.
 - **Automático ou diretor de voo:** no automático, o script encadeia as etapas e acelera o tempo entre elas (`warp_to`). Como diretor de voo, ele só propõe cada nó e o piloto ajusta e executa.
-- **Na página do editor de manobras, na tela multifunção:** a menor distância prevista até o alvo, quando ela acontece e a velocidade relativa nesse ponto, atualizadas enquanto os encoders mexem no nó.
+- **Na página do editor de manobras, na tela multifunção:** a menor distância prevista até o alvo, quando ela acontece e a velocidade relativa nesse ponto, atualizadas enquanto o encoder e o TEMPO mexem no nó.
 - **Ordem para fazer**, do mais simples ao mais difícil:
   1. Só mostrar a menor distância prevista enquanto o piloto edita os nós na mão. Sem automação, e já é como se faz rendezvous "de olho" no KSP.
   2. Os nós de igualar o plano e igualar a velocidade, que são contas fechadas.
@@ -392,8 +394,8 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [x] 2–3× capas de proteção para chave ("missile switch cover")
 - [x] 4–6× botões arcade (24 ou 30 mm), de preferência com LED
 - [ ] Por módulo pequeno (6 no painel): 2× 74HC165, 1× 74HC595, 2× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 8× resistor 1 kΩ, 3× capacitor 100 nF, 1× capacitor 10 µF, 3 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
-- [ ] Por módulo médio (5 no painel): 3× 74HC165, 2× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 16× resistor 1 kΩ, 5× capacitor 100 nF, 1× capacitor 10 µF, 5 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
-- [ ] Por módulo grande (1 no painel): 4× 74HC165, 2× 74HC595, 4× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 16× resistor 1 kΩ, 6× capacitor 100 nF, 1× capacitor 10 µF, 6 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
+- [ ] Por módulo médio (6 no painel): 3× 74HC165, 2× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 16× resistor 1 kΩ, 5× capacitor 100 nF, 1× capacitor 10 µF, 5 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
+- [ ] Por módulo grande (nenhum no painel por enquanto): 4× 74HC165, 2× 74HC595, 4× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 16× resistor 1 kΩ, 6× capacitor 100 nF, 1× capacitor 10 µF, 6 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
 - [ ] Backplane: 12× conector IDC 2x8, 5× resistor 47 Ω, 13× resistor 10 kΩ, capacitores de 470 µF e 100 nF, borne de 2 vias e jumper de 3 pinos
 - [x] Joystick: Logitech Extreme 3D Pro (3 eixos + acelerador, na USB do Pi)
 - [ ] 1× potenciômetro deslizante 10 kΩ linear, curso ≥ 60 mm (opcional: só para uma alavanca de acelerador própria)
@@ -409,8 +411,8 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 
 - [ ] 3–4× módulos MAX7219 com 8 dígitos de 7 segmentos
 - [ ] 2× encoders rotativos (KY-040), para escolher o que os displays mostram
-- [ ] 4× teclas basculantes (*rocker*) com mola para o centro, (ON)-OFF-(ON), para o editor de manobras (PRO, NRM, RAD, TEMPO). Ou uma tecla impressa em 3D sobre 2 botões táteis cada
-- [ ] 6× botões para o editor de manobras (PASSO, NOVO, APAGAR, ANT, PROX, CIRC) e 1 para o MAPA, na seção da câmera, se não sobrarem da fase 2
+- [ ] Editor de manobras ([peças e medidas](hardware/construcao.md#painel-do-editor-de-manobras)): 1× encoder EC11 com knob de alumínio de 30 mm; 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm; 1× tecla basculante (*rocker*) com mola para o centro, (ON)-OFF-(ON), de 21 × 15 mm; 2× botões de metal de 12 mm sem trava; 6 korry (peças na fase 2)
+- [ ] 1 botão para o MAPA, na seção da câmera, se não sobrar da fase 2
 - [ ] 1× chave de 3 posições (ON-OFF-ON, sem mola) para o modo do joystick: VOO, CÂMERA e TRANSLAÇÃO
 - [ ] 1 m de fita WS2812B (60 LEDs/m) + resistor 330 Ω + capacitor 1000 µF
 - [ ] 2–4× motores de passo X27.168 (ponteiros)
