@@ -27,6 +27,11 @@ existe, uma página de botões no navegador (celular/painel.html) manda as
 mesmas linhas. Apertar um modo abre a roda do SAS na tela, e mexer no
 encoder abre a página do piloto automático; uns 10 s depois, a tela volta
 para a navball.
+
+O painel de scripts também (painel_scripts.py): segurar o korry POUSO 5 s abre
+o scripts/pouso.py num processo próprio, e segurar de novo 5 s aborta. O
+pouso manda o estado dele por UDP, e a tela mostra a página POUSO enquanto
+ele voa. Com --demo, o pouso é o de uma nave simulada (pouso.py --demo).
 """
 
 import argparse
@@ -38,6 +43,7 @@ from dataclasses import dataclass
 
 import serial
 
+from painel_scripts import PainelScripts, processo_pouso
 from ponte import Painel, conectar_krpc, esperar_nave
 from sistemas import Remetente, Sistemas
 
@@ -78,6 +84,15 @@ MODOS_DO_KRPC = {krpc: nome for nome, krpc in MODOS_KRPC.items()}
 FBW_FECHADO = {
     "LEI": "LEI OFF", "TRAVA": "TRAVA OFF", "ESTOL": "ESTOL 0",
     "APL HDG": "APL HDG 0", "APL ALT": "APL ALT 0", "APL VS": "APL VS 0",
+}
+
+# Linhas do pouso (scripts/pouso.py): campo → valores aceitos (int = um inteiro).
+CAMPOS_POUSO = {
+    "FASE": ("QUEDA", "QUEIMA", "TOQUE", "POUSADA"),
+    "ALT": int, "VV": int, "MOTOR": int, "TWR": int, "IGN": int, "INCL": int,
+    "FREADA": (int, "OFF"),
+    "SAS": ("RETRO", "ESTAB"),
+    "AVISO": ("EMPUXO", "MOTOR", "NARIZ", "OFF"),
 }
 
 # Perto do chão, a altitude passa a ser a do radar (acima do chão, ou do mar).
@@ -369,10 +384,22 @@ def _inteiro(texto):
     return int(texto) if corpo.isascii() and corpo.isdigit() else None
 
 
+def _campo_pouso_valido(campo, valor):
+    aceitos = CAMPOS_POUSO.get(campo)
+    if aceitos is None:
+        return False
+    if aceitos is int:
+        return _inteiro(valor) is not None
+    return valor in aceitos or (int in aceitos and _inteiro(valor) is not None)
+
+
 class Scripts:
     """O que os scripts de voo (scripts/) mandam para a tela, por UDP.
 
-    Hoje, só o fly by wire (scripts/fbw.py). Ele manda 10 vezes por segundo,
+    O pouso (scripts/pouso.py) manda o estado dele nas linhas POU, que a
+    ponte confere e repassa para a página POUSO da tela.
+
+    O fly by wire (scripts/fbw.py) manda 10 vezes por segundo,
     num pacote, linhas do próprio protocolo da tela: o ponto (FBW <pitch>
     <rumo> ou FBW OFF), a lei (LEI), a trava de altitude (TRAVA) e os modos
     do piloto automático (APL). A ponte confere cada linha e guarda. Se o
@@ -386,6 +413,8 @@ class Scripts:
         self._estado = dict(FBW_FECHADO)
         self._quando = -math.inf
         self._endereco = None      # de onde o fbw.py manda
+        self._pouso = {}           # campo → linha POU
+        self._quando_pouso = -math.inf
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             # Qualquer rede: o script pode rodar noutro computador (ex.: no PC, com a ponte no Pi).
@@ -403,10 +432,11 @@ class Scripts:
                 dados, endereco = self._socket.recvfrom(MAX_PACOTE)
             except OSError:
                 return  # nada na fila (ou, no Windows, um aviso de pacote perdido)
-            self._endereco = endereco
-            for linha in dados.decode("ascii", errors="replace").split("\n"):
-                if linha.strip():
-                    self._linha(linha.strip())
+            linhas = [linha.strip() for linha in dados.decode("ascii", errors="replace").split("\n") if linha.strip()]
+            if not all(linha.startswith("POU ") for linha in linhas):
+                self._endereco = endereco   # só o fbw.py recebe resposta
+            for linha in linhas:
+                self._linha(linha)
 
     def _linha(self, linha):
         partes = linha.split(" ")
@@ -424,6 +454,9 @@ class Scripts:
             self._estado["ESTOL"] = linha
         elif len(partes) == 3 and partes[0] == "APL" and f"APL {partes[1]}" in self._estado and partes[2] in ("0", "1", "2"):
             self._estado[f"APL {partes[1]}"] = linha
+        elif len(partes) == 3 and partes[0] == "POU" and _campo_pouso_valido(partes[1], partes[2]):
+            self._pouso[partes[1]] = linha
+            self._quando_pouso = time.monotonic()
         else:
             print(f"Linha desconhecida de um script: {linha[:40]}")
 
@@ -439,6 +472,14 @@ class Scripts:
         """As linhas LEI, TRAVA e APL do fbw.py, ou as de OFF se ele não está mandando."""
         self._ler()
         return dict(self._estado) if self._valido() else dict(FBW_FECHADO)
+
+    def estado_pouso(self):
+        """As linhas POU do pouso para a tela, ou POU OFF se ele não está mandando."""
+        self._ler()
+        if time.monotonic() - self._quando_pouso > VALIDADE_SCRIPTS:
+            self._pouso = {}
+            return {"POU": "POU OFF"}
+        return {f"POU {campo}": linha for campo, linha in self._pouso.items()}
 
     def comando_fbw(self, linha):
         """Manda uma linha ao fbw.py (CMD ..., APV ...). Sem o fbw.py, se perde."""
@@ -663,6 +704,7 @@ class Demo:
         self._sas_modo = "ESTAB"
         self._sas_desde = -math.inf   # quando o modo foi escolhido
         self.fbw = FbwDemo()
+        self._udp = Scripts()         # o pouso.py --demo manda o estado por UDP, como no jogo
 
     def ler(self):
         t = time.monotonic() - self._inicio
@@ -760,8 +802,14 @@ class Demo:
     def comando_fbw(self, linha):
         self.fbw.executar(linha)
 
+    def estado_pouso(self):
+        return self._udp.estado_pouso()
+
     def remover(self):
         pass
+
+    def fechar(self):
+        self._udp.fechar()
 
 
 class FbwDemo:
@@ -853,15 +901,17 @@ class Acoes:
         self.comando_fbw = scripts.comando_fbw
 
 
-def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistemas=None):
+def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistemas=None, painel_scripts=None):
     """Mantém a tela atualizada até continua_valida() dizer que não.
 
-    painel: a página de botões do painel de sistemas (ou, um dia, o painel
-    de verdade), que manda BTN e ENC e recebe as luzes; pode faltar.
-    sistemas: a lógica do painel, que continua de uma nave para a outra.
+    painel: a página de botões do painel de sistemas e de scripts (ou, um
+    dia, o painel de verdade), que manda BTN e ENC e recebe as luzes; pode faltar.
+    sistemas, painel_scripts: a lógica dos painéis, que continua de uma nave
+    para a outra (um script voando não para quando a nave muda).
     """
     modo = ModoNavball()
     sistemas = sistemas or Sistemas(None)
+    painel_scripts = painel_scripts or PainelScripts({})
     sistemas.acoes = Acoes(fonte, scripts)
     luzes_painel = Remetente(painel.enviar) if painel is not None else None
     luzes_tela = Remetente(tela.enviar)
@@ -878,8 +928,14 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
             for linha in painel.linhas():
                 if linha == "READY":
                     luzes_painel.esquecer()
+                elif painel_scripts.tratar(linha, agora):
+                    if linha.endswith(" 1"):
+                        sistemas.abrir(painel_scripts.em_uso(agora) or "NAV", agora)
                 elif not sistemas.tratar(linha, agora, t.rumo, t.altitude):
                     print(f"Linha desconhecida do painel: {linha[:40]}")
+        painel_scripts.atualizar(agora)
+        # Com um script voando, a tela fica na página dele, e não na navball.
+        sistemas.pagina_base = painel_scripts.em_uso(agora) or "NAV"
         sistemas.atualizar(agora)
         atual = modo.atualizar(t)
         if atual != anterior:
@@ -891,7 +947,10 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
             erro = erro_do_sas(t, atual) if t.sas_modo is not None else None
             sas, rcs = t.sistemas["SAS"], t.sistemas["RCS"]
             luzes = sistemas.luzes(sas, rcs, t.sas_modo, erro, t.sem_ec, t.sem_mp, scripts.estado_fbw())
-            luzes_tela.mandar(sistemas.tela(luzes, erro, sas), agora)
+            luzes.update(painel_scripts.luzes(agora))
+            na_tela = sistemas.tela(luzes, erro, sas)
+            na_tela.update(scripts.estado_pouso())
+            luzes_tela.mandar(na_tela, agora)
             if luzes_painel is not None:
                 luzes_painel.mandar(luzes, agora)
 
@@ -903,7 +962,7 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
         time.sleep(0.01)
 
 
-def acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas):
+def acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, painel_scripts):
     """Acompanha uma nave até ela deixar de ser a ativa ou trocar de planeta.
 
     Ao trocar de planeta (ex.: entrar na esfera de influência da Mun), os
@@ -921,6 +980,7 @@ def acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas):
             lambda: conn.space_center.active_vessel == nave and nave.orbit.body == fonte.corpo,
             painel,
             sistemas,
+            painel_scripts,
         )
     finally:
         fonte.remover()
@@ -958,7 +1018,7 @@ def abrir_painel(args):
         return None
     from mfd_celular import TelaCelular, PAGINA_PAINEL
     try:
-        return TelaCelular(args.painel, PAGINA_PAINEL, "a página de botões do painel de sistemas")
+        return TelaCelular(args.painel, PAGINA_PAINEL, "a página de botões dos painéis de sistemas e de scripts")
     except OSError as e:
         sys.exit(f"Não foi possível abrir a porta {args.painel} para o painel: {e}")
 
@@ -1014,18 +1074,20 @@ def main():
     painel = abrir_painel(args)
     transmissor = Transmissor(tela)
     sistemas = Sistemas(None)
+    painel_scripts = PainelScripts({"POUSO": processo_pouso(args.address, demo=args.demo)})
     scripts = None
     try:
         if args.demo:
             print("Demonstração: a nave se mexe sozinha. Clique nos botões da tela e do painel.")
-            demo = Demo()
-            voar(tela, transmissor, demo, demo, lambda: True, painel, sistemas)
+            print("Segurar o POUSO 5 s pousa uma nave simulada (scripts/pouso.py --demo).")
+            scripts = Demo()
+            voar(tela, transmissor, scripts, scripts, lambda: True, painel, sistemas, painel_scripts)
         else:
             scripts = Scripts()
             while True:
                 nave = esperar_nave(conn, tela)
                 try:
-                    acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas)
+                    acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, painel_scripts)
                 except (ValueError, RuntimeError):
                     # A nave deixou de existir ou o jogo saiu da cena de voo.
                     pass
@@ -1034,6 +1096,7 @@ def main():
     except serial.SerialException:
         print("\nA tela foi desconectada.")
     finally:
+        painel_scripts.fechar()
         tela.fechar()
         if painel is not None:
             painel.fechar()

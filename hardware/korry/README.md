@@ -17,9 +17,10 @@ O botão iluminado quadrado dos aviões, feito em casa: a legenda fica no própr
 |---|---|---|
 | Editor de manobras ([desenho](../construcao.md#painel-do-editor-de-manobras)) | 6 | PRO, NRM e RAD: uma legenda, acesa no eixo escolhido. NOVO, APAGAR e CIRC: uma legenda, sem LED |
 | Sistemas de controle ([desenho](../construcao.md#painel-de-sistemas-de-controle)) | 14 | 10 modos do SAS: o marcador da navball com a palavra embaixo, LED azul e verde. SAS, RCS e FBW: duas metades. TRAVA ALT: uma legenda |
+| Scripts ([desenho](../construcao.md#painel-de-scripts)) | 6 | POUSO: uma legenda, LED vermelho e verde (âmbar com os dois). Os outros cinco, vagos: tampa lisa até o script existir |
 | Action groups | a decidir | 1 a 10: uma legenda |
 
-São uns 30 no cockpit inteiro. Vale fazer em série: uma peça bem resolvida, repetida.
+São uns 36 no cockpit inteiro. Vale fazer em série: uma peça bem resolvida, repetida.
 
 ## Medidas
 
