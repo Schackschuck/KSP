@@ -79,7 +79,7 @@ São uns 30 no cockpit inteiro. Vale fazer em série: uma peça bem resolvida, r
   - duas metades: 2 saídas;
   - legenda única acesa: 1 saída, com os dois LEDs em paralelo nela;
   - legenda única sem luz (NOVO, APAGAR, CIRC): nenhuma, e os LEDs nem são montados.
-- **A cor é a do LED**, escolhida na montagem, porque a tampa é branca. Uma cor fixa por metade, das cores da tabela de [aparência](../construcao.md#aparência): verde, branco, âmbar ou vermelho. A exceção são os korry de eixo do editor, nas cores das alças do nó no KSP (verde-amarelo, magenta e ciano), porque a cor ali diz qual é o eixo, e não um estado.
+- **A cor é a do LED**, escolhida na montagem, porque a tampa é branca. Uma cor fixa por metade, das cores da [identidade visual](../identidade_visual.md#cores-das-luzes): verde, branco, âmbar ou vermelho. A exceção são os korry de eixo do editor, nas cores das alças do nó no KSP (verde-amarelo, magenta e ciano), porque a cor ali diz qual é o eixo, e não um estado.
 
 ### Brilho
 

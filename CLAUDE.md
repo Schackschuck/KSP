@@ -19,3 +19,4 @@ Se a verificação falhar, não fazer o merge: corrigir primeiro ou explicar o q
 - Conversas, comentários de código, documentação e mensagens de commit em **português**.
 - Textos do LCD e da serial em ASCII, sem acentos.
 - A arquitetura, o roteiro das fases e as decisões ficam no `README.md`; o protocolo serial, em `docs/protocolo.md`.
+- Todo painel segue a identidade visual de `hardware/identidade_visual.md`. Para propor o desenho de um painel, usar a skill `/desenhar-painel`; os desenhos são gerados por `node hardware/desenho/desenhar.js`.

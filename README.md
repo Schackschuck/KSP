@@ -108,7 +108,9 @@ firmware/passos/  sketches de aprendizado, um por passo da fase 1
 firmware/mfd/     mikromedia for ARM / LPC2148 (C, GCC e make)
 hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa; ver hardware/README.md
                   e hardware/construcao.md (carcaça, aparência, painéis, joystick);
-                  cada peça própria numa pasta, com ficha e desenhos (hardware/korry/)
+                  cada peça própria numa pasta, com ficha e desenhos (hardware/korry/);
+                  identidade visual (hardware/identidade_visual.md) e desenhos dos painéis
+                  gerados por código (hardware/desenho/)
 docs/             protocolo serial, pinagem, anotações
 ```
 
