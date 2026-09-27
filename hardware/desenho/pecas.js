@@ -8,6 +8,7 @@
 //   rotaryReal(x, y, legendas, posicao)                    chave rotativa, knob de 22 mm
 //   rockerReal(x, y)                                       tecla basculante deitada, 21 x 15 mm
 //   metalButton(x, y, legenda, seta)                       botão de metal de 12 mm
+//   korrySas(x, y, modo, cor)                              korry de 22,5 mm com o ícone de um modo do SAS
 //   guardedToggle(x, y, legenda)                           chave com capa de proteção
 // Moldura: panel(w, h, titulo, corpo), group(x, y, w, h, rotulo), t(x, y, texto, ...).
 // rocker(), button(), rotary() e led() são as versões simplificadas da primeira rodada.
@@ -17,7 +18,8 @@ var C = {
   panel: "#30353a", edge: "#15181b", legend: "#eef0ea", line: "#9aa1a8",
   korry: "#15181b", unlit: "#555c63",
   green: "#46d37f", amber: "#f2a93b", red: "#e5484d", white: "#f4f7ff",
-  pro: "#c6e04a", nrm: "#d24fe0", rad: "#40c9e3", tempo: "#e9ecef", plain: "#e9ecef"
+  pro: "#c6e04a", nrm: "#d24fe0", rad: "#40c9e3", tempo: "#e9ecef", plain: "#e9ecef",
+  blue: "#4c9dff"
 };
 
 function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
@@ -114,7 +116,8 @@ function korry(x, y, w, h, top, bot, topColor, botColor) {
     var bs = Math.min(2.5, (w - 3) / Math.max(bot.length, 3) / 0.66);
     s += t(x + w / 2, y + h * .86, bot, bs, "middle", botColor || C.unlit);
   } else {
-    if (topColor) s += '<rect x="' + (x + 1.6) + '" y="' + (y + 1.6) + '" width="' + (w - 3.2) + '" height="' + (h - 3.2) + '" rx=".5" fill="' + topColor + '" opacity=".13"/>';
+    // topColor = C.unlit: legenda única com LED, apagada
+    if (topColor && topColor !== C.unlit) s += '<rect x="' + (x + 1.6) + '" y="' + (y + 1.6) + '" width="' + (w - 3.2) + '" height="' + (h - 3.2) + '" rx=".5" fill="' + topColor + '" opacity=".13"/>';
     s += t(x + w / 2, y + h / 2 + fs * .36, top, fs, "middle", topColor || "#c9ced3");
   }
   return s;
@@ -273,4 +276,58 @@ function metalButton(x, y, label, dir) {
   return s;
 }
 
-module.exports = { C, KSP, esc, t, screw, panel, group, hexNut, tri, arrow, rocker, cap, korry, button, led, rotary, guardedToggle, dims, svg, encoder, encoderArc, rotaryReal, rockerReal, metalButton };
+// Modos do SAS: o ícone é o marcador na navball do KSP
+var SAS = {
+  ESTAB: "ESTAB", MAN: "MANOBRA", PRO: "PRO", RETRO: "RETRO", NRM: "NORMAL", ANRM: "ANTINRM",
+  RFORA: "RAD FORA", RDENTRO: "RAD DENTRO", ALVO: "ALVO", AALVO: "ANTIALVO"
+};
+
+// ícone de um modo do SAS, centrado em (x, y), uns 7 mm de largura
+function sasIcon(x, y, modo, cor) {
+  var sw = 'stroke="' + cor + '" stroke-width=".55" fill="none" stroke-linecap="round"';
+  function circ(r, extra) { return '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" ' + sw + (extra || "") + "/>"; }
+  function dot() { return '<circle cx="' + x + '" cy="' + y + '" r=".55" fill="' + cor + '"/>'; }
+  function ray(deg, r0, r1) {
+    var a = deg * Math.PI / 180;
+    return '<line x1="' + (x + r0 * Math.cos(a)).toFixed(2) + '" y1="' + (y + r0 * Math.sin(a)).toFixed(2) +
+      '" x2="' + (x + r1 * Math.cos(a)).toFixed(2) + '" y2="' + (y + r1 * Math.sin(a)).toFixed(2) + '" ' + sw + "/>";
+  }
+  function tri3(dir, r) {
+    var p = [], d0 = dir === "up" ? -90 : 90;
+    for (var i = 0; i < 3; i++) { var a = (d0 + i * 120) * Math.PI / 180; p.push((x + r * Math.cos(a)).toFixed(2) + "," + (y + r * Math.sin(a)).toFixed(2)); }
+    return '<polygon points="' + p.join(" ") + '" ' + sw + ' stroke-linejoin="round"/>';
+  }
+  switch (modo) {
+    case "ESTAB": return circ(2.6) + ray(180, 0, 1.5) + ray(0, 0, 1.5);
+    case "MAN": return circ(2.1) + dot() + [-90, 30, 150].map(function (d) {
+      var a = d * Math.PI / 180, b = 3.9, w = 1.2, px = -Math.sin(a), py = Math.cos(a);
+      return '<polygon points="' + (x + 2.6 * Math.cos(a)).toFixed(2) + "," + (y + 2.6 * Math.sin(a)).toFixed(2) + " " +
+        (x + b * Math.cos(a) + w * px).toFixed(2) + "," + (y + b * Math.sin(a) + w * py).toFixed(2) + " " +
+        (x + b * Math.cos(a) - w * px).toFixed(2) + "," + (y + b * Math.sin(a) - w * py).toFixed(2) + '" fill="' + cor + '"/>';
+    }).join("");
+    case "PRO": return circ(2.2) + dot() + ray(-90, 2.2, 3.8) + ray(180, 2.2, 3.8) + ray(0, 2.2, 3.8);
+    case "RETRO": return circ(2.2) + ray(45, -2.2, 2.2) + ray(135, -2.2, 2.2) + ray(-90, 2.2, 3.8) + ray(150, 2.2, 3.8) + ray(30, 2.2, 3.8);
+    case "NRM": return tri3("up", 3) + dot();
+    case "ANRM": return tri3("down", 3) + dot() + ray(-90, 1.5, 3.9) + ray(30, 1.5, 3.9) + ray(150, 1.5, 3.9);
+    case "RFORA": return circ(2) + dot() + [45, 135, 225, 315].map(function (d) { return ray(d, 2, 3.7); }).join("");
+    case "RDENTRO": return circ(3) + [45, 135, 225, 315].map(function (d) { return ray(d, 1, 3); }).join("");
+    case "ALVO": return circ(2.6, ' stroke-dasharray="1.1 .7"') + dot() + [0, 90, 180, 270].map(function (d) { return ray(d, 2.6, 3.8); }).join("");
+    case "AALVO": return circ(2.6) + [-90, 30, 150].map(function (d) { return ray(d, 0, 2.6); }).join("");
+  }
+  return "";
+}
+
+// korry de modo do SAS: ícone em cima, legenda embaixo. Um LED de duas cores atrás:
+// cor = C.blue (a nave vira para o marcador), C.green (o SAS segura nele) ou nada (apagado)
+function korrySas(x, y, modo, cor) {
+  var legenda = SAS[modo], w = 22.5, c = cor || C.unlit;
+  var s = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + w + '" rx="1.3" fill="#0a0c0d"/>';
+  s += '<rect x="' + (x + .9) + '" y="' + (y + .9) + '" width="' + (w - 1.8) + '" height="' + (w - 1.8) + '" rx=".8" fill="' + C.korry + '" stroke="#3a4046" stroke-width=".25"/>';
+  if (cor) s += '<rect x="' + (x + 1.6) + '" y="' + (y + 1.6) + '" width="' + (w - 3.2) + '" height="' + (w - 3.2) + '" rx=".5" fill="' + cor + '" opacity=".13"/>';
+  s += sasIcon(x + w / 2, y + 9.2, modo, c);
+  var fs = Math.min(2.4, (w - 3) / legenda.length / 0.66);
+  s += t(x + w / 2, y + 19.3, legenda, fs, "middle", c);
+  return s;
+}
+
+module.exports = { SAS, sasIcon, korrySas, C, KSP, esc, t, screw, panel, group, hexNut, tri, arrow, rocker, cap, korry, button, led, rotary, guardedToggle, dims, svg, encoder, encoderArc, rotaryReal, rockerReal, metalButton };
