@@ -158,10 +158,15 @@ class Sistemas:
         self.acoes = acoes
         self.menu = MenuPiloto()
         self.pagina = "NAV"
+        self.pagina_base = "NAV"   # para onde a tela volta: a navball, ou a do script voando (POUSO)
         self._fecha_em = 0.0
         self._cor = CorDoModo()
         self._apv_enviados = {}
         self._proximo_apv = 0.0
+
+    def abrir(self, pagina, agora):
+        """Mostra a página por PAGINA_DURA segundos; depois a tela volta para a pagina_base."""
+        self._abrir(pagina, agora)
 
     def _abrir(self, pagina, agora):
         if pagina != self.pagina:
@@ -215,13 +220,13 @@ class Sistemas:
             self.menu.soltar()
 
     def atualizar(self, agora):
-        """Chamar a cada volta: o aperto longo do encoder, a volta à navball e os valores para o fbw.py."""
+        """Chamar a cada volta: o aperto longo do encoder, a volta à pagina_base e os valores para o fbw.py."""
         nome = self.menu.segurou(agora)
         if nome is not None:
             self._fecha_em = agora + PAGINA_DURA
             self.acoes.comando_fbw(f"CMD {nome}")
-        if self.pagina != "NAV" and agora >= self._fecha_em:
-            self.pagina = "NAV"
+        if self.pagina != self.pagina_base and agora >= self._fecha_em:
+            self.pagina = self.pagina_base
             self.menu.sair()
         # Os valores do menu vão ao fbw.py quando mudam e a cada REENVIO.
         valores = self.menu.valores or {}

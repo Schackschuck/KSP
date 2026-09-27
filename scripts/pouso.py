@@ -22,19 +22,33 @@ Quem aponta a nave é o SAS do próprio KSP: retrógrado enquanto a nave desce
 rápido, e segurando a atitude no fim, quando a velocidade fica pequena e o
 retrógrado começa a pular de um lado para o outro.
 
+No cockpit, quem abre o script é a ponte da tela (bridge/mfd.py), quando o
+korry POUSO fica apertado 5 s; segurar de novo 5 s aborta. O script manda o
+estado dele para a ponte por UDP (as linhas POU de docs/protocolo.md), e a
+ponte mostra na página POUSO da tela multifunção. Sem a ponte aberta, os
+pacotes se perdem e o script pousa do mesmo jeito.
+
 Uso:
     python scripts/pouso.py                  # KSP neste computador
     python scripts/pouso.py 192.168.1.10     # KSP em outro computador (ex.: a partir do Pi)
+    python scripts/pouso.py --tela 192.168.1.20   # ponte da tela em outro computador
+    python scripts/pouso.py --demo           # sem o KSP: uma nave simulada cai em Kerbin
 
 Rode com o motor já ativado (no estágio) e a nave caindo ou subindo num salto.
 O script desce na vertical, onde estiver: não escolhe o lugar do pouso.
 A nave precisa de SAS com o modo retrógrado (piloto ou sonda de nível 1).
 Ctrl+C corta o motor e devolve o controle ao piloto.
+
+Sai com o código 0 se a nave pousou, 1 se não pousou (erro, nave perdida) e
+130 se foi interrompido (Ctrl+C, ou o korry segurado de novo): a ponte usa o
+código para acender o korry.
 """
 
 import argparse
 import math
 import os
+import signal
+import socket
 import sys
 import time
 from dataclasses import dataclass
@@ -58,6 +72,11 @@ INTERVALO_STATUS = 1.0  # s: uma linha de situação no terminal
 INTERVALO_STATUS_PERTO = 0.25  # s: idem, nos últimos ALTURA_PERTO metros
 ALTURA_PERTO = 100.0    # m
 PASCAL_POR_ATM = 101_325
+PORTA_TELA = 50100      # UDP: a ponte da tela (bridge/mfd.py) escuta aqui
+INTERVALO_TELA = 0.1    # s: o estado vai para a ponte 10 vezes por segundo
+FREADA_MAX = 999        # % do empuxo: "nem o motor todo dá" vai como 999
+
+POUSOU, NAO_POUSOU, INTERROMPIDO = 0, 1, 130   # códigos de saída
 
 QUEDA = "QUEDA"         # motor desligado, esperando a hora de acender
 QUEIMA = "QUEIMA"       # freando
@@ -354,14 +373,14 @@ class Avisos:
     """Imprime cada aviso uma vez só, e de novo depois que ele deixar de valer."""
 
     def __init__(self):
-        self._ativos = set()
+        self.ativos = set()
 
     def conferir(self, chave, vale, texto):
-        if vale and chave not in self._ativos:
+        if vale and chave not in self.ativos:
             print(f"AVISO: {texto}")
-            self._ativos.add(chave)
+            self.ativos.add(chave)
         elif not vale:
-            self._ativos.discard(chave)
+            self.ativos.discard(chave)
 
 
 class Sas:
@@ -420,12 +439,79 @@ def status(l, guiagem, acelerador):
     )
 
 
-def pousar(conn, nave):
+def linhas_de_estado(l, guiagem, acelerador, modo_sas, aviso):
+    """O estado do pouso nas linhas POU do protocolo da tela (docs/protocolo.md).
+
+    Altura em décimos de metro, descida em décimos de m/s (negativa
+    descendo, como o VV), empuxo/peso em centésimos e a freada em % do
+    empuxo máximo no chão.
+    """
+    maxima = l.empuxo_chao / l.massa if l.massa > 0 else 0.0
+    if maxima <= 0:
+        freada = "OFF"
+    elif math.isinf(guiagem.necessaria):
+        freada = str(FREADA_MAX)
+    else:
+        freada = str(min(FREADA_MAX, round(guiagem.necessaria / maxima * 100)))
+    twr = l.empuxo_chao / (l.massa * l.g) if l.massa > 0 and l.g > 0 else 0.0
+    return [
+        f"POU FASE {guiagem.fase}",
+        f"POU ALT {round(max(-9e7, min(9e7, l.altura * 10)))}",
+        f"POU VV {round(max(-9e7, min(9e7, l.velocidade[0] * 10)))}",
+        f"POU MOTOR {round(100 * max(0.0, min(1.0, acelerador)))}",
+        f"POU TWR {min(9999, round(twr * 100))}",
+        f"POU FREADA {freada}",
+        f"POU IGN {round(IGNICAO * 100)}",
+        f"POU SAS {'RETRO' if modo_sas == RETROGRADO else 'ESTAB'}",
+        f"POU INCL {round(inclinacao(l))}",
+        f"POU AVISO {aviso or 'OFF'}",
+    ]
+
+
+class TelaPouso:
+    """Manda o estado do pouso para a ponte da tela, por UDP, 10 vezes por segundo.
+
+    Um pacote só, com uma linha POU por vez. Sem a ponte aberta, o pacote se
+    perde e nada acontece: a tela é opcional.
+    """
+
+    def __init__(self, endereco):
+        """endereco: IP da ponte, ou IP:PORTA (a porta padrão é PORTA_TELA)."""
+        ip, _, porta = endereco.partition(":")
+        self._destino = (ip, int(porta) if porta else PORTA_TELA)
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._proximo = 0.0
+
+    def enviar(self, linhas, agora=True):
+        """agora=False: só manda se já passou INTERVALO_TELA desde o último pacote."""
+        instante = time.monotonic()
+        if not agora and instante < self._proximo:
+            return
+        self._proximo = instante + INTERVALO_TELA
+        try:
+            self._socket.sendto("\n".join(linhas).encode("ascii"), self._destino)
+        except OSError:
+            pass
+
+    def fechar(self):
+        self._socket.close()
+
+
+def aviso_principal(avisos):
+    """O aviso mais importante que vale agora, para a tela (ou None)."""
+    for chave, nome in (("empuxo", "EMPUXO"), ("motor", "MOTOR"), ("nariz", "NARIZ")):
+        if chave in avisos.ativos:
+            return nome
+    return None
+
+
+def pousar(conn, nave, tela=None):
+    """Pousa a nave. Devolve True se ela pousou."""
     corpo = nave.orbit.body
     # has_solid_surface só existe nas versões novas do kRPC.
     if not getattr(corpo, "has_solid_surface", True):
         print(f"{corpo.name} não tem chão para pousar.")
-        return
+        return False
     if corpo.has_atmosphere:
         print(f"Lendo a atmosfera de {corpo.name}...")
     guiagem = Guiagem(ler_atmosfera(corpo))
@@ -435,7 +521,7 @@ def pousar(conn, nave):
         l = fonte.ler()
         if l.pousada:
             print("A nave já está pousada.")
-            return
+            return False
 
         twr = l.empuxo_chao / (l.massa * l.g)
         print(f"Nave: {nave.name} ({corpo.name})  empuxo/peso no chão: {twr:.2f}")
@@ -464,7 +550,9 @@ def pousar(conn, nave):
                 print(f"Pousou! Descia a {descida:.1f} m/s, com o nariz a "
                       f"{inclinacao(l):.0f}° da vertical. No toque, o script achava "
                       f"que o pé estava a {l.altura:.1f} m do chão.")
-                break
+                if tela is not None:
+                    tela.enviar(linhas_de_estado(l, guiagem, 0.0, sas.modo, None))
+                return True
             controle.throttle = acelerador
             sas.pedir(modo)
             descida = -l.velocidade[0]
@@ -484,6 +572,8 @@ def pousar(conn, nave):
                 "nariz", ligado and l.cima < CIMA_MIN,
                 "nariz longe da vertical: motor desligado até a nave virar.",
             )
+            if tela is not None:
+                tela.enviar(linhas_de_estado(l, guiagem, acelerador, sas.modo, aviso_principal(avisos)), agora=False)
 
             agora = time.monotonic()
             if agora >= proximo_status:
@@ -501,7 +591,103 @@ def pousar(conn, nave):
             pass  # a nave pode não existir mais
 
 
+class NaveDemo:
+    """Uma nave de mentira caindo na vertical em Kerbin, para testar sem o KSP (--demo).
+
+    Gravidade, empuxo, arrasto e gasto de combustível simples, em tempo real.
+    Os testes (tests/test_pouso.py) usam uma nave simulada mais malvada.
+    """
+
+    G = 9.81                # m/s²
+    G0 = 9.80665            # m/s²: a do Isp
+    DENSIDADE_MAR = 1.225   # kg/m³
+    ESCALA = 5_600          # m: a densidade cai para 1/e
+    TOPO = 70_000           # m: fim da atmosfera
+    AREA = 1.2              # m²: arrasto = área · densidade · v²
+    ISP = 300.0             # s
+    ALTURA_CM = 3.0         # m: do pé ao centro de massa
+    PASSO = 0.02            # s: a física anda em passos pequenos
+
+    def __init__(self, altura=4_000.0, velocidade=-200.0, massa=8_000.0, twr=2.2):
+        self.altura = altura
+        self.v = velocidade
+        self.massa = massa
+        self.empuxo_max = twr * massa * self.G
+        self.toque = None   # m/s de descida no toque
+
+    def densidade(self, altitude):
+        if altitude >= self.TOPO:
+            return 0.0
+        return self.DENSIDADE_MAR * math.exp(-max(altitude, 0.0) / self.ESCALA)
+
+    def _arrasto(self):
+        return self.AREA * self.densidade(self.altura + self.ALTURA_CM) * self.v**2
+
+    def leitura(self):
+        return Leitura(
+            altura=self.altura,
+            altitude=self.altura + self.ALTURA_CM,
+            velocidade=(self.v, 0.0, 0.0),
+            massa=self.massa,
+            empuxo=self.empuxo_max,
+            empuxo_chao=self.empuxo_max,
+            arrasto=self._arrasto(),
+            cima=1.0,
+            g=self.G,
+            pousada=self.toque is not None,
+        )
+
+    def avancar(self, acelerador, dt):
+        while dt > 0 and self.toque is None:
+            passo = min(dt, self.PASSO)
+            dt -= passo
+            empuxo = acelerador * self.empuxo_max
+            arrasto = -math.copysign(self._arrasto(), self.v)
+            self.v += ((empuxo + arrasto) / self.massa - self.G) * passo
+            self.altura += self.v * passo
+            self.massa -= empuxo / (self.ISP * self.G0) * passo
+            if self.altura <= 0:
+                self.toque, self.altura, self.v = -self.v, 0.0, 0.0
+
+
+def pousar_demo(tela=None):
+    """O mesmo laço de pousar(), com a NaveDemo no lugar do kRPC e do SAS."""
+    nave = NaveDemo()
+    guiagem = Guiagem(nave.densidade)
+    avisos = Avisos()
+    print(f"Demonstração: nave de mentira a {nave.altura:.0f} m, descendo a {-nave.v:.0f} m/s, em Kerbin.")
+    fase = None
+    proximo_status = 0.0
+    anterior = time.monotonic()
+    while True:
+        l = nave.leitura()
+        acelerador, modo = guiagem.passo(l)
+        if guiagem.fase == POUSADA:
+            print(f"Pousou! Descia a {nave.toque:.1f} m/s.")
+            if tela is not None:
+                tela.enviar(linhas_de_estado(l, guiagem, 0.0, modo, None))
+            return True
+        if guiagem.fase != fase:
+            fase = guiagem.fase
+            print(f"--> {fase} a {l.altura:.0f} m do chão")
+        avisos.conferir(
+            "empuxo", fase == QUEIMA and math.isinf(guiagem.necessaria),
+            "empuxo insuficiente, não dá mais para parar a tempo!",
+        )
+        if tela is not None:
+            tela.enviar(linhas_de_estado(l, guiagem, acelerador, modo, aviso_principal(avisos)), agora=False)
+        agora = time.monotonic()
+        if agora >= proximo_status:
+            print(status(l, guiagem, acelerador))
+            proximo_status = agora + (INTERVALO_STATUS_PERTO if l.altura < ALTURA_PERTO else INTERVALO_STATUS)
+        time.sleep(INTERVALO)
+        agora = time.monotonic()
+        nave.avancar(acelerador, agora - anterior)
+        anterior = agora
+
+
 def main():
+    """Devolve o código de saída: POUSOU, NAO_POUSOU ou INTERROMPIDO."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "address",
@@ -509,27 +695,53 @@ def main():
         default="127.0.0.1",
         help="IP do computador onde o KSP está rodando (padrão: este computador)",
     )
+    parser.add_argument(
+        "--tela",
+        default="127.0.0.1",
+        metavar="IP",
+        help="IP do computador da ponte da tela, bridge/mfd.py (padrão: este computador)",
+    )
+    parser.add_argument("--demo", action="store_true", help="não conecta no KSP: pousa uma nave simulada")
     args = parser.parse_args()
 
-    # Importado só aqui: os testes usam a guiagem sem precisar do kRPC nem da serial.
-    # A ponte fica em bridge/, ao lado de scripts/.
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bridge"))
-    from ponte import conectar_krpc
+    # No Windows, a ponte aborta o script com CTRL_BREAK (o Ctrl+C não chega
+    # num processo aberto por outro). Aqui ele vira o mesmo KeyboardInterrupt.
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, signal.default_int_handler)
 
-    conn = conectar_krpc(args.address)
+    tela = TelaPouso(args.tela)
     try:
+        if args.demo:
+            try:
+                return POUSOU if pousar_demo(tela) else NAO_POUSOU
+            except KeyboardInterrupt:
+                print("\nInterrompido: motor cortado.")
+                return INTERROMPIDO
+
+        # Importado só aqui: os testes usam a guiagem sem precisar do kRPC nem da serial.
+        # A ponte fica em bridge/, ao lado de scripts/.
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bridge"))
+        from ponte import conectar_krpc
+
+        conn = conectar_krpc(args.address)
         try:
-            nave = conn.space_center.active_vessel
-        except (ValueError, RuntimeError):
-            sys.exit("Nenhuma nave ativa: rode o script na cena de voo.")
-        pousar(conn, nave)
-    except KeyboardInterrupt:
-        print("\nInterrompido: motor cortado, o controle volta para o piloto.")
-    except (ValueError, RuntimeError) as e:
-        print(f"\nPerdi a nave (explodiu ou o jogo saiu da cena de voo): {e}")
+            try:
+                nave = conn.space_center.active_vessel
+            except (ValueError, RuntimeError):
+                print("Nenhuma nave ativa: rode o script na cena de voo.")
+                return NAO_POUSOU
+            return POUSOU if pousar(conn, nave, tela) else NAO_POUSOU
+        except KeyboardInterrupt:
+            print("\nInterrompido: motor cortado, o controle volta para o piloto.")
+            return INTERROMPIDO
+        except (ValueError, RuntimeError) as e:
+            print(f"\nPerdi a nave (explodiu ou o jogo saiu da cena de voo): {e}")
+            return NAO_POUSOU
+        finally:
+            conn.close()
     finally:
-        conn.close()
+        tela.fechar()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

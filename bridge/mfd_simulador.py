@@ -141,6 +141,30 @@ LEIS = {
 # Números pintados na navball. O rumo vai a cada 30°, logo acima do
 # horizonte, com letras nos pontos cardeais (L = leste, O = oeste). O pitch
 # vai a cada 30°, um pouco ao lado dos meridianos de N, L, S e O.
+# A página do pouso (PAG POUSO), aberta pelo korry POUSO do painel de scripts:
+# a nave desce pela linha tracejada até o alvo no chão, na altura do pé numa
+# escala logarítmica (cada década, 1, 10, 100 e 1000 m, ocupa o mesmo pedaço).
+POUSO_CHAO = 200            # y do chão
+POUSO_TOPO = 58             # y do pé da nave a POUSO_ALT_MAX
+POUSO_ALT_MAX = 10_000      # m
+CHAO_POUSO = rgb565(16, 24, 40)
+ALVO_POUSO = rgb565(220, 40, 70)
+TRACEJADO = rgb565(40, 150, 220)
+CORPO_NAVE = rgb565(200, 206, 212)
+CHAMA = rgb565(255, 190, 40)
+CHAMA_MEIO = rgb565(255, 245, 190)
+# Fase do pouso (POU FASE) e estado do script (SCR POUSO) → texto e cor do indicador.
+FASES_POUSO = {
+    "QUEDA": ("QUEDA", AZUL),        # armado: esperando a hora de acender
+    "QUEIMA": ("QUEIMA", VERDE),
+    "TOQUE": ("TOQUE", VERDE),
+    "POUSADA": ("POUSADA", VERDE),
+}
+FINS_POUSO = {"FIM": ("POUSADA", VERDE), "ABORT": ("ABORTADO", AVISO), "FALHA": ("FALHOU", AVISO)}
+AVISOS_POUSO = {"EMPUXO": "EMPUXO INSUFICIENTE", "MOTOR": "SEM MOTOR ATIVO", "NARIZ": "NARIZ LONGE DA VERTICAL"}
+CAMPOS_POUSO = ("FASE", "ALT", "VV", "MOTOR", "TWR", "FREADA", "IGN", "SAS", "INCL", "AVISO")
+CAMPOS_POUSO_TEXTO = ("FASE", "SAS", "AVISO")
+
 CARDEAIS = {0: "N", 90: "L", 180: "S", 270: "O"}
 NUMEROS_RUMO = tuple((CARDEAIS.get(h, str(h)), 4, h) for h in range(0, 360, 30))
 NUMEROS_PITCH = tuple(
@@ -226,6 +250,9 @@ class Simulador:
         self._lei = "OFF"
         self._trava = None
         self._estol = False
+        # Painel de scripts: o estado do korry POUSO e o que o pouso.py manda.
+        self._scr = ("OFF", None)      # (estado, segundos que faltam segurando)
+        self._pouso = dict.fromkeys(CAMPOS_POUSO)
         self._proximo_alarme = 0.0
         self._alarme = self._preparar_alarme()
 
@@ -318,7 +345,7 @@ class Simulador:
             self._numeros[nome] = numeros[0]
         elif nome in ("SAS", "RCS") and partes in (["0"], ["1"]):
             self._estados[nome] = partes[0] == "1"
-        elif nome == "PAG" and partes in (["NAV"], ["SAS"], ["AP"]):
+        elif nome == "PAG" and partes in (["NAV"], ["SAS"], ["AP"], ["POUSO"]):
             self._pagina = partes[0]
         elif nome == "SASM" and partes == ["OFF"]:
             self._sas["modo"] = self._sas["cor"] = None
@@ -332,6 +359,16 @@ class Simulador:
             self._ap[partes[0]][1] = numeros[1]
         elif nome == "APC" and len(partes) == 2 and partes[0] in self._ap and partes[1] in ("0", "1"):
             self._cursor = (partes[0], partes[1] == "1")
+        elif nome == "SCR" and len(partes) == 2 and partes[0] == "POUSO" and partes[1] in ("OFF", "ATIVO", "FIM", "ABORT", "FALHA"):
+            self._scr = (partes[1], None)
+        elif nome == "SCR" and len(partes) == 3 and partes[0] == "POUSO" and partes[1] in ("LIGA", "DESL") and numeros[2] is not None:
+            self._scr = (partes[1], numeros[2])
+        elif nome == "POU" and partes == ["OFF"]:
+            self._pouso = dict.fromkeys(CAMPOS_POUSO)
+        elif nome == "POU" and len(partes) == 2 and partes[0] in CAMPOS_POUSO_TEXTO:
+            self._pouso[partes[0]] = partes[1]
+        elif nome == "POU" and len(partes) == 2 and partes[0] in CAMPOS_POUSO and (numeros[1] is not None or partes[1] == "OFF"):
+            self._pouso[partes[0]] = numeros[1]
         elif nome == "LEI" and len(partes) == 1 and partes[0] in LEIS:
             self._lei = partes[0]
         elif nome == "ESTOL" and partes in (["0"], ["1"]):
@@ -371,6 +408,8 @@ class Simulador:
             self._desenhar_pagina_sas()
         elif com_sinal and self._pagina == "AP":
             self._desenhar_pagina_ap()
+        elif com_sinal and self._pagina == "POUSO":
+            self._desenhar_pagina_pouso(agora)
         else:
             self._desenhar_aro()
             self._desenhar_navball(com_sinal)
@@ -634,6 +673,108 @@ class Simulador:
         self._texto(trava, APAGADO if self._trava is None else VERDE, direita=(304, 192))
         dica = "GIRAR: VALOR  APERTAR: SAI" if escolhida else "GIRAR: LINHA  APERTAR: ESCOLHE"
         self._texto(dica, ROTULO, centro=(160, 226), fonte=self._fonte_pequena)
+
+    def _nave_de_pouso(self, x, pe, motor, trem):
+        """A nave em pé, com o pé em (x, pe): corpo, nariz, pernas e a chama do motor."""
+        if motor:
+            comprimento = 6 + 22 * motor / 100
+            pygame.draw.polygon(self._tela, CHAMA, [(x - 3, pe - 2), (x + 3, pe - 2), (x, pe + comprimento)])
+            pygame.draw.polygon(self._tela, CHAMA_MEIO, [(x - 1, pe - 2), (x + 1, pe - 2), (x, pe + comprimento * 0.55)])
+        pygame.draw.rect(self._tela, CORPO_NAVE, (x - 3, pe - 38, 7, 34))
+        pygame.draw.rect(self._tela, APAGADO, (x - 3, pe - 38, 7, 34), 1)
+        pygame.draw.line(self._tela, APAGADO, (x - 3, pe - 22), (x + 3, pe - 22), 1)
+        pygame.draw.polygon(self._tela, CORPO_NAVE, [(x - 3, pe - 38), (x + 3, pe - 38), (x, pe - 45)])
+        pygame.draw.rect(self._tela, APAGADO, (x - 2, pe - 4, 5, 3))    # sino do motor
+        if trem:
+            for lado in (-1, 1):
+                pygame.draw.line(self._tela, TEXTO, (x + 3 * lado, pe - 12), (x + 9 * lado, pe), 1)
+        else:
+            for lado in (-1, 1):
+                pygame.draw.line(self._tela, TEXTO, (x + 3 * lado, pe - 12), (x + 5 * lado, pe - 3), 1)
+
+    def _desenhar_pagina_pouso(self, agora):
+        p = self._pouso
+        estado, faltam = self._scr
+
+        # Chão e alvo
+        pygame.draw.ellipse(self._tela, CHAO_POUSO, (-160, POUSO_CHAO - 8, 640, 200))
+        for largura, altura, espessura in ((76, 16, 3), (44, 9, 3)):
+            pygame.draw.ellipse(self._tela, ALVO_POUSO, (160 - largura // 2, POUSO_CHAO + 4 - altura // 2, largura, altura), espessura)
+        pygame.draw.circle(self._tela, ALVO_POUSO, (160, POUSO_CHAO + 4), 2)
+
+        # A nave, na altura do pé, e o tracejado até o alvo
+        if p["ALT"] is not None:
+            metros = max(0.0, p["ALT"] / 10)
+            fracao = math.log10(1 + min(metros, POUSO_ALT_MAX)) / math.log10(1 + POUSO_ALT_MAX)
+            pe = round(POUSO_CHAO + 4 - fracao * (POUSO_CHAO + 4 - POUSO_TOPO))
+            for y in range(pe + 4, POUSO_CHAO, 8):
+                pygame.draw.line(self._tela, TRACEJADO, (160, y), (160, min(y + 4, POUSO_CHAO)), 1)
+            trem = p["FASE"] in ("QUEIMA", "TOQUE", "POUSADA")
+            self._nave_de_pouso(160, pe, p["MOTOR"] or 0, trem)
+
+        # Números em cima, como na tela do booster
+        pequena = self._fonte_pequena
+        alt = "---" if p["ALT"] is None else (f"{p['ALT'] / 10:.1f} m" if p["ALT"] < 1000 else formatar_distancia(round(p["ALT"] / 10)))
+        vel = "---" if p["VV"] is None else f"{abs(p['VV']) / 10:.1f} m/s"
+        twr = "---" if p["TWR"] is None else f"{p['TWR'] / 100:.2f}"
+        for i, (rotulo, valor) in enumerate((("ALT", alt), ("VEL", vel), ("TWR", twr))):
+            self._texto(rotulo, ROTULO, canto=(8, 6 + i * 15))
+            self._texto(valor, VERDE, canto=(44, 6 + i * 15))
+        sas = p["SAS"] or "---"
+        motor = "---" if p["MOTOR"] is None else f"{p['MOTOR']}%"
+        incl = "---" if p["INCL"] is None else f"{p['INCL']} GR"
+        for i, (rotulo, valor) in enumerate((("SAS", sas), ("MOTOR", motor), ("INCL", incl))):
+            self._texto(rotulo, ROTULO, direita=(258, 6 + i * 15))
+            self._texto(valor, VERDE, direita=(312, 6 + i * 15))
+
+        # Aviso do script, piscando
+        if p["AVISO"] in AVISOS_POUSO and int(agora * 2) % 2 == 0:
+            self._texto(AVISOS_POUSO[p["AVISO"]], AVISO, centro=(160, 56), fonte=pequena)
+
+        # Segurando o korry: quantos segundos faltam
+        if estado in ("LIGA", "DESL"):
+            acao = "PARA POUSAR" if estado == "LIGA" else "PARA ABORTAR"
+            caixa = pygame.Rect(90, 80, 140, 56)
+            pygame.draw.rect(self._tela, FUNDO, caixa, border_radius=6)
+            pygame.draw.rect(self._tela, AMBAR, caixa, 2, border_radius=6)
+            self._texto(f"SEGURE {faltam} S", AMBAR, centro=(160, 100), fonte=self._fonte_grande)
+            self._texto(acao, AMBAR, centro=(160, 122), fonte=pequena)
+
+        # Indicador da fase, embaixo à esquerda
+        if estado in FINS_POUSO:
+            fase, cor = FINS_POUSO[estado]
+        elif estado == "LIGA":
+            fase, cor = "ARMANDO", AMBAR
+        elif p["FASE"] in FASES_POUSO:
+            fase, cor = FASES_POUSO[p["FASE"]]
+        elif estado in ("ATIVO", "DESL"):
+            fase, cor = "LIGANDO", AZUL
+        else:
+            fase, cor = "PARADO", APAGADO
+        centro = (26, 212)
+        pygame.draw.circle(self._tela, cor, centro, 16, 2)
+        pygame.draw.circle(self._tela, cor, centro, 7, 2)
+        pygame.draw.circle(self._tela, cor, centro, 2)
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            pygame.draw.line(self._tela, cor, (centro[0] + 11 * dx, centro[1] + 11 * dy), (centro[0] + 19 * dx, centro[1] + 19 * dy), 2)
+        self._texto(fase, cor, canto=(48, 203))
+        pygame.draw.line(self._tela, cor, (46, 222), (118, 222), 1)
+
+        # Freada: quanto do empuxo ela precisa agora; o motor acende na marca
+        barra = pygame.Rect(212, 220, 100, 8)
+        self._texto("FREADA", ROTULO, canto=(212, 204), fonte=pequena)
+        freada = p["FREADA"]
+        self._texto("---" if freada is None else f"{freada}%" if freada < 999 else "> 100%",
+                    AVISO if freada is not None and freada > 100 else TEXTO, direita=(312, 202))
+        pygame.draw.rect(self._tela, ARO, barra)
+        if freada is not None:
+            largura = round(barra.width * min(freada, 100) / 100)
+            cor_barra = AVISO if freada > 100 else VERDE if p["FASE"] != "QUEDA" else AZUL
+            pygame.draw.rect(self._tela, cor_barra, (barra.x, barra.y, largura, barra.height))
+        pygame.draw.rect(self._tela, BORDA, barra, 1)
+        if p["IGN"] is not None:
+            x = barra.x + round(barra.width * p["IGN"] / 100)
+            pygame.draw.line(self._tela, AMBAR, (x, barra.y - 3), (x, barra.bottom + 2), 2)
 
     # ---- caixas, barras, botões e painel ----
 
