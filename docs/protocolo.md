@@ -125,3 +125,15 @@ Um script de voo pode pôr um marcador na navball sem depender da ponte. Hoje, s
   - `ORB` quando a nave sobe acima de 6% do raio do planeta (36 km em Kerbin), e `SUP` quando desce abaixo de 5,5% (33 km);
   - `ALVO` quando um alvo é escolhido no jogo (uma nave, uma porta de acoplamento ou um planeta), ou trocado por outro; sem alvo, volta para `SUP` ou `ORB` conforme a altitude;
   - `TOQUE MODO` passa para o próximo modo: `SUP` → `ORB` → `ALVO` (se houver alvo) → `SUP`. A escolha vale até a próxima troca automática.
+
+## Editor de nós de manobra
+
+Linhas do editor da fase 4 ([docs/manobras.md](manobras.md)). Hoje quem manda é a página `bridge/celular/manobras.html`, por HTTP (`POST /linha`, uma linha por pedido); quando os encoders existirem, o painel manda as mesmas linhas pela serial. Tudo é painel → ponte: o que o LCD mostra ainda não tem mensagem própria (a página recebe as tabelas prontas em JSON pelo `GET /estado`).
+
+| Mensagem | Quando | Significado |
+|---|---|---|
+| `ENC <nome> <cliques>` | O encoder girou | Cliques com sinal (`+` horário), acumulados desde a última mensagem. Nomes: `PRO`, `NRM`, `RAD`, `TEMPO` |
+| `BTN <nome> 1` | Um botão foi apertado | Apertar o encoder usa o nome dele (`BTN PRO 1`): troca o passo |
+| `BTN <nome> 0` | Um botão foi solto | Ignorada pelo editor |
+
+Botões: `NOVO`, `APAGAR`, `AP`, `PE`, `CIRC`, `ANT`, `PROX` e `MAPA`. **Temporários**, até o joystick mexer na câmera do mapa: `CAM_ESQ`, `CAM_DIR`, `CAM_CIMA`, `CAM_BAIXO`, `CAM_PERTO`, `CAM_LONGE` e `CAM_FOCO`. Uma linha que o editor não reconhece aparece na página como `ERR <linha>`.
