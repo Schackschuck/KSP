@@ -85,7 +85,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Pé da nave medido pelas pernas do trem**, não pela caixa da nave inteira | Nas versões lançadas do kRPC (até a 0.6.0), a caixa de uma peça junta tudo o que está pendurado nela, como a chama do motor ligado. A caixa da nave inteira descia metros abaixo do pé, e a freada terminava alta. |
 | **SAS do KSP aponta a nave no pouso**, não o piloto automático do kRPC | O piloto automático do kRPC vem ajustado para levar 3 s até o ângulo pedido e não conta a força do ar. No segundo teste, a nave caindo de ré balançou até 31° na freada. O SAS o jogo ajusta para cada nave. Retrógrado enquanto a nave desce rápido; devagar, perto do chão, o retrógrado pula de um lado para o outro, então no fim o SAS só segura a atitude. |
 | **Scripts de voo numa pasta própria** (`scripts/`), fora da ponte | Cada script roda sozinho pela linha de comando, no PC ou no Pi, com ou sem o cockpit. A ponte só dispara o script quando o botão do painel é apertado; o script não depende dela nem do painel. |
-| **Joystick Logitech Extreme 3D Pro** na USB do Pi, lido pela ponte | Já está em casa e tem 3 eixos, acelerador, 12 botões e um chapéu. Passando pela ponte, dá para ter zona morta, troca entre girar e transladar, e saber quando o piloto mexe no manche para tirar o controle de um script. Não precisa abrir o joystick. |
+| **Um joystick só** (Logitech Extreme 3D Pro) na USB do Pi, lido pela ponte, com uma chave de 3 posições para o modo | Já está em casa e tem 3 eixos, acelerador, 12 botões e um chapéu. Passando pela ponte, dá para ter zona morta, os modos VOO, CÂMERA e TRANSLAÇÃO, e saber quando o piloto mexe no manche para tirar o controle de um script. Não precisa abrir o joystick. |
 | **Korry switches** (botões iluminados com legenda, de avião) nos sistemas que o jogo também muda | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: corpo impresso em 3D e tampa de acrílico cortada a laser. Quais chaves viram korry: a decidir. |
 | **Caixa em MDF cortado a laser, com peças impressas em 3D** | A laser do colégio faz as peças planas e grandes (paredes, painéis com legendas); a impressora de casa, as pequenas e complicadas (korry, knobs, suportes). Cada seção é um painel removível com o seu módulo atrás. |
 | **Fly by wire pelo ponto na navball**: o manche move para onde o avião vai, e não as superfícies | É o jeito do Airbus e dos caças: soltar o manche segura o caminho, e as proteções ficam simples, porque o ponto tem limites. O piloto automático do avião vira um piloto que só mexe no ponto. |
@@ -189,16 +189,17 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 ### Fase 4 — Instrumentos físicos
 
-**Status: editor de manobras escrito, com botões numa página no lugar dos encoders; falta testar no jogo.** [`bridge/manobras.py`](bridge/manobras.py) cria e edita os nós pelo kRPC e mostra os números do nó e da órbita (antes e depois) no navegador do PC ou do celular: [docs/manobras.md](docs/manobras.md). A página manda as mesmas linhas que o painel vai mandar. Por enquanto a página também gira a câmera do mapa, **o que tem que sair dela:** no cockpit, a câmera do mapa vai ser mexida pelo joystick.
+**Status: editor de manobras escrito, com botões numa página no lugar das chaves; falta testar no jogo.** [`bridge/manobras.py`](bridge/manobras.py) cria e edita os nós pelo kRPC e mostra os números do nó e da órbita (antes e depois) no navegador do PC ou do celular: [docs/manobras.md](docs/manobras.md). A página manda as mesmas linhas que o painel vai mandar. Por enquanto a página também gira a câmera do mapa, **o que tem que sair dela:** no cockpit, a câmera do mapa vai ser mexida pelo joystick, no modo CÂMERA.
 
 - Displays de 7 segmentos com MAX7219 para os números mais importantes.
-- Encoder rotativo para escolher o que cada display mostra.
+- Encoder rotativo para escolher o que cada display mostra. Lido pela mesma cadeia de 74HC165 dos módulos: o Mega lê a cadeia inteira mil vezes por segundo numa **interrupção de timer**, e assim o redesenho do LCD (~20 ms) não faz perder cliques. O painel acumula os cliques e manda `ENC <nome> <cliques>`.
 - **Editor de nós de manobra** (pelo kRPC: `control.add_node`, `node.prograde` etc.):
-  - 4 encoders: pró-grado, normal, radial e tempo (mover o nó ao longo da órbita). Apertar o encoder troca o passo: 0,1 / 1 / 10 / 100 m/s por clique.
-  - Botões NOVO, APAGAR, AP e PE (levar o nó ao apoastro ou ao periastro), CIRC (circulariza no ponto do nó, com o Δv calculado pela ponte), ANT e PROX (trocar de nó) e MAPA (liga e desliga o mapa do jogo).
+  - 4 chaves de alavanca com mola para o centro, (ON)-OFF-(ON), com `+` e `-`: pró-grado, normal, radial e tempo (mover o nó ao longo da órbita). Segurando, repete. O painel manda `INC <nome> <passos>`.
+  - Um botão PASSO para as quatro: 0,1 / 1 / 10 / 100 m/s no Δv e 1 s / 10 s / 1 min / 10 min no tempo.
+  - Botões NOVO (nó novo no apoastro), APAGAR, ANT e PROX (trocar de nó) e CIRC (circulariza no ponto do nó, com o Δv calculado pela ponte). Sem AP e PE: o tempo já leva o nó a qualquer ponto.
+  - São 14 entradas: 8 das chaves e 6 botões.
   - O LCD mostra Δv, tempo de queima, T− até o nó e o Ap/Pe resultante.
-  - A câmera do mapa (girar, aproximar, trocar o foco entre nave, nó e planeta) fica no joystick, não no editor.
-  - Encoders lidos pela mesma cadeia de 74HC165 dos módulos: o Mega lê a cadeia inteira mil vezes por segundo numa **interrupção de timer**, e assim o redesenho do LCD (~20 ms) não faz perder cliques. O painel acumula os cliques e manda `ENC <nome> <cliques>`.
+  - O botão MAPA (liga e desliga o mapa do jogo) fica na seção da câmera. A câmera do mapa (girar, aproximar, trocar o foco entre nave, nó e planeta) fica no joystick, no modo CÂMERA, não no editor.
 - Barra de combustível com LEDs WS2812.
 - Ponteiro analógico com motor de passo X27.168.
 - Fonte 5V externa (a USB não aguenta muitos LEDs).
@@ -348,7 +349,7 @@ Levar a nave até perto de outra em órbita. O script **não pilota até a últi
 ### Acoplamento assistido
 
 - Página nova na tela multifunção: a mira de alinhamento com a porta de acoplamento do alvo, a distância e a velocidade de aproximação.
-- Uma chave troca o joystick entre girar a nave e movê-la para os lados com o RCS.
+- A chave de modo do joystick na posição TRANSLAÇÃO: o manche move a nave com o RCS, sem girar ([os três modos](hardware/construcao.md#um-joystick-três-modos)).
 - Primeiro manual, com a tela ajudando. Depois automático: a nave se alinha e se aproxima devagar sozinha.
 - **Precisa de:** joystick (fase 2) e a tela multifunção.
 
@@ -405,8 +406,10 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 ### Fase 4 — Instrumentos físicos
 
 - [ ] 3–4× módulos MAX7219 com 8 dígitos de 7 segmentos
-- [ ] 6× encoders rotativos (KY-040): 4 para o editor de manobras, 2 para escolher o que os displays mostram
-- [ ] 8× botões para o editor de manobras (NOVO, APAGAR, AP, PE, CIRC, ANT, PROX, MAPA), se não sobrarem da fase 2
+- [ ] 2× encoders rotativos (KY-040), para escolher o que os displays mostram
+- [ ] 4× chaves de alavanca com mola para o centro, (ON)-OFF-(ON), para o editor de manobras (PRO, NRM, RAD, TEMPO)
+- [ ] 6× botões para o editor de manobras (PASSO, NOVO, APAGAR, ANT, PROX, CIRC) e 1 para o MAPA, na seção da câmera, se não sobrarem da fase 2
+- [ ] 1× chave de 3 posições (ON-OFF-ON, sem mola) para o modo do joystick: VOO, CÂMERA e TRANSLAÇÃO
 - [ ] 1 m de fita WS2812B (60 LEDs/m) + resistor 330 Ω + capacitor 1000 µF
 - [ ] 2–4× motores de passo X27.168 (ponteiros)
 - [ ] 1× fonte 5V 3A + conector/borne

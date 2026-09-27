@@ -1,26 +1,29 @@
 """Editor de nós de manobra, com os botões numa página do celular ou do PC.
 
-É o editor da fase 4 do roteiro antes do hardware: os encoders e os botões
+É o editor da fase 4 do roteiro antes do hardware: as chaves e os botões
 ainda não existem, então viram botões numa página web, e o LCD vira uma
 tabela com os números do nó. A página manda as mesmas linhas que o painel
 vai mandar (docs/protocolo.md#editor-de-nós-de-manobra), e toda a lógica fica
 aqui. Quando o hardware chegar, a ponte lê as mesmas linhas da serial.
 
 Controles:
-- Encoders PRO, NRM, RAD e TEMPO: + e - mexem no Δv pró-grado, normal e
-  radial e movem o nó ao longo da órbita. Apertar o encoder (o botão PASSO)
-  troca o passo: 0.1 / 1 / 10 / 100 m/s, ou 1 s / 10 s / 1 min / 10 min.
+- PRO, NRM, RAD e TEMPO (no painel, chaves de alavanca com mola para o
+  centro): + e - mexem no Δv pró-grado, normal e radial e movem o nó ao
+  longo da órbita. Segurando, repete.
+- PASSO: um só para os quatro, troca o passo de todos juntos:
+  0.1 / 1 / 10 / 100 m/s no Δv e 1 s / 10 s / 1 min / 10 min no tempo.
 - NOVO: nó novo no próximo apoastro, depois do último nó.
 - APAGAR: apaga o nó escolhido.
-- AP e PE: levam o nó escolhido ao apoastro ou ao periastro.
 - CIRC: acerta o nó escolhido para deixar a órbita circular ali onde ele
-  está (use AP ou PE antes). A conta é fechada (vis-viva) e depois conferida
-  com a órbita que o jogo prevê, corrigindo até sobrar menos de 1 mm/s.
+  está (leve o nó ao ponto pelo TEMPO). A conta é fechada (vis-viva) e
+  depois conferida com a órbita que o jogo prevê, corrigindo até sobrar
+  menos de 1 mm/s.
 - ANT e PROX: trocam o nó escolhido, quando há mais de um.
-- MAPA: liga e desliga o mapa do jogo, para ver o nó sendo criado.
+- MAPA (no painel, fica na seção da câmera): liga e desliga o mapa do jogo,
+  para ver o nó sendo criado.
 - CAM_*: giram, aproximam e trocam o foco da câmera do mapa.
-  TEMPORÁRIO: no cockpit a câmera vai ser mexida pelo joystick, e estes
-  botões saem do editor. Ver "Câmera do mapa" em docs/manobras.md.
+  TEMPORÁRIO: no cockpit a câmera vai ser mexida pelo joystick, no modo
+  CÂMERA, e estes botões saem. Ver "Câmera do mapa" em docs/manobras.md.
 
 Uso:
     python bridge/manobras.py                  # KSP neste computador
@@ -46,15 +49,15 @@ MAX_CORPO = 64          # bytes: uma linha do protocolo tem no máximo 31 caract
 INTERVALO = 0.25        # s: leitura do jogo e atualização da página, 4 vezes por segundo
 G0 = 9.80665            # m/s²: a gravidade que define o Isp
 
-# ---- encoders ----
+# ---- ajustes: PRO, NRM, RAD e TEMPO ----
 PASSOS = {
     "PRO": (0.1, 1.0, 10.0, 100.0),     # m/s por clique
     "NRM": (0.1, 1.0, 10.0, 100.0),
     "RAD": (0.1, 1.0, 10.0, 100.0),
     "TEMPO": (1.0, 10.0, 60.0, 600.0),  # s por clique
 }
-PASSO_INICIAL = 1       # índice em PASSOS: 1 m/s e 10 s
-TEMPO_MINIMO = 5.0      # s: o encoder de tempo não leva o nó para antes disso a partir de agora
+PASSO_INICIAL = 1       # índice em PASSOS, o mesmo para os quatro: 1 m/s e 10 s
+TEMPO_MINIMO = 5.0      # s: o TEMPO não leva o nó para antes disso a partir de agora
 
 # ---- circularização ----
 CIRC_TOLERANCIA = 0.001  # m/s: para de corrigir quando a correção fica menor que isso
@@ -215,8 +218,8 @@ class Editor:
 
     def __init__(self, conn):
         self._sc = conn.space_center
-        self._passos = {nome: PASSO_INICIAL for nome in PASSOS}
-        self._escolhido = None       # o nó que os encoders mexem
+        self._passo = PASSO_INICIAL  # um passo só para PRO, NRM, RAD e TEMPO
+        self._escolhido = None       # o nó que os ajustes mexem
         self._aviso = ""
         self._aviso_ate = 0.0
         self._foco = "NAVE"          # câmera do mapa: NAVE, NO ou PLANETA
@@ -229,14 +232,14 @@ class Editor:
         self._aviso_ate = time.monotonic() + AVISO_DURA
 
     def comando(self, linha):
-        """Uma linha dos controles: ENC <nome> <cliques> ou BTN <nome> 1."""
+        """Uma linha dos controles: INC <nome> <passos> ou BTN <nome> 1."""
         partes = linha.split(" ")
-        if len(partes) == 3 and partes[0] == "ENC" and partes[1] in PASSOS:
+        if len(partes) == 3 and partes[0] == "INC" and partes[1] in PASSOS:
             try:
-                cliques = int(partes[2])
+                passos = int(partes[2])
             except ValueError:
-                cliques = None
-            acao = None if cliques is None else (lambda: self._girar(partes[1], cliques))
+                passos = None
+            acao = None if passos is None else (lambda: self._ajustar(partes[1], passos))
         elif len(partes) == 3 and partes[0] == "BTN" and partes[2] in ("0", "1"):
             # Soltar o botão (BTN <nome> 0) não faz nada.
             acao = (lambda: self._apertar(partes[1])) if partes[2] == "1" else (lambda: None)
@@ -312,32 +315,29 @@ class Editor:
             i = self._escolher(nos)
         return self._sc.active_vessel, nos, i
 
-    def _girar(self, nome, cliques):
+    def _ajustar(self, nome, passos):
         achado = self._no_escolhido()
         if achado is None:
             return
         no = self._escolhido
-        passo = PASSOS[nome][self._passos[nome]]
+        passo = PASSOS[nome][self._passo]
         if nome == "PRO":
-            no.prograde += cliques * passo
+            no.prograde += passos * passo
         elif nome == "NRM":
-            no.normal += cliques * passo
+            no.normal += passos * passo
         elif nome == "RAD":
-            no.radial += cliques * passo
+            no.radial += passos * passo
         else:
-            no.ut = max(no.ut + cliques * passo, self._sc.ut + TEMPO_MINIMO)
+            no.ut = max(no.ut + passos * passo, self._sc.ut + TEMPO_MINIMO)
 
     def _apertar(self, nome):
-        if nome in PASSOS:
-            self._passos[nome] = (self._passos[nome] + 1) % len(PASSOS[nome])
-            passo = PASSOS[nome][self._passos[nome]]
-            self.avisar(f"Passo {nome}: {txt_passo(nome, passo)}")
+        if nome == "PASSO":
+            self._passo = (self._passo + 1) % len(PASSOS["PRO"])
+            self.avisar(f"Passo: {self._txt_passo('PRO')} / {self._txt_passo('TEMPO')}")
         elif nome == "NOVO":
             self._novo()
         elif nome == "APAGAR":
             self._apagar()
-        elif nome in ("AP", "PE"):
-            self._mover_para(nome)
         elif nome == "CIRC":
             self._circularizar()
         elif nome in ("ANT", "PROX"):
@@ -367,17 +367,6 @@ class Editor:
             self.avisar("Sem no: aperte NOVO")
             return
         self._escolhido = nos[(i + sentido) % len(nos)]
-
-    def _mover_para(self, ponto):
-        achado = self._no_escolhido(criar=True)
-        nave, nos, i = achado
-        orbita, desde = self._antes_do_no(nave, nos, i)
-        ut = self._quando(orbita, desde, math.pi if ponto == "AP" else 0.0)
-        if ut is None:
-            self.avisar(f"Sem {ponto} nesta orbita")
-            return
-        self._escolhido.ut = ut
-        self.avisar(f"No {i + 1} no {ponto}")
 
     def _circularizar(self):
         """Acerta o nó para a órbita ficar circular no ponto onde ele está."""
@@ -476,9 +465,12 @@ class Editor:
 
     # ---- o que a página mostra ----
 
+    def _txt_passo(self, nome):
+        return txt_passo(nome, PASSOS[nome][self._passo])
+
     def estado(self):
         aviso = self._aviso if time.monotonic() < self._aviso_ate else ""
-        passos = {nome: txt_passo(nome, PASSOS[nome][i]) for nome, i in self._passos.items()}
+        passos = {nome: self._txt_passo(nome) for nome in PASSOS}
         try:
             secoes = self._secoes()
         except (ValueError, RuntimeError) as e:
@@ -494,7 +486,7 @@ class Editor:
         secoes = []
 
         if i is None:
-            secoes.append({"titulo": "NO DE MANOBRA", "linhas": [["Nenhum no", "aperte NOVO, AP, PE ou CIRC"]]})
+            secoes.append({"titulo": "NO DE MANOBRA", "linhas": [["Nenhum no", "aperte NOVO ou CIRC"]]})
             orbita_antes, orbita_depois, no = nave.orbit, None, None
         else:
             no = nos[i]
@@ -526,7 +518,7 @@ class Editor:
             elif abs(graus - 180) < 1:
                 onde = " (no AP)"
         altitude = orbita.radius_at(no.ut) - orbita.body.equatorial_radius
-        passo = {n: txt_passo(n, PASSOS[n][self._passos[n]]) for n in PASSOS}
+        passo = {n: self._txt_passo(n) for n in PASSOS}
         linhas = [
             ["No", f"{i + 1} de {total}"],
             ["Pro-grado", txt_vel(no.prograde, True), f"passo {passo['PRO']}"],
@@ -625,7 +617,7 @@ class Editor:
             ]
         except (ValueError, RuntimeError):
             linhas = [["Vista", "camera indisponivel"]]
-        return {"titulo": "CAMERA DO MAPA (temporario: vai para o joystick)", "linhas": linhas}
+        return {"titulo": "CAMERA DO MAPA (temporario: vai para o joystick, modo CAMERA)", "linhas": linhas}
 
 
 # ---------------------------------------------------------------------------

@@ -125,12 +125,12 @@ Assim, não existe tabela de slots no firmware. O Mega avisa a ponte qual módul
 | Action groups 1 a 10 | 10 | 10 | média | 8 | 4, 8 |
 | EVA | 11 | 12 | média | 9 | 1, 4, 8 |
 | Navegação | 10 | 0 | média | 10 | 2, 4, 8 |
-| Câmera | 10 | 0 | média | 11 | 1, 2, 4, 8 |
-| Editor de manobras | 17 | 0 | grande | 12 | 3, 4, 7, 8 |
+| Câmera (com o MAPA) | 11 | 0 | média | 11 | 1, 2, 4, 8 |
+| Editor de manobras | 14 | 0 | grande | 12 | 3, 4, 7, 8 |
 
 São 6 pequenas, 5 médias e 1 grande, que ocupam os 12 slots. As seções da primeira linha ficam longe uma da outra no painel, mas podem dividir uma placa: os fios dos botões até a placa podem ter uns 30 cm.
 
-A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e as seções analógicas podem ficar só com botões e LEDs. Os korry switches também gastam mais LEDs que entradas. Ver [construcao.md](construcao.md#a-decidir).
+A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e as seções analógicas podem ficar só com botões e LEDs. O editor de manobras passou a ter chaves de alavanca no lugar dos encoders e ficou com 14 entradas: cabe numa placa média (16), e aí sobra a grande. Os korry switches também gastam mais LEDs que entradas. Ver [construcao.md](construcao.md#a-decidir).
 
 ## No módulo
 

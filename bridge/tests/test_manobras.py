@@ -19,7 +19,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 from manobras import (
-    PASSOS, Editor, angulo_de_voo, duracao_queima, falta_para_circular, para_o_no,
+    Editor, angulo_de_voo, duracao_queima, falta_para_circular, para_o_no,
     tempo_ate_anomalia,
 )
 
@@ -337,46 +337,48 @@ class TestEditor(unittest.TestCase):
 
     def test_circ_fora_do_apoastro_zera_o_normal(self):
         self.editor.comando("BTN NOVO 1")
-        self.editor.comando("BTN TEMPO 1")          # passo de 1 min
-        self.editor.comando("ENC TEMPO -7")
-        self.editor.comando("ENC NRM 20")
+        self.editor.comando("BTN PASSO 1")          # passo de 10 m/s e 1 min
+        self.editor.comando("INC TEMPO -7")
+        self.editor.comando("INC NRM 2")
         self.editor.comando("BTN CIRC 1")
         (no,) = self.nos()
         self.assertEqual(no.normal, 0.0)
         self.assertNotAlmostEqual(no.radial, 0.0, places=1)
         self.assertLess(no.orbit.eccentricity, 1e-6)
 
-    def test_encoders_e_passos(self):
+    def test_ajustes_e_passo(self):
         self.editor.comando("BTN NOVO 1")
         (no,) = self.nos()
-        self.editor.comando("ENC PRO 3")            # passo inicial: 1 m/s
-        self.editor.comando("BTN PRO 1")            # 10 m/s
-        self.editor.comando("ENC PRO -1")
-        self.assertAlmostEqual(no.prograde, -7.0)
-        for _ in range(3):
-            self.editor.comando("BTN RAD 1")        # 10, 100, volta para 0.1
-        self.editor.comando("ENC RAD 5")
-        self.assertAlmostEqual(no.radial, 0.5)
+        self.editor.comando("INC PRO 3")            # passo inicial: 1 m/s
         ut = no.ut
-        self.editor.comando("ENC TEMPO 2")          # 10 s
+        self.editor.comando("INC TEMPO 2")          # e 10 s
         self.assertAlmostEqual(no.ut, ut + 20)
-        self.editor.comando("ENC TEMPO -100000")    # não vai para o passado
+        self.editor.comando("BTN PASSO 1")          # um passo só: 10 m/s e 1 min
+        self.editor.comando("INC PRO -1")
+        self.assertAlmostEqual(no.prograde, -7.0)
+        self.editor.comando("INC TEMPO 1")
+        self.assertAlmostEqual(no.ut, ut + 80)
+        self.editor.comando("BTN PASSO 1")          # 100 m/s
+        self.editor.comando("BTN PASSO 1")          # volta para 0.1 m/s
+        self.editor.comando("INC RAD 5")
+        self.assertAlmostEqual(no.radial, 0.5)
+        self.editor.comando("INC TEMPO -100000")    # não vai para o passado
         self.assertGreater(no.ut, self.sc.ut)
-        self.assertEqual(set(self.editor.estado()["passos"]), set(PASSOS))
+        self.assertEqual(self.editor.estado()["passos"], {"PRO": "0.1 m/s", "NRM": "0.1 m/s", "RAD": "0.1 m/s", "TEMPO": "1 s"})
 
     def test_varios_nos(self):
         self.editor.comando("BTN CIRC 1")
         self.editor.comando("BTN NOVO 1")           # depois do primeiro
         primeiro, segundo = self.nos()
         self.assertGreater(segundo.ut, primeiro.ut)
-        self.editor.comando("ENC PRO 5")            # mexe no escolhido: o novo
+        self.editor.comando("INC PRO 5")            # mexe no escolhido: o novo
         self.assertEqual(segundo.prograde, 5.0)
         antes = primeiro.prograde
         self.editor.comando("BTN ANT 1")
-        self.editor.comando("ENC PRO 1")
+        self.editor.comando("INC PRO 1")
         self.assertAlmostEqual(primeiro.prograde, antes + 1)
-        self.editor.comando("BTN PE 1")             # primeiro nó no periastro da órbita da nave
-        self.assertAlmostEqual(self.nave.orbit.radius_at(primeiro.ut), self.nave.orbit.periapsis, delta=1.0)
+        self.editor.comando("BTN PROX 1")
+        self.editor.comando("BTN PROX 1")           # dá a volta: de novo o primeiro
         self.editor.comando("BTN APAGAR 1")
         self.assertEqual(self.nos(), [segundo])
         self.editor.comando("BTN APAGAR 1")
@@ -410,8 +412,10 @@ class TestEditor(unittest.TestCase):
         self.assertEqual(cam.mode, "automatic")
 
     def test_linha_errada(self):
-        self.editor.comando("ENC PRO x")
-        self.assertEqual(self.editor.estado()["aviso"], "ERR ENC PRO x")
+        self.editor.comando("INC PRO x")
+        self.assertEqual(self.editor.estado()["aviso"], "ERR INC PRO x")
+        self.editor.comando("BTN AP 1")             # AP e PE saíram: o TEMPO leva o nó
+        self.assertEqual(self.editor.estado()["aviso"], "ERR BTN AP")
         self.editor.comando("BTN NOVO 0")           # soltar não faz nada
         self.assertEqual(self.nos(), [])
 
