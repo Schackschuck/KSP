@@ -573,5 +573,47 @@ class TestConversaComAPonte(unittest.TestCase):
         self.assertIn("desconhecida", fbw.executar("APV ALT abc", guiagem))
 
 
+class ControleDeMentira:
+    """Guarda o que foi mandado ao jogo, como vessel.control."""
+
+    def __init__(self):
+        self.mandados = []
+
+    def __setattr__(self, nome, valor):
+        if nome != "mandados":
+            self.mandados.append((nome, valor))
+        object.__setattr__(self, nome, valor)
+
+
+class TestSemJoystick(unittest.TestCase):
+    def test_manche_sempre_solto(self):
+        m, apertou = fbw.SemJoystick().ler()
+        self.assertEqual((m.pitch, m.roll, m.yaw, m.acelerador, apertou), (0.0, 0.0, 0.0, None, False))
+
+    def test_na_lei_direta_o_teclado_fica_com_o_manche(self):
+        controle = ControleDeMentira()
+        controles = fbw.Controles(controle)
+        controles.mandar(fbw.Comandos(0.3, -0.2, 0.1, None))        # voando no FBW
+        self.assertEqual(len(controle.mandados), 3)
+        controle.mandados.clear()
+        controles.mandar(fbw.Comandos(0.0, 0.0, 0.0, None), livre=True)   # voltou à lei direta
+        self.assertEqual(controle.mandados, [("pitch", 0.0), ("roll", 0.0), ("yaw", 0.0)])
+        controle.mandados.clear()
+        for _ in range(5):
+            controles.mandar(fbw.Comandos(0.0, 0.0, 0.0, None), livre=True)
+        self.assertEqual(controle.mandados, [])                       # não briga com o teclado
+        controles.mandar(fbw.Comandos(0.0, 0.1, 0.0, None))           # o FBW assumiu de novo
+        self.assertEqual(len(controle.mandados), 3)
+
+    def test_piloto_automatico_voa_sem_manche(self):
+        aviao = Aviao()
+        guiagem = fbw_no_ar(aviao, velocidade_alvo=150.0)
+        guiagem.definir("HDG", 120.0)
+        guiagem.alternar_modo("HDG")
+        joystick = fbw.SemJoystick()
+        voar(aviao, guiagem, 40.0, lambda t: joystick.ler()[0])
+        self.assertAlmostEqual(angulo180(trajetoria(aviao)[1] - 120.0), 0.0, delta=1.0)
+
+
 if __name__ == "__main__":
     unittest.main()
