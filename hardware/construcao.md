@@ -95,7 +95,7 @@ Cada seção do painel é **um painel frontal removível, com o seu módulo para
 
 ### Peças impressas
 
-- Korry switches (abaixo).
+- Korry switches ([korry/](korry/README.md)).
 - Knobs dos encoders dos displays (eixo de 6 mm com lado chato), com um risco que marca a posição.
 - Tecla do TEMPO do editor de manobras, se a basculante pronta não funcionar bem deitada: uma tecla impressa sobre dois botões táteis, com uma mola que a traz de volta ao meio.
 - Moldura da mikromedia e suporte do celular.
@@ -127,7 +127,7 @@ O primeiro painel desenhado, no tamanho padrão de 150 × 150 mm e com as peças
 
 | Peça | Qtd | Na frente | Furo no painel | Atrás do painel | Onde |
 |---|---|---|---|---|---|
-| Korry feito em casa | 6 | 20 × 20 mm | 20,4 × 20,4 mm | ~25 mm | PRO, NRM, RAD, NOVO, APAGAR, CIRC |
+| [Korry feito em casa](korry/README.md) | 6 | 22,5 × 22,5 mm | 23 × 23 mm | ~24 mm | PRO, NRM, RAD, NOVO, APAGAR, CIRC |
 | Encoder EC11 + knob de alumínio | 1 | knob Ø 30 × 17 mm | Ø 7 mm (rosca M7) | ~20 mm | Ajuste do Δv, 20 cliques por volta |
 | Chave rotativa de 1 polo e 12 posições | 1 | knob Ø 22 mm | Ø 9,5 mm (rosca M9) | ~30 mm, corpo Ø 26 mm | PASSO, com o anel de batente em 4 posições |
 | Tecla basculante (ON)-OFF-(ON) | 1 | 21 × 15 mm | 19 × 13 mm | ~20 mm | TEMPO, montada deitada |
@@ -151,37 +151,19 @@ Com uma chave alavanca, a chave pode ficar para cima com o SAS desligado pelo jo
 
 ### Como fazer
 
-Korry de avião de verdade custa caro. Dá para fazer um bem parecido:
+A peça tem ficha própria em [korry/](korry/README.md): medidas, desenho, peças, circuito, brilho e o que cada luz diz. Resumo:
 
-```
-  vista em corte
-
-   ┌─────────────────┐  ← tampa: acrílico leitoso 3 mm, cortado a laser,
-   │   S A S         │    pintado de preto e com a legenda gravada
-   │─────────────────│  ← divisória impressa: a luz de cima não vaza para baixo
-   │    O F F        │
-   ├─┬─────────────┬─┤
-   │ │ LED   LED   │ │  ← um LED para cada metade da legenda
-   │ │  ▲     ▲    │ │  ← corpo impresso, desliza para baixo quando apertado
-   │ └──┬───────┬──┘ │
-   │   [microswitch] │  ← botão tátil de 12 × 12 mm ou microswitch
-   └─────────────────┘  ← base impressa, presa atrás do painel frontal
-```
-
-- **Corpo e base:** impressos em PLA preto, com uns 20 a 25 mm de lado. A base passa pelo furo quadrado do painel frontal e é presa por trás.
-- **Tampa:** acrílico branco leitoso de 3 mm, cortado a laser. Duas opções de legenda:
-  - pintar de preto e gravar a laser as letras, que ficam iluminadas;
-  - deixar sem pintura e colar uma legenda impressa em transparência.
-- **Divisória:** uma parede no meio do corpo impresso separa as duas metades da legenda.
-- **Contato:** um botão tátil de 12 × 12 mm ou um microswitch. O clique dá a sensação de botão de avião.
-- **LEDs:** dois LEDs de alto brilho de 3 mm, das cores da tabela de aparência. Atrás do acrílico, a luz perde força: testar o brilho no protótipo.
+- **Um tamanho só, 22,5 × 22,5 mm**, em todo o cockpit. Furo de 23 × 23 mm no painel.
+- **Legenda em duas metades**, como o START do A320: em cima só as letras, embaixo as letras numa caixa. Ou uma legenda única, sem a divisória.
+- **Tampa de acrílico leitoso** pintada e gravada a laser; corpo, divisória e base impressos em PLA preto.
+- **Plaquinha atrás**, com um LED por metade e um botão tátil de 6 × 6 mm no meio, que o pino da divisória aperta. Conector de 4 pinos: GND, botão, LED de cima e LED de baixo.
+- **LEDs comuns, pelas saídas do 74HC595 do módulo.** A cor é a do LED, fixa por metade.
 
 **Alternativa pronta:** botões quadrados iluminados de 16 mm, vendidos no AliExpress. São mais fáceis, mas têm uma luz só, de uma cor, e a legenda fica por conta própria.
 
 ### No painel e no firmware
 
-- **Cada korry usa 1 entrada e 1 ou 2 LEDs** de um módulo. A legenda de duas metades gasta mais LEDs que entradas, o contrário das chaves: a tabela de seções do [README do hardware](README.md#qual-placa-e-qual-etiqueta-em-cada-seção) precisa ser revista quando for decidido quais chaves viram korry.
-- **Brilho:** o resistor de 1 kΩ da placa dá uns 3 mA por LED. Atrás do acrílico pode ser pouco. Se for, trocar o resistor daquela saída por um menor, lembrando o limite de 70 mA por 74HC595.
+- **Cada korry usa 1 entrada e 0, 1 ou 2 LEDs** de um módulo. A legenda de duas metades gasta mais LEDs que entradas, o contrário das chaves: a tabela de seções do [README do hardware](README.md#qual-placa-e-qual-etiqueta-em-cada-seção) precisa ser revista quando for decidido quais chaves viram korry.
 - **Protocolo:** o korry manda um evento de botão (`BTN SAS 1`) em vez de chave (`SW SAS 1`), e a ponte inverte o estado no jogo. A mudança fica toda na ponte: o firmware já manda botões.
 
 ## Joystick: Logitech Extreme 3D Pro
