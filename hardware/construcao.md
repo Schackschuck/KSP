@@ -21,19 +21,9 @@ Este documento trata da parte física do cockpit: o formato da caixa, a aparênc
 
 A referência são os painéis de avião, como o overhead do A320 e o MCP do Boeing: sóbrios, cinza escuro, legendas brancas e botões iluminados. O KSP entra nos detalhes.
 
-- **Painel:** cinza escuro ou preto, fosco. Legendas brancas, em maiúsculas, com fonte sem serifa e sem acentos (como no LCD).
-- **Cores das luzes, sempre com o mesmo significado:**
+Cores, letras, medidas do painel, grupos, peças e as regras para organizar um painel estão na [identidade visual](identidade_visual.md). Vale para todo painel novo.
 
-  | Cor | Significa | Exemplos |
-  |---|---|---|
-  | Verde | Sistema ligado, tudo normal | SAS, RCS, trem baixado |
-  | Branco | Informação, modo escolhido | Modo do SAS, página da tela |
-  | Âmbar | Atenção | Combustível baixo, script armado |
-  | Vermelho | Perigo | ABORT, script abortado |
-
-  Como nos LEDs dos módulos, **a luz mostra o estado do jogo**, nunca a posição da chave.
 - **Zona de perigo:** o ABORT fica numa área com faixa zebrada amarela e preta, com capa de proteção vermelha. O STAGE e as chaves ARM também ficam debaixo de capas.
-- **Seções bem separadas:** cada seção do painel tem o nome gravado em cima e uma linha em volta, como nos painéis de avião. Assim a mão acha a seção sem olhar.
 - **Iluminação das legendas (ideia):** gravadas num acrílico pintado, as legendas deixam passar a luz de LEDs brancos por trás e acendem no escuro. Um knob de brilho no painel (um potenciômetro, ou PWM do Mega) regula todas juntas.
 
 ## Formato da caixa
@@ -71,7 +61,7 @@ Cada seção do painel é **um painel frontal removível, com o seu módulo para
 - **Painel frontal:** MDF ou acrílico de 3 mm, cortado e gravado a laser. Furos, legendas e linhas das seções saem no mesmo corte.
 - **Módulo:** preso atrás do painel com espaçadores M3.
 - **Fixação na caixa:** parafusos M3 em insertos roscados, colocados a quente em peças impressas, ou em porcas cativas. Parafuso direto no MDF espana depois de algumas desmontagens.
-- **Tamanho padrão: 150 × 150 mm.** Todo painel de seção tem a mesma frente, então qualquer um troca de lugar com outro, e seções novas cabem sem refazer a caixa. Uma fileira de 4 painéis tem 600 mm. Uma seção que precise de mais espaço ocupa dois quadrados (300 × 150 mm). Parafusos M3 nos cantos, a 6 mm das bordas.
+- **Tamanho padrão: 150 × 150 mm** ([identidade visual](identidade_visual.md#painel)). Todo painel de seção tem a mesma frente, então qualquer um troca de lugar com outro, e seções novas cabem sem refazer a caixa. Uma fileira de 4 painéis tem 600 mm. Uma seção que precise de mais espaço ocupa dois quadrados (300 × 150 mm). Parafusos M3 nos cantos, a 6 mm das bordas.
 
 ### Estrutura
 
