@@ -181,6 +181,7 @@ As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão 
 | `SEMEC <0\|1>`, `SEMMP <0\|1>` | `1` com o SAS ligado sem carga elétrica, ou o RCS ligado sem monopropelente | Metade de baixo do SAS e do RCS, em âmbar | — |
 | `LEI <FBW\|DIRETA\|CHAO\|OFF>` | A lei do fly by wire: `FBW`, `DIRETA` no ar, `CHAO` (direta no chão). `OFF` sem o `fbw.py` aberto | `FBW` verde; `DIRETA` âmbar | Linha do FBW, na página do piloto |
 | `TRAVA <metros>` ou `TRAVA OFF` | A altitude travada pelo FBW | TRAVA ALT verde | Linha do FBW |
+| `ESTOL <0\|1>` | `1` com o alpha floor do FBW ligado: o avião devagar demais para a asa | Luz ESTOL vermelha, piscando | Alarme sonoro: dois bipes por segundo |
 | `APL <HDG\|ALT\|VS> <0\|1\|2>` | Modo do piloto: `0` desligado, `1` ligado, `2` armado (o ALT subindo ou descendo até a altitude) | Luz do modo, verde com `1` ou `2` | Azul armado, verde ligado |
 | `APV <HDG\|ALT\|VS> <valor>` | O valor escolhido: rumo em graus (0 a 359), altitude em metros, velocidade vertical em décimos de m/s | — | O valor da linha |
 | `APC <HDG\|ALT\|VS> <0\|1>` | A linha do cursor, e `1` se ela está escolhida (girar muda o valor) | — | O cursor, ou a caixa âmbar no valor |
@@ -192,7 +193,7 @@ As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão 
 
 ### Ponte da tela ⇄ fly by wire
 
-O `fbw.py` manda por UDP para a porta **50100** da ponte da tela, 10 vezes por segundo, num pacote só, uma linha por vez: o ponto (`FBW`), a lei (`LEI`), a trava (`TRAVA`) e os modos do piloto (`APL`), como na tabela acima. A ponte responde para o endereço de onde o pacote veio:
+O `fbw.py` manda por UDP para a porta **50100** da ponte da tela, 10 vezes por segundo, num pacote só, uma linha por vez: o ponto (`FBW`), a lei (`LEI`), a trava (`TRAVA`), o alpha floor (`ESTOL`) e os modos do piloto (`APL`), como na tabela acima. A ponte responde para o endereço de onde o pacote veio:
 
 | Mensagem | Quando | Significado |
 |---|---|---|
@@ -200,4 +201,4 @@ O `fbw.py` manda por UDP para a porta **50100** da ponte da tela, 10 vezes por s
 | `CMD HDG`, `CMD ALT`, `CMD VS` | O encoder segurado 1 s | Liga ou desliga o modo |
 | `APV <HDG\|ALT\|VS> <valor>` | Quando muda e 1 vez por segundo | O valor escolhido no menu |
 
-Sem notícia do `fbw.py` por 1 s, a ponte manda `LEI OFF`, `TRAVA OFF` e os `APL` em `0`, e não manda nada a ele. O `fbw.py` só liga um modo voando na lei do FBW; o que ele faz em cada modo está em [docs/fbw.md](fbw.md#piloto-automático).
+Sem notícia do `fbw.py` por 1 s, a ponte manda `LEI OFF`, `TRAVA OFF`, `ESTOL 0` e os `APL` em `0`, e não manda nada a ele. O `fbw.py` só liga um modo voando na lei do FBW; o que ele faz em cada modo está em [docs/fbw.md](fbw.md#piloto-automático).

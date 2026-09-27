@@ -75,7 +75,10 @@ MODOS_KRPC = {
 MODOS_DO_KRPC = {krpc: nome for nome, krpc in MODOS_KRPC.items()}
 
 # Linhas de estado do fbw.py, e o que vale sem ele aberto.
-FBW_FECHADO = {"LEI": "LEI OFF", "TRAVA": "TRAVA OFF", "APL HDG": "APL HDG 0", "APL ALT": "APL ALT 0", "APL VS": "APL VS 0"}
+FBW_FECHADO = {
+    "LEI": "LEI OFF", "TRAVA": "TRAVA OFF", "ESTOL": "ESTOL 0",
+    "APL HDG": "APL HDG 0", "APL ALT": "APL ALT 0", "APL VS": "APL VS 0",
+}
 
 # Perto do chão, a altitude passa a ser a do radar (acima do chão, ou do mar).
 # Entra abaixo de RADAR_ENTRA e só sai acima de RADAR_SAI: a folga evita
@@ -417,6 +420,8 @@ class Scripts:
             self._estado["LEI"] = linha
         elif len(partes) == 2 and partes[0] == "TRAVA" and (partes[1] == "OFF" or numeros[0] is not None):
             self._estado["TRAVA"] = linha
+        elif partes in (["ESTOL", "0"], ["ESTOL", "1"]):
+            self._estado["ESTOL"] = linha
         elif len(partes) == 3 and partes[0] == "APL" and f"APL {partes[1]}" in self._estado and partes[2] in ("0", "1", "2"):
             self._estado[f"APL {partes[1]}"] = linha
         else:
@@ -763,12 +768,16 @@ class FbwDemo:
     """Faz o papel do scripts/fbw.py na demonstração: um avião voando no FBW.
 
     Os modos ligam e desligam com os comandos do painel, e o ALT fica armado
-    por uns segundos antes de chegar na altitude.
+    por uns segundos antes de chegar na altitude. A cada 2 minutos, por 8 s,
+    o avião fica devagar demais: o alpha floor liga (ESTOL), e os modos desligam.
     """
 
     ALT_DEMORA = 6.0   # s até o ALT armado "chegar"
+    ESTOL_A_CADA = 120.0
+    ESTOL_DURA = 8.0
 
     def __init__(self):
+        self._inicio = time.monotonic()
         self.ligado = True
         self.modos = dict.fromkeys(("HDG", "ALT", "VS"), False)
         self._alt_desde = None
@@ -797,6 +806,10 @@ class FbwDemo:
         print(f"FBW (demonstração): {linha}")
 
     def estado(self):
+        t = time.monotonic() - self._inicio
+        estol = self.ligado and self.ESTOL_A_CADA - self.ESTOL_DURA <= t % self.ESTOL_A_CADA
+        if estol:
+            self.modos = dict.fromkeys(self.modos, False)   # o piloto automático desliga
         alt = 0
         if self.modos["ALT"]:
             alt = 1 if time.monotonic() - self._alt_desde > self.ALT_DEMORA else 2
@@ -805,6 +818,7 @@ class FbwDemo:
         return {
             "LEI": f"LEI {'FBW' if self.ligado else 'DIRETA'}",
             "TRAVA": f"TRAVA {self.trava if self.trava is not None else 'OFF'}",
+            "ESTOL": f"ESTOL {int(estol)}",
             "APL HDG": f"APL HDG {int(self.modos['HDG'])}",
             "APL ALT": f"APL ALT {alt}",
             "APL VS": f"APL VS {int(self.modos['VS'])}",

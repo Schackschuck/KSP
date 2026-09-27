@@ -17,6 +17,11 @@ manche, o ponto fica onde está e o avião vai até ele e segue nele.
   de subida que dá a velocidade vertical escolhida; ALT sobe ou desce até a
   altitude escolhida (armado) e segura nela (ligado). Mexer o manche para os
   lados desliga o HDG; para trás ou para a frente, o ALT e o V/S.
+- Alpha floor, como no Airbus: com o ângulo de ataque perto de ALFA_MAX (o
+  avião devagar demais para a asa segurar), o acelerador vai a 100% sozinho,
+  o piloto automático desliga e o painel acende ESTOL, com alarme na tela.
+  Sai quando o ângulo de ataque volta; o acelerador fica no máximo até o
+  piloto mexer nele.
 - Proteções: inclinação das asas até INCLINACAO_MAX, ângulo de subida entre
   GAMA_MIN e GAMA_MAX e ângulo de ataque até ALFA_MAX: puxar o manche não
   estola o avião.
@@ -107,6 +112,11 @@ KP_ROLL = 5.0            # 1/s
 KI_ROLL = 2.0            # 1/s²: só perto da inclinação pedida, para o aileron que o avião torto precisa
 INTEGRA_ROLL = math.radians(5.0)   # rad: mais longe que isso, o integral do roll fica parado
 AUTORIDADE_MIN = 0.2     # rad/s²: abaixo disso, o que o jogo informa é ruído (evita dividir por quase zero)
+
+# ---- alpha floor: perto do estol, acelerador no máximo ----
+ALFA_FLOOR = ALFA_MAX - 0.5   # graus: com o ângulo de ataque acima disso, entra (a curva devagar usa até ~90% de ALFA_MAX)
+ALFA_FLOOR_SAI = ALFA_MAX - 5.0  # graus: sai com o ângulo de ataque abaixo disso...
+FLOOR_SAI_DEPOIS = 2.0       # s: ...por esse tempo seguido
 
 # ---- piloto automático: HDG, ALT e V/S ----
 VV_ALT_PADRAO = 10.0     # m/s: com o ALT armado e o V/S desligado, sobe ou desce com isso
@@ -270,6 +280,8 @@ class FlyByWire:
         self.ap_valores = dict.fromkeys(MODOS_AP, None)  # rumo (graus), altitude (m), velocidade vertical (m/s)
         self.alt_capturada = False   # o ALT chegou na altitude e segura nela
         self._sem_trava_auto = False  # a trava foi solta no korry: não trava sozinho até o manche mexer
+        self.estol = False           # alpha floor ligado: acelerador no máximo
+        self._floor_abaixo = 0.0     # s seguidos com o ângulo de ataque abaixo de ALFA_FLOOR_SAI
         self.taxas = (0.0, 0.0, 0.0)  # rad/s: giro medido em pitch, roll e yaw
         self.diagnostico = {}        # o que cada camada pediu, para o terminal e a gravação
         self._no_ar_desde = None     # ut da decolagem
@@ -314,10 +326,10 @@ class FlyByWire:
         self.ap_valores[nome] = valor
 
     def alternar_modo(self, nome):
-        """Liga ou desliga um modo. Só liga voando na lei do FBW."""
+        """Liga ou desliga um modo. Só liga voando na lei do FBW, fora do alpha floor."""
         if self.ap[nome]:
             self.ap[nome] = False
-        elif self.lei == FBW:
+        elif self.lei == FBW and not self.estol:
             self.ap[nome] = True
             if nome == "ALT":
                 self.alt_capturada = False
@@ -355,6 +367,7 @@ class FlyByWire:
         self.lei = lei
         self.altitude_travada = None
         self._pedido_trava = self._sem_trava_auto = False
+        self.estol = False
         if lei == DIRETA:
             # Sem o FBW, não há ponto: o piloto automático desliga, como no avião.
             self.ponto = self.comando = None
@@ -536,7 +549,21 @@ class FlyByWire:
             "giro_pitch_c": math.degrees(giro_pitch_c),
             "giro_roll_c": math.degrees(giro_roll_c),
         }
+        self._alpha_floor(math.degrees(alfa), dt)
         return Comandos(pitch, roll, yaw, self._acelerador(l, m, v, dt))
+
+    def _alpha_floor(self, alfa, dt):
+        """Liga o alpha floor perto do estol; desliga quando a asa folga por um tempo."""
+        if not self.estol:
+            if alfa > ALFA_FLOOR:
+                self.estol = True
+                self._floor_abaixo = 0.0
+                # O piloto automático desliga: o avião volta para o piloto.
+                self.ap = dict.fromkeys(MODOS_AP, False)
+            return
+        self._floor_abaixo = self._floor_abaixo + dt if alfa < ALFA_FLOOR_SAI else 0.0
+        if self._floor_abaixo >= FLOOR_SAI_DEPOIS:
+            self.estol = False
 
     def _inclinacao_maxima(self, carga, alfa, dt):
         """Até onde as asas podem inclinar sem o avião descer.
@@ -572,7 +599,13 @@ class FlyByWire:
         return self._integrar(eixo, ki * erro / autoridade * dt, kp * erro / autoridade, -1.0, 1.0)
 
     def _acelerador(self, l, m, v, dt):
-        """Na mão do piloto, ou segurando velocidade_alvo (SPD, ainda sem interface)."""
+        """Na mão do piloto, ou segurando velocidade_alvo (SPD, ainda sem interface).
+
+        No alpha floor, no máximo. Depois, fica lá até o piloto mexer nele,
+        como o TOGA LOCK do Airbus: ninguém tira a potência sem querer."""
+        if self.estol:
+            self._integral["acelerador"] = 1.0
+            return 1.0
         if self.velocidade_alvo is None:
             return m.acelerador
         erro = self.velocidade_alvo - v
@@ -793,13 +826,14 @@ def linhas_de_estado(fbw):
         pitch, rumo = fbw.comando
         ponto = f"FBW {round(pitch * 10)} {round(rumo * 10) % 3600}"
     if fbw is None:
-        return [ponto, "LEI OFF", "TRAVA OFF"] + [f"APL {nome} 0" for nome in MODOS_AP]
+        return [ponto, "LEI OFF", "TRAVA OFF", "ESTOL 0"] + [f"APL {nome} 0" for nome in MODOS_AP]
     if fbw.lei == FBW:
         lei = "FBW"
     else:
         lei = "CHAO" if fbw.no_chao else "DIRETA"
     trava = "OFF" if fbw.altitude_travada is None else str(round(fbw.altitude_travada))
-    return [ponto, f"LEI {lei}", f"TRAVA {trava}"] + [f"APL {nome} {fbw.estado_ap(nome)}" for nome in MODOS_AP]
+    estol = f"ESTOL {int(fbw.estol)}"
+    return [ponto, f"LEI {lei}", f"TRAVA {trava}", estol] + [f"APL {nome} {fbw.estado_ap(nome)}" for nome in MODOS_AP]
 
 
 def executar(linha, fbw):
@@ -956,7 +990,10 @@ def voar(conn, nave, joystick, tela, gravador):
                 texto = executar(linha.strip(), fbw) if linha.strip() else None
                 if texto:
                     print(texto)
+            estol = fbw.estol
             c = fbw.passo(l, m)
+            if fbw.estol != estol:
+                print("ESTOL: acelerador no máximo, piloto automático desligado" if fbw.estol else "Saiu do estol")
             controles.mandar(c, livre=getattr(joystick, "manche_livre", False) and fbw.lei == DIRETA)
             gravador.gravar(l, m, c, fbw)
 

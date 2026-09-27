@@ -14,7 +14,7 @@
   :root {
     --painel: #30353a; --borda: #15181b; --legenda: #eef0ea; --apoio: #b9bfc5;
     --korry: #15181b; --apagado: #555c63;
-    --verde: #46d37f; --azul: #4c9dff; --ambar: #f2a93b;
+    --verde: #46d37f; --azul: #4c9dff; --ambar: #f2a93b; --vermelho: #e5484d;
     --k: min(14.5vw, 76px);        /* lado de um korry */
     --vao: calc(var(--k) * 0.133); /* 3 mm num korry de 22,5 mm */
   }
@@ -90,6 +90,11 @@
     border: 2px solid #8a9096; box-sizing: border-box; display: inline-block;
   }
   .luz.acesa i { background: var(--verde); box-shadow: 0 0 8px var(--verde); }
+  /* ESTOL: vermelho, piscando, como um alarme de avião. */
+  .luz.estol { margin-top: 4px; }
+  .luz.estol.acesa i { background: var(--vermelho); box-shadow: 0 0 10px var(--vermelho); animation: pisca .5s steps(2) infinite; }
+  .luz.estol.acesa { color: var(--vermelho); }
+  @keyframes pisca { 50% { opacity: .25; } }
   .apoio { color: var(--apoio); font-size: 9px; text-align: center; margin-top: 6px; line-height: 1.4; }
   #conexao { color: var(--ambar); text-align: center; font-size: 12px; min-height: 16px; margin-top: 10px; }
   .sem-sinal .korry, .sem-sinal .luz { opacity: .45; }
@@ -101,7 +106,7 @@
   verdade (hardware/construcao.md#painel-de-sistemas-de-controle) e mandam
   as mesmas linhas para a ponte da tela (bridge/mfd.py): BTN <nome> 1,
   BTN AP 0 e ENC AP <cliques>. As luzes acendem com as linhas que a ponte
-  manda de volta (SASM, SAS, RCS, SEMEC, SEMMP, LEI, TRAVA, APL), como o
+  manda de volta (SASM, SAS, RCS, SEMEC, SEMMP, LEI, TRAVA, ESTOL, APL), como o
   painel vai acender os LEDs. Protocolo em docs/protocolo.md.
 -->
 <div class="painel" id="painel">
@@ -138,6 +143,7 @@
           <span class="luz" id="APL-HDG">HDG <i></i></span>
           <span class="luz" id="APL-ALT">ALT <i></i></span>
           <span class="luz" id="APL-VS">V/S <i></i></span>
+          <span class="luz estol" id="ESTOL">ESTOL <i></i></span>
         </div>
       </div>
       <div class="apoio">GIRAR: LINHA OU VALOR &middot; APERTAR: ESCOLHE &middot; SEGURAR 1 S: LIGA</div>
@@ -232,6 +238,8 @@ function interpretar(linha) {
     acender("DIRETA", p[1] === "DIRETA");
   } else if (p[0] === "TRAVA" && p.length === 2) {
     acender("TRAVA", p[1] !== "OFF");
+  } else if (p[0] === "ESTOL" && p.length === 2) {
+    document.getElementById("ESTOL").classList.toggle("acesa", p[1] === "1");
   } else if (p[0] === "APL" && p.length === 3) {
     const luz = document.getElementById(`APL-${p[1]}`);
     if (!luz) return false;

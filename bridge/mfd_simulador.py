@@ -125,6 +125,12 @@ FAIXA_PASSO = 46
 LINHAS_AP = ("HDG", "ALT", "VS")
 NOMES_AP = {"HDG": "HDG", "ALT": "ALT", "VS": "V/S"}
 ESTADO_AP = {0: ("DESLIGADO", APAGADO), 1: ("LIGADO", VERDE), 2: ("ARMADO", AZUL)}
+# Alarme de estol (alpha floor do fly by wire): dois bipes por segundo.
+ALARME_HZ = 880
+ALARME_BIPE = 0.12      # s de cada bipe
+ALARME_VAO = 0.08       # s entre os dois
+ALARME_REPETE = 1.0     # s
+
 LEIS = {
     "FBW": ("LEI FBW", VERDE),
     "DIRETA": ("LEI DIRETA", AMBAR),
@@ -219,11 +225,32 @@ class Simulador:
         self._cursor = ("HDG", False)                           # (linha, escolhida)
         self._lei = "OFF"
         self._trava = None
+        self._estol = False
+        self._proximo_alarme = 0.0
+        self._alarme = self._preparar_alarme()
 
         self._ultima_valida = float("-inf")
         self._toque = (None, float("-inf"))   # último botão tocado e quando
         self._proximo_quadro = 0.0
         self._saida = ["READY"]    # como a placa, avisa que acabou de ligar
+
+    @staticmethod
+    def _preparar_alarme():
+        """Dois bipes agudos, o alarme de estol. None se o PC não tem som."""
+        try:
+            import numpy
+            pygame.mixer.init(frequency=22050, size=-16, channels=1)
+            taxa = pygame.mixer.get_init()[0]
+            t = numpy.arange(int(taxa * ALARME_BIPE)) / taxa
+            bipe = (numpy.sign(numpy.sin(2 * numpy.pi * ALARME_HZ * t)) * 5000).astype(numpy.int16)
+            vao = numpy.zeros(int(taxa * ALARME_VAO), dtype=numpy.int16)
+            onda = numpy.concatenate([bipe, vao, bipe])
+            if pygame.mixer.get_init()[2] == 2:
+                onda = numpy.column_stack([onda, onda])
+            return pygame.sndarray.make_sound(onda)
+        except (pygame.error, ImportError) as e:
+            print(f"Simulador sem som (o alarme de estol não vai tocar): {e}")
+            return None
 
     # ---- a mesma interface da classe Painel (ponte.py) ----
 
@@ -251,6 +278,10 @@ class Simulador:
                 self._tocar(evento.pos[0] // self._zoom, evento.pos[1] // self._zoom)
 
         agora = time.monotonic()
+        com_sinal = agora - self._ultima_valida < SEM_SINAL
+        if self._alarme is not None and self._estol and com_sinal and agora >= self._proximo_alarme:
+            self._alarme.play()
+            self._proximo_alarme = agora + ALARME_REPETE
         if agora >= self._proximo_quadro:
             self._desenhar(agora)
             self._proximo_quadro = agora + 1 / QUADROS_POR_SEGUNDO
@@ -303,6 +334,8 @@ class Simulador:
             self._cursor = (partes[0], partes[1] == "1")
         elif nome == "LEI" and len(partes) == 1 and partes[0] in LEIS:
             self._lei = partes[0]
+        elif nome == "ESTOL" and partes in (["0"], ["1"]):
+            self._estol = partes[0] == "1"
         elif nome == "TRAVA" and (partes == ["OFF"] or (len(partes) == 1 and tudo_numero)):
             self._trava = None if partes == ["OFF"] else numeros[0]
         elif nome == "MODO" and partes in (["SUP"], ["ORB"], ["ALVO"]):

@@ -615,5 +615,50 @@ class TestSemJoystick(unittest.TestCase):
         self.assertAlmostEqual(angulo180(trajetoria(aviao)[1] - 120.0), 0.0, delta=1.0)
 
 
+class TestAlphaFloor(unittest.TestCase):
+    def test_devagar_demais_acelera_desliga_o_piloto_e_recupera(self):
+        # Motor parado: segurando a altitude, o avião perde velocidade até a asa chegar no limite.
+        aviao = Aviao(velocidade=(0.0, 0.0, 110.0), acelerador=0.0)
+        guiagem = fbw_no_ar(aviao)
+        self.assertFalse(guiagem.estol)
+        altitude = aviao.altitude
+        guiagem.definir("HDG", 90.0)
+        guiagem.alternar_modo("HDG")
+        visto = {"estol": False, "ap_com_estol": False, "menor": aviao.altitude}
+
+        def medir(a, g):
+            if g.estol:
+                visto["estol"] = True
+                visto["ap_com_estol"] |= any(g.ap.values())
+            visto["menor"] = min(visto["menor"], a.altitude)
+
+        voar(aviao, guiagem, 120.0, a_cada_passo=medir)
+        self.assertTrue(visto["estol"])
+        self.assertFalse(visto["ap_com_estol"])            # o piloto automático desligou
+        self.assertFalse(guiagem.ap["HDG"])
+        self.assertEqual(aviao.acelerador, 1.0)             # e o acelerador ficou no máximo
+        self.assertFalse(guiagem.estol)                     # a asa folgou: saiu do estol
+        self.assertGreater(modulo(aviao.velocidade), 100.0)
+        self.assertLessEqual(aviao.maior_alfa, ALFA_MAX + 1.0)
+        self.assertGreater(visto["menor"], altitude - 100.0)
+
+    def test_voo_normal_nao_entra(self):
+        aviao = Aviao()
+        guiagem = fbw_no_ar(aviao, velocidade_alvo=150.0)
+        voar(aviao, guiagem, 30.0, lambda t: Manche(roll=0.5))
+        self.assertFalse(guiagem.estol)
+
+    def test_lei_direta_sai_e_a_linha_vai_para_a_ponte(self):
+        aviao = Aviao(velocidade=(0.0, 0.0, 80.0), acelerador=0.0)
+        guiagem = fbw_no_ar(aviao)          # a 80 m/s, nivelado já passa do limite
+        self.assertTrue(guiagem.estol)
+        self.assertIn("ESTOL 1", fbw.linhas_de_estado(guiagem))
+        self.assertFalse(guiagem.alternar_modo("HDG"))   # não liga o piloto no alpha floor
+        guiagem.ligado = False
+        voar(aviao, guiagem, 0.1)
+        self.assertFalse(guiagem.estol)
+        self.assertIn("ESTOL 0", fbw.linhas_de_estado(guiagem))
+
+
 if __name__ == "__main__":
     unittest.main()

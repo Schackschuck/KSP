@@ -27,6 +27,17 @@ O manche move um **ponto na navball**, que diz para onde o avião deve ir: um ru
 - **Ângulo de subida entre −30° e +30°.**
 - **Ângulo de ataque até 15°:** puxar o manche não estola o avião. Sem motor, o avião vai perdendo velocidade e desce devagar, com a asa no limite.
 
+### Alpha floor
+
+Devagar demais, a asa no limite do ângulo de ataque não sustenta o peso, e o avião vai afundando, mesmo com o ponto no horizonte: a proteção não deixa estolar, mas também não faz milagre. Como no Airbus, o FBW então corrige:
+
+- Com o ângulo de ataque acima de **14,5°** (0,5° antes do limite), o **acelerador vai a 100%**, o **piloto automático desliga** e o painel acende a luz **ESTOL**, vermelha e piscando, com dois bipes por segundo na tela. O terminal mostra `ESTOL`.
+- O nariz continua na proteção dos 15°, e o avião ganha velocidade. Com o ângulo de ataque abaixo de **10°** por **2 s**, o alarme para.
+- **O acelerador fica no máximo** até o piloto mexer nele (a alavanca do joystick, ou Shift e Ctrl), como o TOGA LOCK do Airbus: ninguém tira a potência sem querer.
+- Durante o alpha floor, o piloto automático não liga.
+- Sem motor, ou com pouco, o alarme continua: o avião desce devagar, com a asa no limite.
+- Na curva devagar, a asa usa até uns 13,5° (90% do que aguenta), abaixo do alpha floor: curva não liga o alarme.
+
 **Lei direta:** no chão, e com o FBW desligado pelo botão, o manche mexe direto nas superfícies, como no jogo sem o script. O FBW assume sozinho 1 s depois de o avião sair do chão, e volta para a lei direta ao tocar no chão. No ar ralo, ou muito devagar, as superfícies não seguram o avião, e também fica a lei direta.
 
 **O acelerador fica com o piloto.** A alavanca do joystick vai para o jogo só quando é mexida, e as teclas Shift e Ctrl do jogo continuam valendo (a última que mexeu ganha). O acelerador automático (SPD) já existe por dentro (`FlyByWire.velocidade_alvo`) e é usado nos testes, mas ainda não tem como ser ligado.
@@ -58,6 +69,7 @@ Por cima do FBW, como um piloto que não cansa: cada modo só mexe no ponto, e a
 | Escolhe ALT 300 m acima e liga, com o V/S ligado | ALT azul (armado); perto da altitude, nivela, fica verde e o V/S desliga |
 | Mexe o manche para o lado | O HDG desliga (luz apagada); o ALT continua |
 | Aperta TRAVA ALT | A trava liga na altitude do momento; o terminal mostra `trava` no status |
+| Com a trava ligada, tira o motor (Ctrl ou X) e espera | O avião perde velocidade. Perto de 14,5° de ângulo de ataque: `ESTOL`, acelerador em 100%, piloto automático desligado, luz ESTOL piscando e alarme. Depois de recuperar, o alarme para, e o acelerador fica no máximo até você mexer |
 
 **Pronto quando:** um avião decola na mão, e o piloto automático leva ele até a altitude e o rumo escolhidos no painel e segura lá.
 
@@ -210,7 +222,8 @@ A guiagem (`FlyByWire`) não conhece o kRPC nem o joystick, como a do pouso: rec
 | O SAS liga sozinho e o terminal diz `SAS desligado` de novo | Alguém apertou T | O FBW desliga o SAS, que brigaria com ele pelo manche |
 | O ponto não aparece na tela | A ponte da tela não está aberta, ou está em outro computador | Abrir o `mfd.py`; em outro computador, `--tela <IP>` e liberar a porta UDP 50100 no firewall |
 | O painel mostra `FBW FECHADO` e os modos não ligam | A ponte não recebe o `fbw.py` | Abrir o `fbw.py`, com `--tela <IP>` se a ponte está noutro computador. As respostas voltam para a porta de onde o `fbw.py` manda: no firewall, liberar o Python |
-| Segurar o encoder não liga o modo | O avião está na lei direta (no chão, ou FBW desligado) | Normal: o piloto automático só liga voando no FBW |
+| Segurar o encoder não liga o modo | O avião está na lei direta (no chão, ou FBW desligado), ou no alpha floor | Normal: o piloto automático só liga voando no FBW, fora do alpha floor |
+| O avião afunda com o ponto no horizonte, e a luz ESTOL pisca | Devagar demais para a asa | O alpha floor já pôs o acelerador no máximo; se não houver motor, desça para ganhar velocidade ([Alpha floor](#alpha-floor)) |
 | `Nenhum joystick encontrado`, e não há joystick | O script espera um joystick | `--sem-joystick`: decola pelo teclado, e o piloto automático voa ([Sem joystick](#sem-joystick)) |
 
 ## Próximos passos

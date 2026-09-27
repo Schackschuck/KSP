@@ -289,6 +289,7 @@ Como nos aviões da Airbus, o manche não mexe nas superfícies: ele diz para on
 
 - **O ponto do FBW:** o manche move um ponto na navball, um rumo e um ângulo de subida, e o avião voa até o pró-grado ficar em cima dele. Soltando o manche, o ponto fica onde está. Com o manche solto e o ponto perto do horizonte, o avião trava a altitude.
 - **Proteções:** asas até 60° (menos se a asa não aguenta: a curva abre em vez de o avião descer), subida entre −30° e +30° e ângulo de ataque até 15°.
+- **Alpha floor:** devagar demais para a asa (ângulo de ataque perto dos 15°), o acelerador vai ao máximo, o piloto automático desliga, a luz ESTOL do painel pisca e a tela toca um alarme.
 - **Lei direta** no chão e com o botão do FBW desligado: o manche vai direto para as superfícies. O FBW assume 1 s depois da decolagem.
 - **Sem joystick** (`--sem-joystick`): decola pelo teclado do jogo, na lei direta, e no ar o piloto automático voa pelo painel.
 - **O acelerador fica com o piloto.** O acelerador automático (SPD) já existe por dentro, ainda sem interface.
@@ -437,7 +438,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [ ] 2× encoders rotativos (KY-040), para escolher o que os displays mostram
 - [ ] Editor de manobras ([peças e medidas](hardware/construcao.md#painel-do-editor-de-manobras)): 1× encoder EC11 com knob de alumínio de 30 mm; 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm; 1× tecla basculante (*rocker*) com mola para o centro, (ON)-OFF-(ON), de 21 × 15 mm; 2× botões de metal de 12 mm sem trava; 6 korry (peças na fase 2)
 - [ ] 1 botão para o MAPA, na seção da câmera, se não sobrar da fase 2
-- [ ] Sistemas de controle ([peças e medidas](hardware/construcao.md#painel-de-sistemas-de-controle)): 1× encoder EC11 com botão e knob de alumínio de 30 mm; 10× LED azul e verde de 3 mm, difuso, catodo comum (korry dos modos); 3× LED verde de 3 mm com anel de metal; 14 korry (peças na fase 2); 1 módulo grande
+- [ ] Sistemas de controle ([peças e medidas](hardware/construcao.md#painel-de-sistemas-de-controle)): 1× encoder EC11 com botão e knob de alumínio de 30 mm; 10× LED azul e verde de 3 mm, difuso, catodo comum (korry dos modos); 3× LED verde e 1× LED vermelho de 3 mm com anel de metal; 14 korry (peças na fase 2); 1 módulo grande
 - [ ] 1× chave de 3 posições (ON-OFF-ON, sem mola) para o modo do joystick: VOO, CÂMERA e TRANSLAÇÃO
 - [ ] 1 m de fita WS2812B (60 LEDs/m) + resistor 330 Ω + capacitor 1000 µF
 - [ ] 2–4× motores de passo X27.168 (ponteiros)

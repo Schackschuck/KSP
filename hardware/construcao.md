@@ -130,11 +130,11 @@ As medidas são as de catálogo das peças comuns. Conferir cada uma no paquíme
 
 O painel que junta o SAS, o RCS, o fly by wire e o piloto automático de avião: tudo que controla para onde a nave aponta. Tamanho padrão de 150 × 150 mm, com as peças no tamanho de catálogo. O que cada controle faz está no roteiro do [piloto automático](../README.md#piloto-automático-de-avião) e no [protocolo](../docs/protocolo.md#painel-de-sistemas-de-controle).
 
-![Painel de sistemas de controle: dez korry de modo do SAS com o PRO aceso em verde, korry SAS, RCS, FBW e TRAVA ALT, e o encoder do piloto automático com as luzes HDG, ALT e V/S](img/sistemas.svg)
+![Painel de sistemas de controle: dez korry de modo do SAS com o PRO aceso em verde, korry SAS, RCS, FBW e TRAVA ALT, e o encoder do piloto automático com as luzes HDG, ALT, V/S e ESTOL](img/sistemas.svg)
 
 - **ATITUDE:** os 10 modos do SAS em pares, o modo em cima e o oposto embaixo: ESTAB e MANOBRA, PRO e RETRO, NORMAL e ANTINRM, RAD FORA e RAD DENTRO, ALVO e ANTIALVO. A legenda é o marcador da navball, com a palavra embaixo. Cada korry tem um LED de duas cores: **azul** enquanto a nave vira para o marcador, **verde** quando chegou e o SAS segura nele, apagado quando o modo não está escolhido. Apertar um modo que o jogo não aceita (sem alvo, sem nó de manobra, SAS fraco) não faz nada.
 - **SISTEMAS:** a nave em cima (SAS e RCS), o avião embaixo (FBW e TRAVA ALT). A metade de baixo acende em âmbar quando falta alguma coisa: `SEM EC` (o SAS sem carga elétrica), `SEM MP` (o RCS sem monopropelente) e `DIRETA` (o avião no ar na lei direta).
-- **PILOTO AUTO:** um encoder só para HDG, ALT e V/S, mexido pelo menu da página do piloto na tela multifunção: girar move o cursor, apertar escolhe a linha e girar muda o valor, apertar de novo sai, e segurar 1 s liga ou desliga o modo da linha. Três luzes verdes ao lado mostram, sem olhar a tela, quais modos estão ligados.
+- **PILOTO AUTO:** um encoder só para HDG, ALT e V/S, mexido pelo menu da página do piloto na tela multifunção: girar move o cursor, apertar escolhe a linha e girar muda o valor, apertar de novo sai, e segurar 1 s liga ou desliga o modo da linha. Três luzes verdes ao lado mostram, sem olhar a tela, quais modos estão ligados. Embaixo delas, separada por um traço, a luz vermelha **ESTOL** pisca quando o avião fica devagar demais para a asa: o FBW põe o acelerador no máximo e desliga o piloto automático (o *alpha floor*, ver [docs/fbw.md](../docs/fbw.md#alpha-floor)), e a tela toca um alarme.
 - **Sem tela:** os valores do piloto e a roda dos modos do SAS aparecem em páginas da tela multifunção, que abrem sozinhas quando o painel é mexido.
 
 | Peça | Qtd | Na frente | Furo no painel | Atrás do painel | Onde |
@@ -144,9 +144,10 @@ O painel que junta o SAS, o RCS, o fly by wire e o piloto automático de avião:
 | [Korry feito em casa](korry/README.md), legenda única | 1 | 22,5 × 22,5 mm | 23 × 23 mm | ~24 mm | TRAVA ALT |
 | Encoder EC11 com botão + knob de alumínio | 1 | knob Ø 30 × 17 mm | Ø 7 mm (rosca M7) | ~20 mm | Piloto automático, 20 cliques por volta |
 | LED verde de 3 mm com anel de metal | 3 | anel Ø 5 mm | Ø 5 mm | ~10 mm | HDG, ALT, V/S |
+| LED vermelho de 3 mm com anel de metal | 1 | anel Ø 5 mm | Ø 5 mm | ~10 mm | ESTOL |
 | Parafuso M3 | 4 | cabeça Ø 5,5 mm | Ø 3,2 mm | inserto roscado | Cantos |
 
-São 17 entradas (10 modos, 4 korry e as 3 do encoder: A, B e o aperto) e 30 LEDs (20 dos modos, 2 do SAS, 2 do RCS, 2 do FBW, 1 da TRAVA e as 3 luzes): uma placa grande, com 4 × 74HC595. Ver a [tabela de placas](README.md#qual-placa-e-qual-etiqueta-em-cada-seção).
+São 17 entradas (10 modos, 4 korry e as 3 do encoder: A, B e o aperto) e 31 LEDs (20 dos modos, 2 do SAS, 2 do RCS, 2 do FBW, 1 da TRAVA, as 3 luzes do piloto e a do ESTOL): uma placa grande, com 4 × 74HC595. Ver a [tabela de placas](README.md#qual-placa-e-qual-etiqueta-em-cada-seção).
 
 ## Korry switches
 

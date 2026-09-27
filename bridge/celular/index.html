@@ -116,6 +116,7 @@ const estado = {
   ap: { HDG: [0, null], ALT: [0, null], VS: [0, null] },  // [estado, valor]
   cursor: ["HDG", false],                              // [linha, escolhida]
   lei: "OFF", trava: null,
+  estol: false,                                        // alpha floor do fly by wire: toca o alarme
   ultimaValida: -Infinity,
   toque: [null, -Infinity],
 };
@@ -163,6 +164,8 @@ function interpretar(mensagem) {
     estado.cursor = [partes[0], partes[1] === "1"];
   } else if (nome === "LEI" && partes.length === 1 && ["FBW", "DIRETA", "CHAO", "OFF"].includes(partes[0])) {
     estado.lei = partes[0];
+  } else if (nome === "ESTOL" && partes.length === 1 && ["0", "1"].includes(partes[0])) {
+    estado.estol = partes[0] === "1";
   } else if (nome === "TRAVA" && (off || (partes.length === 1 && tudoNumero))) {
     estado.trava = off ? null : numeros[0];
   } else if (nome === "MODO" && partes.length === 1 && ["SUP", "ORB", "ALVO"].includes(partes[0])) {
@@ -708,6 +711,38 @@ function telaCheia() {
     .catch(() => {});
 }
 
+// ---------- alarme sonoro ----------
+
+// ESTOL: dois bipes agudos por segundo enquanto o alpha floor do FBW estiver
+// ligado. O navegador só deixa tocar som depois de um toque na página, então
+// o primeiro toque (o mesmo da tela cheia) liga o som.
+const ALARME = { hz: 880, bipe: 0.12, vao: 0.08, repete: 1000 };
+let audio = null;
+
+function liberarSom() {
+  if (audio) return;
+  const Contexto = window.AudioContext || window.webkitAudioContext;
+  if (Contexto) audio = new Contexto();
+}
+
+function bipe(quando) {
+  const osc = audio.createOscillator(), volume = audio.createGain();
+  osc.type = "square";
+  osc.frequency.value = ALARME.hz;
+  volume.gain.value = 0.15;
+  osc.connect(volume).connect(audio.destination);
+  osc.start(quando);
+  osc.stop(quando + ALARME.bipe);
+}
+
+setInterval(() => {
+  const comSinal = performance.now() - estado.ultimaValida < SEM_SINAL;
+  if (!audio || !estado.estol || !comSinal) return;
+  const agora = audio.currentTime;
+  bipe(agora);
+  bipe(agora + ALARME.bipe + ALARME.vao);
+}, ALARME.repete);
+
 function tocar(nome) {
   estado.toque = [nome, performance.now()];
   mandar(`TOQUE ${nome}`);
@@ -715,6 +750,7 @@ function tocar(nome) {
 
 canvas.addEventListener("pointerdown", (e) => {
   telaCheia();   // o primeiro toque põe em tela cheia, onde o navegador deixa
+  liberarSom();  // e libera o alarme sonoro
   if (estado.pagina !== "NAV") return;   // as páginas do painel são só para ver
   const x = (e.clientX - deslocX) / escala, y = (e.clientY - deslocY) / escala;
   for (const [nome, [cx, cy]] of Object.entries(BOTOES_REDONDOS)) {
