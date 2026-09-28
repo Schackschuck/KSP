@@ -16,7 +16,8 @@ Se a verificação falhar, não fazer o merge: corrigir primeiro ou explicar o q
 
 ## Convenções
 
-- Conversas, comentários de código, documentação e mensagens de commit em **português**.
+- Conversas, documentação e mensagens de commit em **português**.
+- **Código gerado sem comentários:** todo código novo ou reescrito (Python, JavaScript, HTML, CSS, C/Arduino) vai sem comentários de linha ou de bloco e sem docstrings. O que precisar de explicação vai para a documentação em `docs/` ou para o `README.md`.
 - Textos do LCD e da serial em ASCII, sem acentos.
 - A arquitetura, o roteiro das fases e as decisões ficam no `README.md`; o protocolo serial, em `docs/protocolo.md`.
 - Todo painel segue a identidade visual de `hardware/identidade_visual.md`. Para propor o desenho de um painel, usar a skill `/desenhar-painel`; os desenhos são gerados por `node hardware/desenho/desenhar.js`.
