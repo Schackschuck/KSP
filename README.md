@@ -309,6 +309,13 @@ Como nos aviões da Airbus, o manche não mexe nas superfícies: ele diz para on
 
 **Pronto quando:** um avião decola na lei direta e, com o FBW, voa reto, faz curvas, sobe e desce só pelo ponto, sem balançar.
 
+**Anotado depois dos primeiros voos no jogo** (a fazer):
+
+- [ ] **O FBW está muito instável no jogo.** Ainda falta ver como ele fica e o porquê; gravar um voo com `--gravar voo.csv` ajuda a achar qual camada balança ([Ajustar](docs/fbw.md#ajustar)).
+- [ ] **Não ligar o FBW sozinho na decolagem.** Hoje ele assume 1 s depois de sair do chão; passa a começar desligado e só liga pelo korry FBW (ou pelo botão do joystick).
+- [ ] **Tirar a recuperação automática do estol**, que só deu problema no jogo. A decidir: tirar só o nariz para baixo, as asas niveladas e a trava solta (#36), ou também o acelerador no máximo e o piloto automático desligado (#34).
+- [ ] **Avisar o estol também fora do FBW** (na lei direta): a luz ESTOL e o alarme pelo ângulo de ataque, mesmo sem o FBW voando.
+
 ### Piloto automático de avião
 
 **Status: código escrito e testado com o avião simulado e a demonstração; falta testar no jogo.** O `fbw.py` voa HDG, ALT e V/S mexendo no ponto ([docs/fbw.md](docs/fbw.md#piloto-automático)), e o painel de sistemas é, por enquanto, uma página de botões aberta pela ponte da tela ([docs/mfd.md](docs/mfd.md#painel-de-sistemas-de-controle)), com a roda do SAS e a página do piloto na tela.
@@ -318,6 +325,8 @@ Como nos aviões da Airbus, o manche não mexe nas superfícies: ele diz para on
 - [x] Tela do celular e simulador: a roda dos modos do SAS e a página do piloto.
 - [x] `scripts/fbw.py`: HDG, ALT e V/S mexendo no ponto; FBW e TRAVA pelo painel; estado e comandos por UDP com a ponte da tela; testes no avião simulado.
 - [ ] Testar no jogo: os modos do SAS e as luzes ([roteiro](docs/mfd.md#testar-o-painel-sem-o-ksp)), e o piloto automático num avião ([roteiro](docs/fbw.md#piloto-automático)).
+- [ ] **Tela: tirar os botões redondos SAS e RCS da navball.** Eles ficam só no painel.
+- [ ] **Tela: as páginas que abrem sozinhas** (a roda do SAS, a do piloto e as outras que aparecem por cima da navball) **ficam 6 s** depois do último toque, em vez de 10 s.
 - [ ] O painel de verdade: as mesmas linhas pela serial do Mega, e as pontes do painel e da tela juntas.
 
 Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing, o FCU do Airbus).
