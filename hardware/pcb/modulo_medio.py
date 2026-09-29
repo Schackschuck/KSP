@@ -32,41 +32,35 @@ FAB = os.path.join(PASTA, 'fabricacao')
 LIBS = os.environ.get('KICAD7_FOOTPRINT_DIR', '/usr/share/kicad/footprints')
 FREEROUTING = os.environ.get('FREEROUTING_JAR', '/opt/fr/fr.jar')
 
-LARGURA, ALTURA = 100.0, 86.0
-Y_CIMA, Y_BAIXO = 14.0, 50.0
-X_RA, X_RB = 72.5, 82.5
-X_J, X_RN, X_U = 7.5, 11.5, 18.0
-X_J1, X_J6, X_RN1, X_SW1, X_U1, X_U45, X_JL = 32.5, 43.0, 30.0, 34.0, 47.5, 61.0, 94.0
+LARGURA, ALTURA = 100.0, 100.0
+Y_A, Y_B = 16.0, 58.0
+Y_KA, Y_KB = 5.0, 95.0
+X_U4, X_U5, X_U2, X_U6, X_U3, X_U1 = 4.0, 27.0, 51.0, 4.0, 27.0, 61.0
+PASSO_R = 3.3
 
 POSICOES = {
-    'J1': (X_J1, Y_CIMA - 2.0, 0), 'J6': (X_J6, Y_CIMA - 2.0, 0), 'C6': (76.0, ALTURA - 8.0, 0),
-    'RN1': (X_RN1, Y_BAIXO - 2.54, 270), 'SW1': (X_SW1, Y_BAIXO, 0),
-    'U1': (X_U1, Y_BAIXO, 0), 'C1': (X_U1 + 1.5, Y_BAIXO - 4.5, 0),
+    'U4': (X_U4, Y_A, 0), 'U5': (X_U5, Y_A, 0), 'U2': (X_U2, Y_A, 0), 'RN2': (X_U2 + 12.0, Y_A - 2.54, 270),
+    'C4': (X_U4 + 1.5, Y_A - 4.5, 0), 'C5': (X_U5 + 1.5, Y_A - 4.5, 0), 'C2': (X_U2 + 1.5, Y_A - 4.5, 0),
+    'J1': (70.0, Y_A - 1.0, 0), 'J6': (80.0, Y_A, 0),
+    'U6': (X_U6, Y_B, 0), 'U3': (X_U3, Y_B, 0), 'RN3': (X_U3 + 12.0, Y_B - 2.54, 270),
+    'RN1': (44.0, Y_B - 2.54, 270), 'SW1': (48.0, Y_B, 0), 'U1': (X_U1, Y_B, 0), 'J2': (75.0, Y_B, 0),
+    'C7': (X_U6 + 1.5, Y_B - 4.5, 0), 'C3': (X_U3 + 1.5, Y_B - 4.5, 0), 'C1': (X_U1 + 1.5, Y_B - 4.5, 0),
+    'C6': (82.0, 80.0, 0),
 }
-for y0, j, rn, u, c, ul, cl, jl in ((Y_CIMA, 'J2', 'RN2', 'U2', 'C2', 'U4', 'C4', 'J4'),
-                                    (Y_BAIXO, 'J3', 'RN3', 'U3', 'C3', 'U5', 'C5', 'J5')):
-    POSICOES[j] = (X_J, y0, 0)
-    POSICOES[rn] = (X_RN, y0 - 2.54, 270)
-    POSICOES[u] = (X_U, y0, 0)
-    POSICOES[c] = (X_U + 1.5, y0 - 4.5, 0)
-    POSICOES[ul] = (X_U45, y0, 0)
-    POSICOES[cl] = (X_U45 + 1.5, y0 - 4.5, 0)
-    POSICOES[jl] = (X_JL, y0, 0)
-for i in range(8):
-    x = X_RA if i % 2 == 0 else X_RB
-    POSICOES['R%d' % (i + 1)] = (x, Y_CIMA + 2.54 * i, 0)
-    POSICOES['R%d' % (i + 9)] = (x, Y_BAIXO + 2.54 * i, 0)
+for banco, (xu, y0) in enumerate(((X_U4, Y_A), (X_U5, Y_A), (X_U6, Y_B))):
+    for i in range(8):
+        POSICOES['R%d' % (8 * banco + i + 1)] = (xu + 12.0, y0 - 1.0 + PASSO_R * i, 0)
+for i in range(6):
+    POSICOES['K%d' % (i + 1)] = (10.0 + 14.2 * i, Y_KA, 0)
+    POSICOES['K%d' % (i + 7)] = (10.0 + 14.2 * i, Y_KB, 0)
 
-FUROS = [(4.0, 4.0), (LARGURA - 4.0, 4.0), (4.0, ALTURA - 4.0), (LARGURA - 4.0, ALTURA - 4.0)]
+FUROS = [(3.5, 3.5), (LARGURA - 3.5, 3.5), (3.5, ALTURA - 3.5), (LARGURA - 3.5, ALTURA - 3.5)]
 
 ROTULOS = {
-    'J2': ['IN0', 'IN1', 'IN2', 'IN3', 'IN4', 'IN5', 'IN6', 'IN7', 'GND', 'GND'],
-    'J3': ['IN8', 'IN9', 'IN10', 'IN11', 'IN12', 'IN13', 'IN14', 'IN15', 'GND', 'GND'],
-    'J4': ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'GND', 'GND'],
-    'J5': ['L8', 'L9', 'L10', 'L11', 'L12', 'L13', 'L14', 'L15', 'GND', 'GND'],
+    'J2': ['IN12', 'IN13', 'IN14', 'IN15', 'GND'],
     'J6': ['+5V', 'AN_A', 'AN_B', 'AN_C', 'GND'],
 }
-LADO_ROTULO = {'J2': -1, 'J3': -1, 'J4': 1, 'J5': 1, 'J6': 1}
+LADO_ROTULO = {'J2': 1, 'J6': 1}
 
 CLASSES = {
     'Default': {'track_width': 0.3, 'clearance': 0.2, 'via_diameter': 0.8, 'via_drill': 0.4},
@@ -236,6 +230,16 @@ def montar(comps, nets):
             fp.Reference().SetPosition(pt(x + 3.81, y + 8.89))
             fp.Reference().SetTextAngleDegrees(90)
             fp.Reference().SetTextSize(pcbnew.VECTOR2I(mm(1.2), mm(1.2)))
+        if ref.startswith('K'):
+            fp.Reference().SetPosition(pt(x + 3.75, y + 1.7))
+            fp.Reference().SetTextSize(pcbnew.VECTOR2I(mm(0.8), mm(0.8)))
+            fp.Reference().SetTextThickness(mm(0.12))
+        if ref.startswith('C') and ref != 'C6':
+            fp.Reference().SetPosition(pt(x + 2.5, y))
+            fp.Reference().SetTextSize(pcbnew.VECTOR2I(mm(0.8), mm(0.8)))
+            fp.Reference().SetTextThickness(mm(0.12))
+        if ref == 'J1':
+            fp.Reference().SetPosition(pt(x + 1.27, y + 24.0))
         if ref in ROTULOS:
             fp.Reference().SetPosition(pt(x, y + 2.54 * (len(ROTULOS[ref]) - 1) + 2.4))
 
@@ -252,14 +256,14 @@ def montar(comps, nets):
         lado = LADO_ROTULO[ref]
         for k, r in enumerate(rotulos):
             texto(board, r, x0 + lado * 1.9, y0 + 2.54 * k, tam=0.9, just=lado)
-    for y0 in (Y_CIMA, Y_BAIXO):
-        texto(board, 'BOTOES', X_J - 1.2, y0 - 3.2, tam=0.9)
-        texto(board, 'LEDS', X_JL, y0 - 3.2, tam=0.9)
-    texto(board, 'ANALOG', X_J6, Y_CIMA - 4.2, tam=0.9)
-    texto(board, 'BACKPLANE', X_J1 + 1.3, Y_CIMA - 9.4, tam=0.9)
-    texto(board, 'ETIQUETA', X_SW1 + 3.8, Y_BAIXO - 5.1, tam=0.9)
-    texto(board, 'KSP COCKPIT  MODULO MEDIO  REV 1', 40.0, ALTURA - 3.2, tam=1.2, grosso=0.18)
-    texto(board, '220R: EVITE OS 8 LEDS DE UM 595 ACESOS JUNTOS', 40.0, ALTURA - 5.6, tam=0.9)
+    texto(board, 'ANALOG', 80.0, Y_A - 3.8, tam=0.9)
+    texto(board, 'BOTOES', 75.0, Y_B - 3.2, tam=0.9)
+    t = texto(board, 'BACKPLANE', 77.2, Y_A + 9.0, tam=0.9)
+    t.SetTextAngleDegrees(90)
+    texto(board, 'ETIQUETA', 51.8, Y_B - 4.6, tam=0.9)
+    texto(board, 'KSP COCKPIT  MODULO MEDIO  REV 2', LARGURA / 2, 44.2, tam=1.2, grosso=0.18)
+    texto(board, 'KORRY: 1 GND  2 BOTAO  3 LED CIMA  4 LED BAIXO', LARGURA / 2, 46.8, tam=0.9)
+    texto(board, '220R: EVITE OS 8 LEDS DE UM 595 ACESOS JUNTOS', LARGURA / 2, 49.0, tam=0.9)
     board.SynchronizeNetsAndNetClasses(True)
     return board
 

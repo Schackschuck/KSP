@@ -73,7 +73,7 @@ São uns 36 no cockpit inteiro. Vale fazer em série: uma peça bem resolvida, r
 ```
 
 - **Não tem CI nem resistor no korry.** O pull-up da entrada e os resistores dos LEDs já estão no módulo (ver o [README do hardware](../README.md#no-módulo)). O korry é só botão, LEDs e fios.
-- **Conector de 4 pinos, passo de 2,54 mm:** 1 GND, 2 BTN, 3 LC (LED de cima), 4 LB (LED de baixo). Barra de pinos com cabo dupont no protótipo; JST-XH de 4 vias na versão final, para não soltar.
+- **Conector de 4 pinos:** 1 GND, 2 BTN, 3 LC (LED de cima), 4 LB (LED de baixo). Barra de pinos de 2,54 mm com cabo dupont no protótipo; JST-XH de 4 vias (passo de 2,5 mm) na versão final, para não soltar. O [módulo médio](../README.md#pcb-do-módulo-médio) já tem 12 jacks JST-XH nessa ordem: o korry do jack Kk usa a entrada IN(k−1) e as saídas LED(2k−2) e LED(2k−1).
 - **Apertado lê 0**, como qualquer botão dos módulos.
 - **Cada korry gasta 1 entrada e 0, 1 ou 2 saídas de LED:**
   - duas metades: 2 saídas;
@@ -84,7 +84,7 @@ São uns 36 no cockpit inteiro. Vale fazer em série: uma peça bem resolvida, r
 
 ### Brilho
 
-Com o resistor de 1 kΩ do módulo, cada LED recebe uns 3 mA (uns 2 mA os brancos). Atrás de 3 mm de acrílico leitoso pode ser pouco.
+Com o resistor de 1 kΩ do módulo, cada LED recebe uns 3 mA (uns 2 mA os brancos). Atrás de 3 mm de acrílico leitoso pode ser pouco. O módulo médio usa 220 Ω, uns 13 mA por LED: bem mais forte, mas passa do limite do 74HC595 com os 8 LEDs dele acesos juntos.
 
 1. Testar primeiro com 1 kΩ, no escuro e de dia.
 2. Se ficar fraco, trocar o resistor daquela saída no módulo por 470 Ω: uns 6 mA por LED.

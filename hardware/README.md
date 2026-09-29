@@ -5,7 +5,7 @@ Esquemáticos do painel, feitos no KiCad. Cada pasta tem também um PDF do esque
 | Pasta | Placa | CIs |
 |---|---|---|
 | [`modulo_pequeno/`](modulo_pequeno/) | Módulo pequeno: 8 entradas e 8 LEDs ([PDF](modulo_pequeno/modulo_pequeno.pdf)) | etiqueta + 1 × 74HC165, 1 × 74HC595 |
-| [`modulo_medio/`](modulo_medio/) | Módulo médio: 16 entradas e 16 LEDs ([PDF](modulo_medio/modulo_medio.pdf), [PCB](#pcb-do-módulo-médio)) | etiqueta + 2 × 74HC165, 2 × 74HC595 |
+| [`modulo_medio/`](modulo_medio/) | Módulo médio: 16 entradas e 24 LEDs, com 12 jacks de korry ([PDF](modulo_medio/modulo_medio.pdf), [PCB](#pcb-do-módulo-médio)) | etiqueta + 2 × 74HC165, 3 × 74HC595 |
 | [`modulo_grande/`](modulo_grande/) | Módulo grande: 24 entradas e 32 LEDs ([PDF](modulo_grande/modulo_grande.pdf)) | etiqueta + 3 × 74HC165, 4 × 74HC595 (o esquema ainda tem 2: ver [Próximos passos](#próximos-passos)) |
 | [`backplane/`](backplane/) | Backplane: liga até 12 módulos ao Mega ([PDF](backplane/backplane.pdf)) | — |
 
@@ -137,8 +137,8 @@ A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e
 | O que liga | Pequeno | Médio | Grande | Como |
 |---|---|---|---|---|
 | Etiqueta | SW1 | SW1 | SW1 | Chave DIP de 8 vias, conforme a tabela acima. |
-| Botões e chaves | J2 (IN0–IN7) | J2, J3 (IN0–IN15) | J2, J3, J4 (IN0–IN23) | Entre o INn e o GND do próprio conector. Apertado ou ligado lê **0** (pull-up de 10 kΩ). |
-| LEDs | J3 (LED0–LED7) | J4, J5 (LED0–LED15) | J5, J6 (LED0–LED15) e, quando o esquema tiver os 4 × 74HC595, mais dois conectores (LED16–LED31) | Anodo no LEDn, catodo no GND. O resistor já está na placa. Na pequena e na grande é de 1 kΩ: uns 3 mA por LED, e os 8 LEDs de um 74HC595 ficam abaixo de 70 mA. Na média é de 220 Ω, que acende mais forte: uns 13 mA por LED, e os 8 de um 74HC595 acesos juntos passam dos 70 mA do CI. |
+| Botões e chaves | J2 (IN0–IN7) | K1–K12 (IN0–IN11) e J2 (IN12–IN15) | J2, J3, J4 (IN0–IN23) | Entre o INn e o GND do próprio conector. Apertado ou ligado lê **0** (pull-up de 10 kΩ). |
+| LEDs | J3 (LED0–LED7) | K1–K12 (LED0–LED23) | J5, J6 (LED0–LED15) e, quando o esquema tiver os 4 × 74HC595, mais dois conectores (LED16–LED31) | Anodo no LEDn, catodo no GND. O resistor já está na placa. Na pequena e na grande é de 1 kΩ: uns 3 mA por LED, e os 8 LEDs de um 74HC595 ficam abaixo de 70 mA. Na média é de 220 Ω, que acende mais forte: uns 13 mA por LED, e os 8 de um 74HC595 acesos juntos passam dos 70 mA do CI. |
 | Joystick ou acelerador | J4 | J6 | J7 | Pontas do potenciômetro em +5V e GND, cursor em AN_A, AN_B ou AN_C. |
 
 **Os LEDs mostram o estado do jogo.** Nenhum LED é ligado a um botão: o Mega acende cada LED com o que a ponte manda do kRPC. Até o LED de um botão iluminado vai numa saída LEDn, separado do contato do botão.
@@ -150,7 +150,7 @@ A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e
 | Placa | Bytes de entrada, na ordem de leitura | Bytes de saída |
 |---|---|---|
 | Pequena | 2: U1 (etiqueta), U2 (IN0–IN7) | 1: U3 (LED0–LED7) |
-| Média | 3: U1 (etiqueta), U2 (IN0–IN7), U3 (IN8–IN15) | 2: U4 (LED0–LED7), U5 (LED8–LED15) |
+| Média | 3: U1 (etiqueta), U2 (IN0–IN7), U3 (IN8–IN15) | 3: U4 (LED0–LED7), U5 (LED8–LED15), U6 (LED16–LED23) |
 | Grande | 4: U1 (etiqueta), U2 (IN0–IN7), U3 (IN8–IN15), U4 (IN16–IN23) | 4: U5 (LED0–LED7), U6 (LED8–LED15), U7 (LED16–LED23), U8 (LED24–LED31) |
 
 **Entradas:**
@@ -185,16 +185,16 @@ A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e
 
 **Módulo médio:**
 - U1 (etiqueta), U2 e U3: 74HC165.
-- U4–U5: 74HC595.
+- U4–U6: 74HC595.
 - RN1–RN3: rede resistiva 10 kΩ SIP 9 pinos.
 - SW1: chave DIP de 8 vias.
-- R1–R16: 220 Ω, 1/4 W.
-- C1–C5: 100 nF.
+- R1–R24: 220 Ω, 1/4 W.
+- C1–C5 e C7: 100 nF.
 - C6: 470 µF eletrolítico, de 10 V ou mais e até 10 mm de diâmetro.
 - J1: conector IDC 2x8 macho com trava.
-- J2–J5: barra de pinos 1x10.
-- J6: barra de pinos 1x5.
-- 5 soquetes DIP-16.
+- K1–K12: conector JST-XH de 4 vias, macho de placa, vertical (B4B-XH-A).
+- J2 e J6: barra de pinos 1x5.
+- 6 soquetes DIP-16.
 
 **Módulo grande:**
 - U1 (etiqueta) a U4: 74HC165.
@@ -222,16 +222,23 @@ A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e
 
 ## PCB do módulo médio
 
-A placa do módulo médio está desenhada e pronta para mandar fabricar.
+A placa do módulo médio está desenhada e pronta para mandar fabricar. Ela tem um jack para cada [korry](korry/README.md), com o botão e os dois LEDs, e uma barra (J2) com as 4 entradas que sobram, para botões comuns.
+
+| Jack | Pino 1 | Pino 2 | Pino 3 | Pino 4 |
+|---|---|---|---|---|
+| Kk (k de 1 a 12) | GND | IN(k−1): botão | LED(2k−2): LED de cima | LED(2k−1): LED de baixo |
+
+Por exemplo, o K1 usa IN0, LED0 e LED1, e o K12 usa IN11, LED22 e LED23. Um korry de legenda única acesa usa só o pino 3.
 
 ![Frente da PCB do módulo médio](img/pcb_modulo_medio.png)
 
 | O quê | Como é |
 |---|---|
-| Tamanho | 100 × 86 mm, com 4 furos M3 nos cantos (centro a 4 mm das bordas), para prender atrás do painel com espaçadores |
+| Tamanho | 100 × 100 mm, com 4 furos M3 nos cantos (centro a 3,5 mm das bordas), para prender atrás do painel com espaçadores |
 | Camadas | 2, com o GND preenchido nas duas faces |
 | Trilhas | 0,3 mm nos sinais e 0,6 mm no +5V e no GND |
 | Peças | As da [lista acima](#lista-de-peças-por-placa), todas de furo passante |
+| Korry | 12 jacks JST-XH de 4 vias, K1 a K6 na borda de cima e K7 a K12 na de baixo |
 | Verificação | DRC do KiCad sem nenhum erro e sem nenhuma ligação faltando |
 
 Os arquivos ficam em [`modulo_medio/`](modulo_medio/): a placa (`modulo_medio.kicad_pcb`), as regras do DRC (`modulo_medio.kicad_dru`) e, em `fabricacao/`, o `modulo_medio_gerbers.zip` com os Gerbers e a furação.
@@ -244,7 +251,7 @@ Os arquivos ficam em [`modulo_medio/`](modulo_medio/): a placa (`modulo_medio.ki
 
 ### Na hora de montar
 
-- A face de cima tem os nomes das peças e dos pinos. Os pinos das barras vêm marcados: `IN0` a `IN15` para os botões, `L0` a `L15` para os LEDs, e o `GND` de cada barra.
+- A face de cima tem os nomes das peças, a ordem dos pinos dos jacks (`1 GND  2 BOTAO  3 LED CIMA  4 LED BAIXO`) e os pinos das barras J2 e J6.
 - Os pinos 1 têm ilha quadrada. No J1, o pino 1 também tem um triângulo, e ele é o +5V.
 - Nas redes RN1 a RN3, o pino comum (marcado com um ponto na peça) vai na ilha quadrada, que é o +5V.
 - Os soquetes vão com o chanfro para cima, do lado do pino 1.

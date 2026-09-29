@@ -34,7 +34,7 @@ O objetivo principal é **aprender firmware/embarcados e eletrônica**, e de que
           ▼
  Módulos do painel, um por seção .......... hardware/modulo_pequeno/, _medio/ e _grande/
    pequeno: 8 entradas + 8 LEDs (1 × 74HC165 + 1 × 74HC595)
-   médio: 16 entradas + 16 LEDs (2 × 74HC165 + 2 × 74HC595)
+   médio: 16 entradas + 24 LEDs (2 × 74HC165 + 3 × 74HC595), com 12 jacks de korry
    grande: 24 entradas + 16 LEDs (3 × 74HC165 + 2 × 74HC595)
    chaves, botões, LEDs, joysticks, acelerador
 
@@ -76,7 +76,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Python** na ponte | Já usado com kRPC antes; o mesmo código roda no PC e no Pi. |
 | **Raspberry Pi 4** como computador de bordo | Deixa o cockpit independente do PC (só um cabo de rede) e pode ligar uma tela colorida grande. A compra dessa tela foi adiada — decidir depois. |
 | **Arduino Mega** para o I/O | O Pi não tem entradas analógicas e o Linux não é tempo real; o Mega tem muitos pinos, trabalha em 5V e é compatível com praticamente todo módulo. |
-| **Painel em módulos** com 74HC165 e 74HC595, ligados ao Mega por um backplane | Cada seção do painel é uma placa, montada e testada uma de cada vez. Há três tamanhos (8 entradas e 8 LEDs, 16 e 16, ou 24 e 16), para não montar CI à toa. Cada módulo tem uma etiqueta (chave DIP lida por um 74HC165 a mais), e o Mega reconhece sozinho qual módulo está em cada slot. Os CIs custam poucos reais por módulo, o firmware continua um só e o protocolo com a ponte não muda. Um micro em cada módulo fica para a fase 8. |
+| **Painel em módulos** com 74HC165 e 74HC595, ligados ao Mega por um backplane | Cada seção do painel é uma placa, montada e testada uma de cada vez. Há três tamanhos (8 entradas e 8 LEDs, 16 e 24, ou 24 e 16), para não montar CI à toa. Cada módulo tem uma etiqueta (chave DIP lida por um 74HC165 a mais), e o Mega reconhece sozinho qual módulo está em cada slot. Os CIs custam poucos reais por módulo, o firmware continua um só e o protocolo com a ponte não muda. Um micro em cada módulo fica para a fase 8. |
 | Pinos do Raspberry Pi **não** substituem o Mega | O Pi não tem entradas analógicas, o Linux não é tempo real para encoders e ponteiros, e os pinos de 3,3 V vão direto ao processador: um fio errado nos 5 V queima o Pi. |
 | **mikromedia for ARM (LPC2148)** como tela multifunção | Já está na bancada. ARM programado sem framework, com tela touch, microSD e áudio. Começa no protocolo em texto, como o simulador, e passa para o v1 junto com o Mega. |
 | **Simulador da tela multifunção** no PC antes do firmware | A ponte, o protocolo e o desenho (navball, números, botões) ficam prontos e testados com o jogo antes da placa; o firmware só precisa copiar o simulador. A placa desenha a partir dos ângulos, porque a imagem pronta não cabe na serial (150 KB por quadro). |
@@ -184,7 +184,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - Chaves para SAS, RCS, trem de pouso, luzes e freios; STAGE e ABORT com capa de proteção. Depois, action groups.
 - **Painel de sistemas de controle** ([desenho](hardware/construcao.md#painel-de-sistemas-de-controle)): os 10 modos do SAS em korry de duas cores (azul virando, verde segurando), korry SAS, RCS, FBW e TRAVA ALT, e o encoder do [piloto automático](#piloto-automático-de-avião). Numa placa grande com 4 × 74HC595. Apertar um modo do SAS abre a roda dos modos na tela multifunção, só para ver. Trem de pouso, luzes e freios saíram desta seção: lugar a decidir.
 - A posição da chave é o estado desejado (para cima = ligado); o LED de cada sistema mostra o estado no jogo.
-- **Painel em módulos:** cada seção vira uma placa, ligada por cabo flat a um backplane de 12 slots no Mega. A placa pequena tem 8 entradas e 8 LEDs (1 × 74HC165 + 1 × 74HC595); a média, 16 e 16 (2 + 2); a grande, 24 e 32 (3 + 4). Os LEDs só mostram o que vem do jogo: nenhum é ligado a um botão. Cada módulo tem uma etiqueta numa chave DIP, e o Mega descobre sozinho o que está encaixado. Esquemáticos, etiquetas e qual placa vai em cada seção em [hardware/](hardware/README.md).
+- **Painel em módulos:** cada seção vira uma placa, ligada por cabo flat a um backplane de 12 slots no Mega. A placa pequena tem 8 entradas e 8 LEDs (1 × 74HC165 + 1 × 74HC595); a média, 16 e 24 (2 + 3), com um jack JST-XH para cada korry; a grande, 24 e 32 (3 + 4). Os LEDs só mostram o que vem do jogo: nenhum é ligado a um botão. Cada módulo tem uma etiqueta numa chave DIP, e o Mega descobre sozinho o que está encaixado. Esquemáticos, etiquetas e qual placa vai em cada seção em [hardware/](hardware/README.md).
 - Enquanto o primeiro módulo não fica pronto, os controles básicos continuam direto nos pinos do Mega, como em [docs/fase2.md](docs/fase2.md).
 - Próximo passo: o firmware do Mega lendo a fila de módulos pelas etiquetas, e testar o primeiro módulo direto no Mega.
 - **Joystick:** o Logitech Extreme 3D Pro, na USB do Pi, lido pela ponte e mandado ao jogo pelo kRPC. O acelerador é a alavanca da base dele. Mapeamento proposto em [hardware/construcao.md](hardware/construcao.md#joystick-logitech-extreme-3d-pro).
@@ -464,7 +464,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [x] 2–3× capas de proteção para chave ("missile switch cover")
 - [x] 4–6× botões arcade (24 ou 30 mm), de preferência com LED
 - [ ] Por módulo pequeno (6 no painel): 2× 74HC165, 1× 74HC595, 2× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 8× resistor 1 kΩ, 3× capacitor 100 nF, 1× capacitor 10 µF, 3 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
-- [ ] Por módulo médio (5 no painel): 3× 74HC165, 2× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 16× resistor 220 Ω, 5× capacitor 100 nF, 1× capacitor 470 µF, 5 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
+- [ ] Por módulo médio (5 no painel): 3× 74HC165, 3× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 24× resistor 220 Ω, 6× capacitor 100 nF, 1× capacitor 470 µF, 12× conector JST-XH de 4 vias, 6 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
 - [ ] Por módulo grande (1 no painel, o de sistemas de controle): 4× 74HC165, 4× 74HC595, 4× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 32× resistor 1 kΩ, 8× capacitor 100 nF, 1× capacitor 10 µF, 8 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
 - [ ] Backplane: 12× conector IDC 2x8, 5× resistor 47 Ω, 13× resistor 10 kΩ, capacitores de 470 µF e 100 nF, borne de 2 vias e jumper de 3 pinos
 - [x] Joystick: Logitech Extreme 3D Pro (3 eixos + acelerador, na USB do Pi)
