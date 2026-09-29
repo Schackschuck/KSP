@@ -405,14 +405,15 @@ class TestVoo(unittest.TestCase):
         self.assertGreater(abs(rolagem(aviao)), 20.0)
         self.assertLess(pior["beta"], 6.0)
 
-    def test_protecao_do_angulo_de_ataque(self):
-        # Profundor forte, que sozinho levaria a asa ao estol, e motor desligado.
-        aviao = Aviao(velocidade=(0.0, 0.0, 90.0), profundor=8.0, acelerador=0.0)
+    def test_protecao_do_angulo_de_ataque_so_no_piloto_automatico(self):
+        aviao = Aviao(velocidade=(0.0, 0.0, 110.0), acelerador=0.0)
         guiagem = fbw_no_ar(aviao)
+        guiagem.definir("VS", 20.0)
+        guiagem.alternar_modo("VS")
         aviao.maior_alfa = -math.inf
-        voar(aviao, guiagem, 30.0, lambda t: Manche(pitch=1.0))
+        voar(aviao, guiagem, 60.0)
         self.assertLessEqual(aviao.maior_alfa, ALFA_MAX + 1.5)
-        self.assertLess(aviao.maior_alfa, aviao.alfa_estol)
+        self.assertTrue(guiagem.ap["VS"])
 
     def test_autoridade_errada(self):
         """O kRPC pode errar o torque disponível: pela metade ou em dobro, ainda voa."""
@@ -628,33 +629,46 @@ class TestSemJoystick(unittest.TestCase):
         self.assertAlmostEqual(angulo180(trajetoria(aviao)[1] - 120.0), 0.0, delta=1.0)
 
 
-class TestAlphaFloor(unittest.TestCase):
-    def test_devagar_demais_acelera_desliga_o_piloto_e_recupera(self):
-        # Motor parado: segurando a altitude, o avião perde velocidade até a asa chegar no limite.
+class TestAvisoDeEstol(unittest.TestCase):
+    def test_com_o_manche_o_piloto_pode_estolar_e_o_aviso_acende(self):
+        aviao = Aviao(velocidade=(0.0, 0.0, 90.0), acelerador=0.0)
+        guiagem = fbw_no_ar(aviao)
+        visto = {"estol": False}
+        voar(aviao, guiagem, 10.0, lambda t: Manche(pitch=1.0),
+             lambda a, g: visto.update(estol=visto["estol"] or g.estol))
+        self.assertTrue(visto["estol"])
+        self.assertGreater(aviao.maior_alfa, ALFA_MAX + 2.0)
+        self.assertEqual(aviao.acelerador, 0.0)
+        self.assertIsNone(guiagem.comando)
+        self.assertIsNone(guiagem.altitude_travada)
+        self.assertFalse(any(guiagem.ap.values()))
+
+    def test_no_piloto_automatico_o_aviso_nao_mexe_em_nada(self):
         aviao = Aviao(velocidade=(0.0, 0.0, 110.0), acelerador=0.0)
         guiagem = fbw_no_ar(aviao)
-        self.assertFalse(guiagem.estol)
-        altitude = aviao.altitude
         guiagem.alternar_trava()
         guiagem.definir("HDG", 90.0)
         guiagem.alternar_modo("HDG")
-        visto = {"estol": False, "ap_com_estol": False, "menor": aviao.altitude}
-
-        def medir(a, g):
-            if g.estol:
-                visto["estol"] = True
-                visto["ap_com_estol"] |= any(g.ap.values())
-            visto["menor"] = min(visto["menor"], a.altitude)
-
-        voar(aviao, guiagem, 120.0, a_cada_passo=medir)
+        visto = {"estol": False}
+        voar(aviao, guiagem, 120.0, a_cada_passo=lambda a, g: visto.update(estol=visto["estol"] or g.estol))
         self.assertTrue(visto["estol"])
-        self.assertFalse(visto["ap_com_estol"])            # o piloto automático desligou
-        self.assertFalse(guiagem.ap["HDG"])
-        self.assertEqual(aviao.acelerador, 1.0)             # e o acelerador ficou no máximo
-        self.assertFalse(guiagem.estol)                     # a asa folgou: saiu do estol
-        self.assertGreater(modulo(aviao.velocidade), 100.0)
+        self.assertTrue(guiagem.ap["HDG"])
+        self.assertIsNotNone(guiagem.altitude_travada)
+        self.assertEqual(aviao.acelerador, 0.0)
         self.assertLessEqual(aviao.maior_alfa, ALFA_MAX + 1.0)
-        self.assertGreater(visto["menor"], altitude - 100.0)
+
+    def test_nada_liga_sozinho(self):
+        aviao = Aviao()
+        guiagem = fbw_no_ar(aviao, velocidade_alvo=150.0)
+        voar(aviao, guiagem, 1.0, lambda t: Manche(pitch=0.5))
+        voar(aviao, guiagem, 0.8, lambda t: Manche(roll=0.5))
+        voar(aviao, guiagem, 20.0)
+        voar(aviao, guiagem, 1.5, lambda t: Manche(pitch=-0.4))
+        voar(aviao, guiagem, 20.0)
+        self.assertFalse(any(guiagem.ap.values()))
+        self.assertIsNone(guiagem.altitude_travada)
+        self.assertIsNone(guiagem.comando)
+        self.assertIn("TRAVA OFF", fbw.linhas_de_estado(guiagem))
 
     def test_voo_normal_nao_entra(self):
         aviao = Aviao()
@@ -669,63 +683,10 @@ class TestAlphaFloor(unittest.TestCase):
         voar(aviao, guiagem, 2.0, lambda t: Manche(pitch=1.0))
         self.assertTrue(guiagem.estol)
         self.assertIn("ESTOL 1", fbw.linhas_de_estado(guiagem))
-        self.assertFalse(guiagem.alternar_modo("HDG"))   # não liga o piloto no alpha floor
         guiagem.ligado = False
         voar(aviao, guiagem, 0.1)
         self.assertFalse(guiagem.estol)
         self.assertIn("ESTOL 0", fbw.linhas_de_estado(guiagem))
-
-
-class TestRecuperacaoDoEstol(unittest.TestCase):
-    def estolar(self, aviao, guiagem, limite=120.0):
-        """Segura a altitude sem motor até o alpha floor ligar."""
-        guiagem.alternar_trava()
-        inicio = aviao.t
-        while not guiagem.estol and aviao.t - inicio < limite:
-            voar(aviao, guiagem, 0.2)
-        self.assertTrue(guiagem.estol)
-
-    def test_no_estol_solta_a_trava_baixa_o_nariz_e_nivela_as_asas(self):
-        aviao = Aviao(velocidade=(0.0, 0.0, 110.0), acelerador=0.0)
-        guiagem = fbw_no_ar(aviao)
-        guiagem.definir("HDG", 180.0)
-        guiagem.alternar_modo("HDG")
-        self.estolar(aviao, guiagem)
-        voar(aviao, guiagem, 0.2)
-        self.assertIsNone(guiagem.altitude_travada)
-        self.assertLessEqual(guiagem.comando[0], fbw.GAMA_RECUPERA)
-        _, rumo = trajetoria(aviao)
-        self.assertAlmostEqual(angulo180(guiagem.comando[1] - rumo), 0.0, delta=1.0)
-        self.assertEqual(guiagem.diagnostico["inclinacao_c"], 0.0)
-
-    def test_recupera_e_nivela_numa_altitude_nova(self):
-        aviao = Aviao(velocidade=(0.0, 0.0, 110.0), acelerador=0.0)
-        guiagem = fbw_no_ar(aviao)
-        self.estolar(aviao, guiagem)
-        voar(aviao, guiagem, 60.0)
-        self.assertFalse(guiagem.estol)
-        self.assertIsNotNone(guiagem.altitude_travada)
-        altitude = guiagem.altitude_travada
-        voar(aviao, guiagem, 30.0)
-        self.assertAlmostEqual(aviao.altitude, altitude, delta=10.0)
-        self.assertLessEqual(aviao.maior_alfa, ALFA_MAX + 1.0)
-
-    def test_sem_motor_desce_em_vez_de_ficar_pendurado_na_asa(self):
-        aviao = Aviao(velocidade=(0.0, 0.0, 110.0), acelerador=0.0, empuxo_max=0.0)
-        guiagem = fbw_no_ar(aviao)
-        self.estolar(aviao, guiagem)
-        voar(aviao, guiagem, 20.0)
-        gama, _ = trajetoria(aviao)
-        self.assertLess(gama, -2.0)
-        self.assertLess(guiagem.diagnostico["alfa"], fbw.ALFA_FLOOR)
-
-    def test_com_o_manche_puxado_o_piloto_manda_e_a_protecao_segura(self):
-        aviao = Aviao(velocidade=(0.0, 0.0, 90.0), acelerador=0.0)
-        guiagem = fbw_no_ar(aviao)
-        voar(aviao, guiagem, 10.0, lambda t: Manche(pitch=1.0))
-        self.assertTrue(guiagem.estol)
-        self.assertIsNone(guiagem.comando)
-        self.assertLessEqual(aviao.maior_alfa, ALFA_MAX + 1.5)
 
 
 if __name__ == "__main__":

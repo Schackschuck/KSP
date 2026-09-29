@@ -303,8 +303,9 @@ Os scripts ficam em [`scripts/`](scripts/), fora da ponte: cada um roda sozinho 
 Como nos caças, o manche não mexe nas superfícies: ele pede o que o avião deve fazer, e o FBW decide as superfícies. [`scripts/fbw.py`](scripts/fbw.py) lê o joystick (o Extreme 3D Pro, ou um controle de Xbox) e pilota o avião pelo kRPC.
 
 - **O manche:** para trás e para a frente pede carga, de −1 g a 4 g; solto, 1 g, e o caminho não curva. Para os lados pede velocidade de rolagem, até 90°/s; solto, a inclinação fica onde parou. A torção soma ao leme. O FBW não trava a altitude sozinho: numa curva, o piloto puxa.
-- **Proteções:** ângulo de ataque entre −8° e 15° e carga até 4 g. No piloto automático, também asas até 60° e subida entre −30° e +30°.
-- **Alpha floor:** devagar demais para a asa (ângulo de ataque perto dos 15°), acelerador no máximo e piloto automático e trava desligados. Com o manche solto, o FBW recupera sozinho (asas niveladas e nariz para baixo até a asa folgar, depois nivela numa altitude nova); com o manche mexido, quem manda é o piloto. A luz ESTOL do painel pisca e a tela toca um alarme.
+- **Proteções:** com o manche, só a carga até 4 g: puxando tudo devagar, o avião estola. No piloto automático e na trava, ângulo de ataque entre −8° e 15°, asas até 60° e subida entre −30° e +30°.
+- **Aviso de estol:** com o ângulo de ataque perto dos 15°, a luz ESTOL do painel pisca e a tela toca um alarme. É só aviso: o FBW não mexe no acelerador, no piloto automático, na trava nem no manche.
+- **Nada liga sozinho:** os modos do piloto automático e a trava só ligam pelo painel.
 - **Lei direta** no chão e com o botão do FBW desligado: o manche vai direto para as superfícies. O FBW assume 1 s depois da decolagem.
 - **Sem joystick** (`--sem-joystick`): decola pelo teclado do jogo, na lei direta, e no ar o piloto automático voa pelo painel.
 - **O acelerador fica com o piloto.** O acelerador automático (SPD) já existe por dentro, ainda sem interface.
@@ -317,7 +318,8 @@ Como nos caças, o manche não mexe nas superfícies: ele pede o que o avião de
 
 - [x] **O FBW está muito instável no jogo.** O voo gravado mostrou o nariz oscilando a 1,5 vez por segundo (ganho de pitch alto para o atraso do kRPC) e um avião lento e "interventor". Refeito com a lei de caça e ganhos menores, testados com a leitura atrasada ([docs/fbw.md](docs/fbw.md)). Falta confirmar no jogo.
 - [ ] **Não ligar o FBW sozinho na decolagem.** Hoje ele assume 1 s depois de sair do chão; passa a começar desligado e só liga pelo korry FBW (ou pelo botão do joystick).
-- [ ] **Tirar a recuperação automática do estol**, que só deu problema no jogo. A decidir: tirar só o nariz para baixo, as asas niveladas e a trava solta (#36), ou também o acelerador no máximo e o piloto automático desligado (#34).
+- [x] **Tirar a recuperação automática do estol**, que só deu problema no jogo. Saiu tudo: o acelerador no máximo, o piloto automático e a trava desligando, o nariz para baixo, a trava ligando sozinha depois e o limite de ângulo de ataque no manche. Fica só o aviso (luz ESTOL e alarme).
+- [x] **Os modos do piloto automático ligavam sozinhos** ao ligar o FBW (o avião tentava subir para uma altitude): era a trava de altitude automática, que saiu. Falta confirmar no jogo.
 - [ ] **Avisar o estol também fora do FBW** (na lei direta): a luz ESTOL e o alarme pelo ângulo de ataque, mesmo sem o FBW voando.
 
 ### Piloto automático de avião
