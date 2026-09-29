@@ -418,3 +418,4 @@ A tela foi feita aos poucos, testando no jogo entre uma etapa e outra:
 | [#14](https://github.com/Schackschuck/KSP/pull/14) | A tela no celular, pelo Wi-Fi |
 | [#15](https://github.com/Schackschuck/KSP/pull/15) | Números do rumo e do pitch na própria navball; sai a fita de rumo, e o modo SUP fica sem o painel de baixo |
 | [#32](https://github.com/Schackschuck/KSP/pull/32) | Painel de sistemas de controle: a página de botões, a roda do SAS e a página do piloto automático, com a volta à navball; a conversa com o `fbw.py` nos dois sentidos |
+| [#40](https://github.com/Schackschuck/KSP/pull/40) | O firmware da mikromedia, cópia do simulador na placa, com o ajuste da tela e do touch na flash; a ponte abre a PROG sem prender a placa no reset |
