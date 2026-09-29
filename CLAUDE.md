@@ -1,5 +1,17 @@
 # Instruções para o Claude
 
+## Fluxo de trabalho: plano e implementação
+
+Para tarefas de programação que não sejam triviais, o agente principal (Opus) planeja e revisa, e o subagente `implementador` (Sonnet, definido em `.claude/agents/implementador.md`) escreve o código:
+
+1. Escrever um plano detalhado em `PLANO.md`, com arquivos, funções, estruturas de dados, casos de borda e testes.
+2. Delegar cada etapa do plano ao subagente `implementador`, uma de cada vez.
+3. Revisar o diff ao final e corrigir os problemas encontrados.
+
+Para debug difícil ou mudanças que atravessam o projeto inteiro, o agente principal pode fazer direto, sem delegar.
+
+Este fluxo vem antes do merge automático abaixo: a revisão do diff faz parte da verificação, e o `PLANO.md` é de trabalho, não vai para o commit.
+
 ## Fluxo de trabalho: merge automático
 
 O dono do repositório **não revisa pull requests nem faz merge manualmente**. Toda alteração pronta deve ir para o `main` sem pedir confirmação:
