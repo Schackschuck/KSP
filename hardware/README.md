@@ -5,7 +5,7 @@ Esquemáticos do painel, feitos no KiCad. Cada pasta tem também um PDF do esque
 | Pasta | Placa | CIs |
 |---|---|---|
 | [`modulo_pequeno/`](modulo_pequeno/) | Módulo pequeno: 8 entradas e 8 LEDs ([PDF](modulo_pequeno/modulo_pequeno.pdf)) | etiqueta + 1 × 74HC165, 1 × 74HC595 |
-| [`modulo_medio/`](modulo_medio/) | Módulo médio: 16 entradas e 16 LEDs ([PDF](modulo_medio/modulo_medio.pdf)) | etiqueta + 2 × 74HC165, 2 × 74HC595 |
+| [`modulo_medio/`](modulo_medio/) | Módulo médio: 16 entradas e 16 LEDs ([PDF](modulo_medio/modulo_medio.pdf), [PCB](#pcb-do-módulo-médio)) | etiqueta + 2 × 74HC165, 2 × 74HC595 |
 | [`modulo_grande/`](modulo_grande/) | Módulo grande: 24 entradas e 32 LEDs ([PDF](modulo_grande/modulo_grande.pdf)) | etiqueta + 3 × 74HC165, 4 × 74HC595 (o esquema ainda tem 2: ver [Próximos passos](#próximos-passos)) |
 | [`backplane/`](backplane/) | Backplane: liga até 12 módulos ao Mega ([PDF](backplane/backplane.pdf)) | — |
 
@@ -17,7 +17,7 @@ As três placas de módulo usam o mesmo cabo flat e encaixam em qualquer slot. C
 
 1. Instale o KiCad 7 ou mais novo e abra o `.kicad_pro` de cada pasta.
 2. Os arquivos estão no formato do KiCad 7. Uma versão mais nova avisa que vai converter o arquivo ao salvar: pode aceitar.
-3. Os símbolos estão embutidos no esquema. As footprints já estão escolhidas (DIP-16 com soquete, IDC 2x8, chave DIP, barras de pinos), mas o layout da PCB ainda não existe: fica para a fase 7.
+3. Os símbolos estão embutidos no esquema. As footprints já estão escolhidas (DIP-16 com soquete, IDC 2x8, chave DIP, barras de pinos). O módulo médio já tem a PCB pronta para fabricar ([abaixo](#pcb-do-módulo-médio)); as outras placas ficam para a fase 7.
 4. Ao abrir, rode o verificador de regras elétricas: menu **Inspecionar → Verificador de Regras Elétricas (ERC)**.
 
 ## Como tudo se liga
@@ -138,12 +138,12 @@ A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e
 |---|---|---|---|---|
 | Etiqueta | SW1 | SW1 | SW1 | Chave DIP de 8 vias, conforme a tabela acima. |
 | Botões e chaves | J2 (IN0–IN7) | J2, J3 (IN0–IN15) | J2, J3, J4 (IN0–IN23) | Entre o INn e o GND do próprio conector. Apertado ou ligado lê **0** (pull-up de 10 kΩ). |
-| LEDs | J3 (LED0–LED7) | J4, J5 (LED0–LED15) | J5, J6 (LED0–LED15) e, quando o esquema tiver os 4 × 74HC595, mais dois conectores (LED16–LED31) | Anodo no LEDn, catodo no GND. O resistor de 1 kΩ já está na placa: uns 3 mA por LED, para os 8 LEDs de um 74HC595 ficarem abaixo de 70 mA. |
+| LEDs | J3 (LED0–LED7) | J4, J5 (LED0–LED15) | J5, J6 (LED0–LED15) e, quando o esquema tiver os 4 × 74HC595, mais dois conectores (LED16–LED31) | Anodo no LEDn, catodo no GND. O resistor já está na placa. Na pequena e na grande é de 1 kΩ: uns 3 mA por LED, e os 8 LEDs de um 74HC595 ficam abaixo de 70 mA. Na média é de 220 Ω, que acende mais forte: uns 13 mA por LED, e os 8 de um 74HC595 acesos juntos passam dos 70 mA do CI. |
 | Joystick ou acelerador | J4 | J6 | J7 | Pontas do potenciômetro em +5V e GND, cursor em AN_A, AN_B ou AN_C. |
 
 **Os LEDs mostram o estado do jogo.** Nenhum LED é ligado a um botão: o Mega acende cada LED com o que a ponte manda do kRPC. Até o LED de um botão iluminado vai numa saída LEDn, separado do contato do botão.
 
-**Botão com LED de 5 V** (como os botões arcade) já tem resistor interno. Com o 1 kΩ da placa em série, ele fica mais fraco. Se ficar fraco demais, troque o resistor daquela saída por um de menor valor, ou por um fio.
+**Botão com LED de 5 V** (como os botões arcade) já tem resistor interno. Com o resistor da placa em série, ele fica mais fraco. Se ficar fraco demais, troque o resistor daquela saída por um de menor valor, ou por um fio.
 
 ## Ordem dos bytes (para o firmware)
 
@@ -188,9 +188,9 @@ A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e
 - U4–U5: 74HC595.
 - RN1–RN3: rede resistiva 10 kΩ SIP 9 pinos.
 - SW1: chave DIP de 8 vias.
-- R1–R16: 1 kΩ.
+- R1–R16: 220 Ω, 1/4 W.
 - C1–C5: 100 nF.
-- C6: 10 µF.
+- C6: 470 µF eletrolítico, de 10 V ou mais e até 10 mm de diâmetro.
 - J1: conector IDC 2x8 macho com trava.
 - J2–J5: barra de pinos 1x10.
 - J6: barra de pinos 1x5.
@@ -220,10 +220,64 @@ A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e
 - C1: 470 µF.
 - C2: 100 nF.
 
+## PCB do módulo médio
+
+A placa do módulo médio está desenhada e pronta para mandar fabricar.
+
+![Frente da PCB do módulo médio](img/pcb_modulo_medio.png)
+
+| O quê | Como é |
+|---|---|
+| Tamanho | 100 × 86 mm, com 4 furos M3 nos cantos (centro a 4 mm das bordas), para prender atrás do painel com espaçadores |
+| Camadas | 2, com o GND preenchido nas duas faces |
+| Trilhas | 0,3 mm nos sinais e 0,6 mm no +5V e no GND |
+| Peças | As da [lista acima](#lista-de-peças-por-placa), todas de furo passante |
+| Verificação | DRC do KiCad sem nenhum erro e sem nenhuma ligação faltando |
+
+Os arquivos ficam em [`modulo_medio/`](modulo_medio/): a placa (`modulo_medio.kicad_pcb`), as regras do DRC (`modulo_medio.kicad_dru`) e, em `fabricacao/`, o `modulo_medio_gerbers.zip` com os Gerbers e a furação.
+
+### Como encomendar
+
+1. No site da fábrica (JLCPCB, PCBWay ou outra), enviar o `fabricacao/modulo_medio_gerbers.zip`. O site lê o tamanho sozinho.
+2. Escolher 2 camadas, espessura de 1,6 mm e acabamento HASL. A cor não importa. A quantidade mínima costuma ser 5 placas, e as 6 médias do painel cabem em 10.
+3. O resto pode ficar no padrão.
+
+### Na hora de montar
+
+- A face de cima tem os nomes das peças e dos pinos. Os pinos das barras vêm marcados: `IN0` a `IN15` para os botões, `L0` a `L15` para os LEDs, e o `GND` de cada barra.
+- Os pinos 1 têm ilha quadrada. No J1, o pino 1 também tem um triângulo, e ele é o +5V.
+- Nas redes RN1 a RN3, o pino comum (marcado com um ponto na peça) vai na ilha quadrada, que é o +5V.
+- Os soquetes vão com o chanfro para cima, do lado do pino 1.
+- O C6 tem polaridade: a perna mais comprida (+) vai na ilha quadrada.
+
+### Gerar de novo
+
+A placa é gerada por [`pcb/modulo_medio.py`](pcb/modulo_medio.py), a partir do esquema:
+
+1. lê as ligações do `modulo_medio.kicad_sch`;
+2. posiciona as peças;
+3. roteia com o [Freerouting](https://github.com/freerouting/freerouting);
+4. preenche o GND;
+5. roda o DRC e refaz os Gerbers.
+
+Mudou o esquema? Basta rodar de novo:
+
+```
+python3 hardware/pcb/modulo_medio.py
+```
+
+**O que precisa estar instalado:**
+- o KiCad 7, com o módulo `pcbnew` do Python;
+- o Java 21;
+- o jar do Freerouting 1.9, apontado pela variável `FREEROUTING_JAR`;
+- o `xvfb-run`, se o computador não tiver tela.
+
+O script para com erro se o roteamento deixar alguma ligação faltando. Ele também imprime o relatório do DRC, que tem que terminar com `Found 0 DRC violations` e `Found 0 unconnected pads`.
+
 ## Próximos passos
 
 1. Revisar os esquemas no KiCad e rodar o ERC.
 2. Pôr no esquema da placa grande os dois 74HC595 a mais (U7 e U8, LED16 a LED31), para a seção de sistemas de controle.
 3. Firmware do Mega: ler a fila de módulos pelas etiquetas e avisar a ponte.
 4. Testar o primeiro módulo direto no Mega. Depois, montar o backplane em placa perfurada.
-5. A PCB fica para a fase 7: são três placas de módulo diferentes, e cada uma é fabricada em quantidade.
+5. Mandar fabricar a PCB do [módulo médio](#pcb-do-módulo-médio) e montar a primeira. As PCBs da pequena, da grande e do backplane ficam para a fase 7.
