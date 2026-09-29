@@ -47,9 +47,9 @@ Botões hoje: `STAGE` e `ABORT`. Chaves hoje: `SAS`, `RCS`, `GEAR`, `LIGHTS` e `
 
 ## Tela multifunção (mikromedia)
 
-Protocolo entre a ponte da tela (`bridge/mfd.py`) e a mikromedia for ARM. Enquanto o firmware da placa não existe, quem responde é o simulador (`bridge/mfd_simulador.py`), que segue estas mesmas regras. Roteiro e testes: [mfd.md](mfd.md).
+Protocolo entre a ponte da tela (`bridge/mfd.py`) e a mikromedia for ARM, com o firmware de `firmware/mfd/` ([mikromedia.md](mikromedia.md)). O simulador (`bridge/mfd_simulador.py`) e a página do celular seguem estas mesmas regras. Roteiro e testes: [mfd.md](mfd.md).
 
-A camada física e o enquadramento são os mesmos do painel: 115200 baud, uma mensagem por linha, no máximo 31 caracteres, e `ERR <linha>` para o que a tela não reconhece.
+A camada física e o enquadramento são os mesmos do painel: 115200 baud, uma mensagem por linha, no máximo 31 caracteres, e `ERR <linha>` para o que a tela não reconhece. Na placa, a serial é a porta PROG, onde o DTR reinicia a placa: a ponte abre a porta com o DTR e o RTS desligados e dá um pulso no DTR, como a Arduino IDE faz com o Mega.
 
 No **celular** (`bridge/mfd_celular.py`), as mesmas linhas vão por HTTP, pelo Wi-Fi:
 
@@ -62,6 +62,7 @@ No **celular** (`bridge/mfd_celular.py`), as mesmas linhas vão por HTTP, pelo W
 | Mensagem | Quando | Significado |
 |---|---|---|
 | `READY` | Ao terminar de ligar | A tela está pronta. A ponte reenvia tudo. |
+| `ID <4 dígitos hex>` | Logo depois do `READY`, só a placa | O código do controlador da tela, lido no registrador 0 (ex.: `ID 0047`). Só para diagnóstico: a ponte mostra no terminal |
 | `TOQUE <nome>` | Um botão da tela foi tocado | Uma vez por toque. Botões hoje: `SAS` e `RCS` (redondos, embaixo da navball) e `MODO` (a caixa da velocidade). |
 | `ERR <linha>` | Chegou uma linha que a tela não reconhece | Devolve a linha recebida |
 

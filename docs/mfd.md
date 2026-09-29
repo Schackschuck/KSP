@@ -2,7 +2,7 @@
 
 **Pronto quando:** a navball da tela acompanha a do jogo, os números batem com os do KSP e os botões de toque ligam e desligam o SAS e o RCS.
 
-A tela multifunção mostra uma navball no estilo do KSP2, velocidade, altitude, acelerador, velocidade vertical e os dados da órbita ou do alvo, com botões de toque. Ela vai morar na mikromedia for ARM, mas a placa ainda não tem firmware: é a fase 6 do [roteiro](../README.md#fase-6--tela-multifunção-mikromedia-for-arm). Enquanto isso, a mesma tela roda em dois lugares, e os três falam o mesmo [protocolo](protocolo.md#tela-multifunção-mikromedia):
+A tela multifunção mostra uma navball no estilo do KSP2, velocidade, altitude, acelerador, velocidade vertical e os dados da órbita ou do alvo, com botões de toque. Ela mora na mikromedia for ARM, a fase 6 do [roteiro](../README.md#fase-6--tela-multifunção-mikromedia-for-arm), com o firmware de `firmware/mfd/`: gravar e ligar em [mikromedia.md](mikromedia.md). A mesma tela roda também no PC e no celular, e os três falam o mesmo [protocolo](protocolo.md#tela-multifunção-mikromedia):
 
 ```
  KSP + kRPC (PC)
@@ -15,30 +15,28 @@ A tela multifunção mostra uma navball no estilo do KSP2, velocidade, altitude,
       ▼                     ▼                          ▼
  simulador             celular, pelo Wi-Fi         mikromedia, pela serial
  mfd_simulador.py      mfd_celular.py e            firmware/mfd/
- janela no PC          celular/index.html          (ainda não existe)
+ janela no PC          celular/index.html          (mikromedia.md)
  (padrão)              (--celular)                 (--porta COMx)
 ```
 
-A ponte não sabe qual tela está do outro lado. Quando o firmware existir, basta trocar a janela pela porta serial. O **simulador** desenha ponto a ponto na resolução da placa (320x240, 16 bits por ponto) e é a referência do que o firmware tem que desenhar. A **página do celular** segue as mesmas posições, só que na resolução do celular.
+A ponte não sabe qual tela está do outro lado: para usar a placa, basta trocar a janela pela porta serial. O **simulador** desenha ponto a ponto na resolução da placa (320x240, 16 bits por ponto) e é a referência do que o firmware tem que desenhar. A **página do celular** segue as mesmas posições, só que na resolução do celular.
 
 **Onde estamos:**
 
 - Testado com o jogo: navball (pitch, yaw e roll), pró-grado, SAS e RCS pelo toque, e a volta automática ao trocar de nave. Estão marcados na lista de [Testar com o KSP](#testar-com-o-ksp).
 - Ainda sem teste com o jogo: radar, troca automática de modo, modo ALVO, normal e radial, nó de manobra, acelerador, tempos até AP e PE, e os números na bola.
 - Ainda sem teste num celular de verdade: a página foi testada num navegador simulando um celular.
-- A placa ainda não conversa com o PC: o cabo mini-USB antigo falha nos dados (ver abaixo).
+- O firmware da placa está pronto e conferido no PC contra o simulador, mas ainda não rodou na placa: [mikromedia.md](mikromedia.md).
 
 ![O simulador em órbita: navball no centro com os números do rumo e do pitch e os marcadores, velocidade e altitude nas laterais, acelerador e velocidade vertical nas bordas, AP e PE embaixo](img/mfd_simulador.png)
 
 ## O que já se sabe da placa
 
 - Ela tem **duas mini-USB**:
-  - **USB** vai direto no LPC2148. Alimenta a placa e roda o demo de fábrica.
-  - **PROG** tem um **FT232RL**, um conversor USB-serial. É por ela que o PC vai conversar com a placa, como uma porta COM comum, igual ao Mega. O firmware não precisa implementar USB.
-- No primeiro teste, a PROG alimentou a placa, mas o Windows mostrou "Dispositivo USB desconhecido (falha na solicitação do descritor)". A suspeita é o cabo mini-USB, que é antigo e falha nos fios de dados.
-  - Com um cabo bom, deve aparecer **USB Serial Port (COMx)** em *Portas (COM e LPT)*.
-  - Se aparecer **FT232R USB UART** em *Outros dispositivos*, falta o driver VCP da FTDI (ftdichip.com → Drivers → VCP).
-- **Ainda falta** o manual e o esquemático, no site da MikroE. Eles dizem qual é o controlador da tela, em que pinos estão a tela e o touch, e como gravar programas.
+  - **USB** vai direto no LPC2148. Alimenta a placa e rodava o demo de fábrica.
+  - **PROG** tem um **FT232RL**, um conversor USB-serial. É por ela que o PC conversa com a placa, como uma porta COM comum, igual ao Mega, e é por ela que o Flash Magic grava o firmware. O firmware não precisa implementar USB.
+- No primeiro teste, a PROG alimentou a placa, mas o Windows mostrou "Dispositivo USB desconhecido (falha na solicitação do descritor)". O cabo mini-USB era antigo e falhava nos fios de dados.
+- O manual e o esquemático deram os pinos da tela e do touch, a gravação pela PROG e o módulo da tela (MI0283QT2). Estão resumidos em [mikromedia.md](mikromedia.md#como-o-firmware-funciona).
 
 ## Onde está o código
 
@@ -52,6 +50,7 @@ A ponte não sabe qual tela está do outro lado. Quando o firmware existir, bast
 | [`bridge/sistemas.py`](../bridge/sistemas.py) | O painel de sistemas de controle: modos do SAS, SAS, RCS, FBW, o menu do piloto automático e a troca de página |
 | [`bridge/painel_scripts.py`](../bridge/painel_scripts.py) | O painel de scripts: o korry POUSO segurado 5 s abre e aborta o `scripts/pouso.py` num processo |
 | [`bridge/celular/painel.html`](../bridge/celular/painel.html) | A página de botões dos painéis de sistemas e de scripts, no lugar do painel de verdade |
+| [`firmware/mfd/`](../firmware/mfd/) | O firmware da mikromedia, em C: a cópia do simulador na placa ([mikromedia.md](mikromedia.md)) |
 | [`docs/protocolo.md`](protocolo.md#tela-multifunção-mikromedia) | O protocolo da tela, mensagem por mensagem |
 
 ## Instalar
@@ -356,7 +355,7 @@ As peças:
 | `TelaCelular` | `mfd_celular.py` | Tela: servidor HTTP que liga a ponte à página do celular |
 | página | `celular/index.html` | O "firmware" do navegador: interpreta o protocolo e desenha |
 | página de botões | `celular/painel.html` | O painel de sistemas no navegador: manda os botões e acende as luzes, servida por outra `TelaCelular` |
-| `Painel` | `ponte.py` | Tela: a serial, para a mikromedia quando o firmware existir |
+| `TelaMikromedia` | `mfd.py` | Tela: a serial da mikromedia, pela PROG. Abre a porta sem prender a placa no reset |
 | funções da navball | `navball.py` | A conta da bola, usada pelo simulador e copiada no JavaScript |
 
 Toda tela tem a mesma interface: `enviar(linha)` manda uma linha para a tela, `linhas()` devolve as linhas que a tela mandou, e ainda `esperar_ready()` e `fechar()`.
@@ -370,12 +369,13 @@ Toda tela tem a mesma interface: `enviar(linha)` manda uma linha para a tela, `l
 3. **`docs/protocolo.md`:** uma linha na tabela.
 4. **`mfd_simulador.py`:** aceitar a mensagem em `_interpretar()` e desenhar. Um marcador também entra em `_marcadores` e em `pares`, com a função que o desenha.
 5. **`celular/index.html`:** o mesmo, em `interpretar()` e no desenho, nas mesmas posições.
+6. **`firmware/mfd/mfd.c`:** o mesmo, em `interpretar()` e no desenho; depois, `python compilar.py` e gravar.
 
 Depois, confira com `python mfd.py --demo`, na janela e com `--celular`.
 
 ### Armadilhas
 
-- **O layout está em dois lugares:** `mfd_simulador.py` e `celular/index.html`, e as cores e larguras da navball também estão em `navball.py`. Mudou um, mude o outro. O simulador é a referência da placa.
+- **O layout está em três lugares:** `mfd_simulador.py`, `celular/index.html` e `firmware/mfd/mfd.c`, e as cores e larguras da navball também estão em `navball.py` e `firmware/mfd/navball.c`. Mudou um, mude os outros. O simulador é a referência da placa.
 - **Linhas de no máximo 31 caracteres.** Um texto livre, como o nome de um alvo, teria que ser cortado antes de ir para a tela.
 - **Os referenciais do kRPC são "canhotos"** (eixos da mão esquerda). O produto vetorial só dá o sentido certo em eixos da mão direita, então `normal_e_radial()` troca a ordem para (leste, norte, cima) antes da conta.
 - **No navegador, os pedidos HTTP podem chegar fora de ordem.** A página manda uma linha de cada vez, esperando a anterior terminar, para funcionar como uma serial.
@@ -396,15 +396,14 @@ A conta está em [`navball.py`](../bridge/navball.py), escrita para caber num AR
    - **Sombra e cor:** escurece a borda e arredonda para 16 bits por ponto (RGB565).
 3. **Marcadores e números:** cada um é um vetor projetado na bola por 3 produtos escalares, e só aparece se estiver na metade visível. As direções dos marcadores chegam prontas da ponte: normal e radial saem de produtos vetoriais da posição e da velocidade, feitos no PC. Os números do rumo e do pitch são escritos de pé no ponto projetado, com a fonte normal e uma sombra escura, então a placa não precisa girar texto.
 
-Com raio de 72 pontos, são cerca de 16 mil pontos por quadro, cada um com umas 30 operações de inteiros. Na placa, a bola vai ser desenhada linha a linha, direto na memória do controlador da tela. Os números só são redesenhados quando mudam. A velocidade de verdade só dá para saber medindo na placa.
+Com raio de 72 pontos, são cerca de 16 mil pontos por quadro, cada um com umas 30 operações de inteiros. Na placa ([`navball.c`](../firmware/mfd/navball.c)), a conta é a mesma, em inteiros com 14 bits de fração, e a tela é desenhada em faixas de 16 linhas ([mikromedia.md](mikromedia.md#como-o-firmware-funciona)). A velocidade de verdade só dá para saber medindo na placa.
 
 ## Próximos passos
 
-1. **Cabo mini-USB novo** para a PROG virar uma porta COM.
-2. **Manual e esquemático** da mikromedia for ARM, no site da MikroE: controlador e pinos da tela e do touch, e como gravar. Pode ser pelo bootloader serial do LPC2148, pela PROG, com o Flash Magic ou o `lpc21isp`; ou pelo bootloader USB da MikroE, pela outra porta. **Antes de gravar qualquer coisa**, baixar o `.hex` do demo de fábrica, se estiver disponível: gravar um programa novo apaga o demo.
-3. **Firmware, fase 6:** piscar um LED, depois a serial (eco, e em seguida este protocolo), depois a tela (pintar, texto), a navball e o touch. Quando a placa responder `READY`, rodar `python mfd.py --porta COMx`.
-4. **Manobras pela tela** (ideia para depois): informações do próximo nó (Δv, tempo de queima, T− até o nó) e um editor de manobras pelo toque, junto com o editor de encoders da fase 4.
-5. **Painéis de sistemas e de scripts de verdade:** quando os módulos existirem, as mesmas linhas chegam pela serial do Mega, pela ponte do painel (`ponte.py`), e as duas pontes precisam virar uma, ou a do painel repassar as linhas para esta.
+1. **Gravar e ligar a placa** ([mikromedia.md](mikromedia.md)): confirmar o controlador da tela, a orientação, o touch e a velocidade.
+2. **Alarme de estol na placa**, pelo chip de áudio (VS1053), como o simulador já toca.
+3. **Manobras pela tela** (ideia para depois): informações do próximo nó (Δv, tempo de queima, T− até o nó) e um editor de manobras pelo toque, junto com o editor de encoders da fase 4.
+4. **Painéis de sistemas e de scripts de verdade:** quando os módulos existirem, as mesmas linhas chegam pela serial do Mega, pela ponte do painel (`ponte.py`), e as duas pontes precisam virar uma, ou a do painel repassar as linhas para esta.
 
 ## Histórico
 
@@ -419,3 +418,4 @@ A tela foi feita aos poucos, testando no jogo entre uma etapa e outra:
 | [#14](https://github.com/Schackschuck/KSP/pull/14) | A tela no celular, pelo Wi-Fi |
 | [#15](https://github.com/Schackschuck/KSP/pull/15) | Números do rumo e do pitch na própria navball; sai a fita de rumo, e o modo SUP fica sem o painel de baixo |
 | [#32](https://github.com/Schackschuck/KSP/pull/32) | Painel de sistemas de controle: a página de botões, a roda do SAS e a página do piloto automático, com a volta à navball; a conversa com o `fbw.py` nos dois sentidos |
+| [#40](https://github.com/Schackschuck/KSP/pull/40) | O firmware da mikromedia, cópia do simulador na placa, com o ajuste da tela e do touch na flash; a ponte abre a PROG sem prender a placa no reset |

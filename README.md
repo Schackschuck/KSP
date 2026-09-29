@@ -49,7 +49,7 @@ Cada parte tem um papel bem definido:
 | **Computador de bordo** (Raspberry Pi 4, Python) | Conecta no kRPC pela rede, abre *streams* de telemetria, traduz eventos do painel em comandos do jogo e telemetria em mensagens para o painel. Desenha a tela de telemetria. Dispara os scripts de voo de `scripts/` (ex.: pouso autônomo). | Não lê pino nenhum. |
 | **Joystick** (Logitech Extreme 3D Pro, USB no Pi) | Manda eixos e botões para o computador de bordo, que os traduz em comandos do kRPC. | O KSP não enxerga o joystick: tudo passa pela ponte. |
 | **Painel** (Arduino Mega, C++) | Lê entradas (com debounce), envia eventos; recebe valores e atualiza LEDs, displays e ponteiros. | **Não sabe que o KSP existe.** É um painel de I/O genérico. |
-| **Celular** (opcional, página no navegador) | Mostra a tela multifunção pelo Wi-Fi, com o mesmo protocolo e o mesmo layout, enquanto a mikromedia não tem firmware. | Não fala com o kRPC nem guarda estado: só desenha o que a ponte manda. |
+| **Celular** (opcional, página no navegador) | Mostra a tela multifunção pelo Wi-Fi, com o mesmo protocolo e o mesmo layout, sem precisar da mikromedia. | Não fala com o kRPC nem guarda estado: só desenha o que a ponte manda. |
 | **Tela multifunção** (mikromedia for ARM, LPC2148, C sem framework) | Recebe telemetria pelo mesmo protocolo serial, desenha páginas (atitude, órbita, pouso), troca de página pelo touch e toca alarmes sonoros. | Não fala com o kRPC; só mostra o que o computador de bordo manda. |
 
 Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o endereço do servidor kRPC e a porta serial.
@@ -78,8 +78,11 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Arduino Mega** para o I/O | O Pi não tem entradas analógicas e o Linux não é tempo real; o Mega tem muitos pinos, trabalha em 5V e é compatível com praticamente todo módulo. |
 | **Painel em módulos** com 74HC165 e 74HC595, ligados ao Mega por um backplane | Cada seção do painel é uma placa, montada e testada uma de cada vez. Há três tamanhos (8 entradas e 8 LEDs, 16 e 16, ou 24 e 16), para não montar CI à toa. Cada módulo tem uma etiqueta (chave DIP lida por um 74HC165 a mais), e o Mega reconhece sozinho qual módulo está em cada slot. Os CIs custam poucos reais por módulo, o firmware continua um só e o protocolo com a ponte não muda. Um micro em cada módulo fica para a fase 8. |
 | Pinos do Raspberry Pi **não** substituem o Mega | O Pi não tem entradas analógicas, o Linux não é tempo real para encoders e ponteiros, e os pinos de 3,3 V vão direto ao processador: um fio errado nos 5 V queima o Pi. |
-| **mikromedia for ARM (LPC2148)** como tela multifunção | Já está na bancada. ARM programado sem framework, com tela touch, microSD e áudio. Entra depois do protocolo v1, que ela também usa. |
+| **mikromedia for ARM (LPC2148)** como tela multifunção | Já está na bancada. ARM programado sem framework, com tela touch, microSD e áudio. Começa no protocolo em texto, como o simulador, e passa para o v1 junto com o Mega. |
 | **Simulador da tela multifunção** no PC antes do firmware | A ponte, o protocolo e o desenho (navball, números, botões) ficam prontos e testados com o jogo antes da placa; o firmware só precisa copiar o simulador. A placa desenha a partir dos ângulos, porque a imagem pronta não cabe na serial (150 KB por quadro). |
+| **Firmware da mikromedia compilado com o LLVM** (clang), e não com o `arm-none-eabi-gcc` | Um compilador só, que já gera código para o ARM7, e um `compilar.py` em Python que roda igual no Windows e no Linux, sem `make`. O `mfd.hex` vai compilado no repositório: para gravar, basta o Flash Magic. |
+| **Tela da mikromedia desenhada em faixas de 16 linhas** | Não cabe a tela inteira na RAM (150 KB contra 32 KB), e desenhar direto na tela piscaria. Cada faixa de 10 KB fica pronta na RAM e vai inteira para a tela, então cada ponto é escrito uma vez só. |
+| **Orientação e touch da mikromedia ajustados na própria tela** e guardados na flash | O manual não diz a orientação do módulo nem a do touch. Ajustando na tela, o que vier trocado se corrige sem compilar de novo. |
 | **Celular como tela**, por uma página web | Funciona já, sem firmware e sem o cabo, em qualquer celular e sem instalar nada. A ponte serve a página e fala com ela por HTTP (Server-Sent Events e POST), só com a biblioteca padrão do Python. O protocolo é o mesmo da placa, então a ponte não muda. |
 | **pygame-ce** no lugar do pygame | O pygame original não tem pacote para o Python 3.14; o pygame-ce, mantido pela comunidade, tem e é usado do mesmo jeito (`import pygame`). |
 | **Pouso por previsão**: simula a freada até o chão e acha o acelerador por bisseção | Com arrasto, a freada não tem conta fechada. Simular funciona igual em qualquer planeta, com ou sem atmosfera, e refazer a conta 20 vezes por segundo corrige os erros da previsão. O arrasto é medido em voo, e a previsão só usa parte dele, porque ele cai quando a nave fica mais lenta que o som. A guiagem não conhece o kRPC, então é testada numa nave simulada. |
@@ -109,7 +112,7 @@ bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de 
 scripts/          scripts de voo (pouso, fly by wire...), que rodam com ou sem o cockpit; testes em scripts/tests/
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
 firmware/passos/  sketches de aprendizado, um por passo da fase 1
-firmware/mfd/     mikromedia for ARM / LPC2148 (C, GCC e make)
+firmware/mfd/     mikromedia for ARM / LPC2148 (C, compilado com o LLVM pelo compilar.py)
 hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa; ver hardware/README.md
                   e hardware/construcao.md (carcaça, aparência, painéis, joystick);
                   cada peça própria numa pasta, com ficha e desenhos (hardware/korry/);
@@ -252,17 +255,18 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de flash, 32 KB de RAM), tela 320x240 com touch resistivo, microSD, saída de áudio e carregador de Li-Po. Aqui o firmware é escrito **sem framework**: C, registradores, script de linker e código de inicialização próprios.
 
-**Status: simulador pronto, firmware não começado.** A tela já roda num simulador no PC e no navegador do celular, pelo Wi-Fi, com navball, números e botões de toque, falando o protocolo que a placa vai usar: [docs/mfd.md](docs/mfd.md). A placa ainda não conversa com o PC: o cabo mini-USB antigo falha nos dados.
+**Status: firmware pronto, falta rodar na placa.** O firmware em `firmware/mfd/` faz na placa o que o simulador faz no PC: navball, números, botões de toque e as páginas SAS, AP e POUSO, no protocolo em texto. Ele compila sem avisos e foi conferido no PC contra o simulador. Gravar e ligar: [docs/mikromedia.md](docs/mikromedia.md). A tela também roda no simulador do PC e no navegador do celular: [docs/mfd.md](docs/mfd.md).
 
-- **Antes de começar:** achar o manual e o esquemático da placa (site da MikroE) para confirmar o controlador da tela, os pinos da tela e do touch e o chip de áudio. Já se sabe que a placa tem duas mini-USB: a **USB** vai direto no LPC2148, e a **PROG** tem um conversor USB-serial **FT232RL**. É pela PROG que o PC conversa com a placa.
-- **Ferramentas:** `arm-none-eabi-gcc` + `make`. Gravação pelo bootloader serial de fábrica do LPC2148, com `lpc21isp` ou Flash Magic — provavelmente pela PROG (FT232RL), sem precisar de gravador. Antes de gravar, guardar o `.hex` do demo de fábrica, se a MikroE oferecer: gravar um programa novo apaga o demo.
+- **Placa:** duas mini-USB. A **USB** vai direto no LPC2148, e a **PROG** tem um conversor USB-serial **FT232RL**, por onde o PC conversa com a placa e o Flash Magic grava o firmware. A tela é um módulo MI0283QT2 (320x240, barramento de 16 bits), com touch resistivo lido pelo ADC. Pinos em [docs/mikromedia.md](docs/mikromedia.md#como-o-firmware-funciona).
+- **Ferramentas:** LLVM (clang, ld.lld e llvm-objcopy), chamado pelo `firmware/mfd/compilar.py`; o `mfd.hex` já vem compilado. Gravação pelo bootloader serial de fábrica do LPC2148, pela PROG, com o Flash Magic.
 - **Passos:**
-  1. Piscar um LED: código de inicialização, script de linker, configuração do PLL.
-  2. Serial: eco de caracteres; depois, receber o protocolo da tela ([docs/protocolo.md](docs/protocolo.md#tela-multifunção-mikromedia)), em texto como o simulador, e mais tarde o v1.
-  3. Driver da tela: inicializar o controlador, desenhar pixels, retângulos e texto com fonte bitmap. Com 32 KB de RAM não cabe um *framebuffer* (320×240×2 = 150 KB), então o desenho vai direto para a memória do controlador da tela, atualizando só o que mudou.
-  4. Touch: leitura pelo ADC e calibração.
-  5. Páginas: a navball do simulador primeiro (a conta está em `bridge/navball.py`, pronta para virar C); depois mapa da órbita, dados de pouso, informações, uma página para cada módulo do painel que precisa de números (a começar pelo editor de nós de manobra) e uma roda de modos do SAS. Troca de página pelo touch e pela ponte, que abre a página do módulo em uso e volta depois.
-  6. Áudio: alarmes e avisos gravados no microSD (combustível baixo, contagem de altitude no pouso).
+  1. [x] Código de inicialização, script de linker, PLL a 60 MHz.
+  2. [x] Serial com interrupção e o protocolo da tela ([docs/protocolo.md](docs/protocolo.md#tela-multifunção-mikromedia)), em texto como o simulador; mais tarde o v1.
+  3. [x] Driver da tela (HX8347) e desenho em faixas de 16 linhas, porque não cabe um *framebuffer* (320×240×2 = 150 KB contra 32 KB de RAM).
+  4. [x] Touch pelo ADC, com a orientação e a calibração escolhidas na própria tela e guardadas na flash.
+  5. [x] Páginas: navball, roda do SAS, piloto automático e pouso. Depois: mapa da órbita, informações e uma página para cada módulo do painel que precisa de números (a começar pelo editor de nós de manobra).
+  6. [ ] Rodar na placa: confirmar o controlador da tela, o touch e a velocidade.
+  7. [ ] Áudio: alarme de estol e avisos gravados no microSD (combustível baixo, contagem de altitude no pouso), pelo VS1053.
 
 **Pronto quando:** a mikromedia mostra telemetria ao vivo recebida do Pi e toca um alarme de combustível baixo.
 
@@ -467,7 +471,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 ### Fase 6 — Tela multifunção
 
 - [x] mikromedia for ARM (LPC2148)
-- [ ] Cabo mini-USB **com fios de dados**, para a PROG (o antigo alimenta a placa, mas o Windows não reconhece o FT232)
+- [x] Cabo mini-USB **com fios de dados**, para a PROG (o antigo alimenta a placa, mas o Windows não reconhece o FT232)
 - [ ] Cartão microSD (para os sons de alarme)
 - [ ] Fone ou caixinha de som com plugue P2
 - [ ] Gravador JTAG compatível com ARM7 (opcional, só para depurar passo a passo)
@@ -491,7 +495,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [Arduino — documentação](https://docs.arduino.cc/)
 - [KiCad](https://www.kicad.org/)
 - [LPC214x User Manual (UM10139)](https://www.nxp.com/docs/en/user-guide/UM10139.pdf) — referência de todos os registradores do LPC2148
-- [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (`arm-none-eabi-gcc`)
-- [lpc21isp](https://sourceforge.net/projects/lpc21isp/) — gravação pelo bootloader serial do LPC2148
-- Manual e esquemático da mikromedia for ARM: site da [MikroElektronika](https://www.mikroe.com/)
+- [LLVM](https://llvm.org/) (clang e ld.lld), que compila o firmware da mikromedia
+- [Flash Magic](https://www.flashmagictool.com/) — gravação pelo bootloader serial do LPC2148
+- Manual e esquemático da mikromedia for ARM (MIKROE-780): site da [MikroElektronika](https://www.mikroe.com/)
 - Bibliotecas úteis para o firmware: `LiquidCrystal_I2C`, `LedControl` (MAX7219), `FastLED` ou `Adafruit_NeoPixel` (WS2812), `SwitecX25` (X27.168)
