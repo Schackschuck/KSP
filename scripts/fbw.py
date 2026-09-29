@@ -1,51 +1,52 @@
-"""Fly by wire de avião: o manche escolhe para onde ir, e o avião vai.
+"""Fly by wire de avião, com a lei de um caça: o piloto pede, o avião faz na hora.
 
-O manche não mexe nas superfícies. Ele move um ponto na navball, o ponto do
-FBW, que diz para onde o piloto quer ir: um rumo e um ângulo de subida. O
-script inclina as asas, puxa ou cede o nariz e usa o leme até o pró-grado
-(para onde o avião vai de verdade) ficar em cima do ponto. Soltando o
-manche, o ponto fica onde está e o avião vai até ele e segue nele.
-
-- Manche para trás ou para a frente: o ponto sobe ou desce.
-- Manche para os lados: o ponto anda para os lados, ou seja, muda o rumo.
-- Manche solto com o ponto a menos de TRAVA_GAMA do horizonte: o avião trava
-  a altitude daquele momento e corrige o ponto sozinho para ficar nela.
+- Manche para trás ou para a frente: pede carga (g). Solto, 1 g corrigido pelo
+  ângulo de subida: o caminho não curva para cima nem para baixo com as asas
+  niveladas. Puxando todo, CARGA_MANCHE_MAX; empurrando todo, CARGA_MANCHE_MIN.
+- Manche para os lados: pede velocidade de rolagem, até GIRO_ROLL_MANCHE com
+  o manche todo. Solto, a inclinação fica onde parou, em qualquer ângulo,
+  como num caça: numa curva inclinada, o piloto puxa para não descer.
+- Torção do manche (leme): soma ao leme que o FBW usa para coordenar a curva.
 - No chão, ou com o FBW desligado pelo botão, o manche mexe direto nas
   superfícies (lei direta), como no jogo sem o script.
-- Piloto automático, por cima do ponto (ligado pelo painel de sistemas, pela
-  ponte da tela): HDG põe o rumo do ponto no rumo escolhido; V/S põe o ângulo
-  de subida que dá a velocidade vertical escolhida; ALT sobe ou desce até a
-  altitude escolhida (armado) e segura nela (ligado). Mexer o manche para os
-  lados desliga o HDG; para trás ou para a frente, o ALT e o V/S.
+- Piloto automático (ligado pelo painel de sistemas, pela ponte da tela): HDG
+  vira até o rumo escolhido; V/S sobe ou desce com a velocidade vertical
+  escolhida; ALT sobe ou desce até a altitude escolhida (armado) e segura nela
+  (ligado). O korry TRAVA ALT segura a altitude do momento. Mexer o manche
+  para os lados desliga o HDG; para trás ou para a frente, o ALT, o V/S e a
+  trava. Sem nenhum deles, o FBW não trava nada sozinho.
 - Alpha floor: com o ângulo de ataque perto de ALFA_MAX (o avião devagar
   demais para a asa segurar), o FBW recupera sozinho: acelerador a 100%,
-  piloto automático e trava desligados, asas niveladas e o ponto a
+  piloto automático e trava desligados, asas niveladas e o caminho a
   GAMA_RECUPERA abaixo do horizonte (e mais, até GAMA_RECUPERA_MIN, enquanto
-  a asa não folga), trocando altura por velocidade. O painel
-  acende ESTOL, com alarme na tela. Quando o ângulo de ataque volta, o ponto
-  volta ao horizonte e a trava pega a altitude nova; o acelerador fica no
+  a asa não folga), trocando altura por velocidade. Empurrar o manche e rolar
+  continuam com o piloto. O painel acende ESTOL, com alarme na tela. Quando o
+  ângulo de ataque volta, a trava pega a altitude nova; o acelerador fica no
   máximo até o piloto mexer nele.
-- Proteções: inclinação das asas até INCLINACAO_MAX, ângulo de subida entre
-  GAMA_MIN e GAMA_MAX e ângulo de ataque até ALFA_MAX: puxar o manche não
-  estola o avião.
+- Proteções: ângulo de ataque entre ALFA_MIN e ALFA_MAX (puxar o manche não
+  estola o avião) e carga até CARGA_MAX. No piloto automático, inclinação até
+  INCLINACAO_MAX e ângulo de subida entre GAMA_MIN e GAMA_MAX.
 - O acelerador fica com o piloto: a alavanca do joystick passa direto para o
   jogo quando é mexida, e as teclas do jogo continuam valendo.
 
-Por dentro, três camadas, cada uma pedindo algo para a de baixo:
- 1. Trajetória: a diferença entre o ponto e o pró-grado vira a aceleração que
-    falta para curvar o caminho. Dela saem a inclinação das asas e a carga
-    (quantos g a asa tem que fazer).
- 2. Carga → velocidade de giro do nariz em pitch; inclinação → velocidade de
-    giro em roll; o leme zera o escorregamento (curva coordenada).
- 3. Velocidade de giro → superfícies (control.pitch, roll e yaw), com o
-    ganho dividido pela aceleração angular que o avião consegue fazer agora.
-    Assim o mesmo ajuste serve devagar e rápido, e em aviões diferentes.
+Por dentro, duas camadas por eixo:
+ 1. Pitch: a carga pedida (pelo manche, ou pelo piloto automático a partir
+    do caminho que falta curvar) vira velocidade de giro do nariz. Roll: o
+    manche pede a velocidade de rolagem direto; o HDG, a trava da inclinação
+    e o alpha floor pedem uma inclinação, que vira velocidade de rolagem. O
+    leme zera o escorregamento (curva coordenada).
+ 2. Velocidade de giro → superfícies (control.pitch, roll e yaw), com
+    proporcional e integral e o ganho dividido pela aceleração angular que
+    o avião consegue fazer agora. Assim o mesmo ajuste serve devagar e
+    rápido, e em aviões diferentes; o integral acha sozinho o comando que
+    segura o giro pedido.
 
 A guiagem (FlyByWire) não conhece o kRPC nem o joystick: recebe uma Leitura e
 um Manche e devolve Comandos. Os testes (tests/test_fbw.py) usam a mesma
 guiagem com um avião simulado.
 
-O ponto aparece na navball da tela multifunção (bridge/mfd.py), se ela
+Com o piloto automático, a trava ou o alpha floor, o caminho que o FBW
+persegue aparece na navball da tela multifunção (bridge/mfd.py), se ela
 estiver aberta: o script manda FBW <pitch> <rumo> por UDP para a ponte da
 tela, que repassa para a tela, junto com a lei, a trava e os modos do piloto
 automático. A ponte responde com os toques do painel de sistemas (os korry
@@ -75,17 +76,18 @@ import sys
 import time
 from dataclasses import dataclass
 
-# ---- o ponto e o manche ----
-VEL_PONTO_PITCH = 8.0    # graus/s: o ponto sobe ou desce com o manche todo para trás ou para a frente
-VEL_PONTO_RUMO = 15.0    # graus/s: o ponto anda para os lados com o manche todo de lado
-LADO_MAX = 60.0          # graus: o ponto fica no máximo isso de lado do pró-grado, para não sair da navball
+# ---- o manche ----
 ZONA_MORTA = 0.05        # manche: fração do curso no centro que conta como solto
 EXPO = 0.4               # manche: 0 = resposta reta; perto de 1, mais fina perto do centro
-TRAVA_GAMA = 1.0         # graus: com o manche solto e o ponto mais perto que isso do horizonte, trava a altitude
+CARGA_MANCHE_MAX = 4.0
+CARGA_MANCHE_MIN = -1.0
+GIRO_ROLL_MANCHE = math.radians(90.0)
+PITCH_SEM_ROLAGEM = 75.0
+GIRO_ROLL_PARADO = math.radians(3.0)
 
 # ---- proteções ----
-GAMA_MIN, GAMA_MAX = -30.0, 30.0   # graus: ângulo de subida do ponto
-INCLINACAO_MAX = 60.0    # graus: inclinação das asas
+GAMA_MIN, GAMA_MAX = -30.0, 30.0   # graus: ângulo de subida do piloto automático
+INCLINACAO_MAX = 60.0    # graus: inclinação das asas no piloto automático
 ALFA_MAX = 15.0          # graus: ângulo de ataque máximo (a maioria das asas do KSP estola bem depois)
 ALFA_MIN = -8.0          # graus: ângulo de ataque mínimo, empurrando o manche
 CARGA_MIN, CARGA_MAX = 0.0, 4.0    # g: o que a asa pode fazer
@@ -93,34 +95,32 @@ MARGEM_CARGA = 0.9       # a inclinação só usa 90% da carga que a asa aguenta
 ALFA_CONTA_CARGA = 2.0   # graus: com menos ângulo de ataque que isso, sobra asa (a estimativa não vale)
 TAU_CARGA_MAXIMA = 0.5   # s: filtro da estimativa de quanto a asa aguenta
 
-# ---- camada 1: trajetória ----
-K_TRAJETORIA = 0.4       # 1/s: o pró-grado anda até o ponto com constante de tempo de 2,5 s
+# ---- piloto automático: o caminho ----
+K_TRAJETORIA = 0.4       # 1/s: o pró-grado anda até o caminho pedido com constante de tempo de 2,5 s
 GIRO_TRAJETORIA_MAX = math.radians(5.0)  # rad/s: o caminho sobe ou desce no máximo 5°/s
 K_ALTITUDE = 0.15        # 1/s: com a altitude travada, 10 m de erro pedem 1,5 m/s de subida
 VV_TRAVA_MAX = 10.0      # m/s: a correção da altitude travada sobe ou desce no máximo isso
 A_CIMA_MIN = 0.3         # g: a inclinação é calculada com pelo menos esta carga, para não virar de costas
 
-# ---- camada 2: velocidades de giro ----
-K_CARGA = 1.5            # quanto a diferença de carga acelera o giro do nariz (sem unidade)
+# ---- camada 1: velocidades de giro ----
+K_CARGA = 2.5
 K_ALFA = 2.0             # 1/s: na proteção, o ângulo de ataque volta para o limite com constante de 0,5 s
-GIRO_PITCH_MAX = math.radians(20.0)  # rad/s
+GIRO_PITCH_MAX = math.radians(30.0)
 K_INCLINACAO = 2.0       # 1/s: 10° de diferença na inclinação pedem 20°/s de roll
 GIRO_ROLL_MAX = math.radians(45.0)   # rad/s
 K_BETA = 4.0             # 1/s²: o leme contra o escorregamento
 K_YAW = 3.0              # 1/s: amortecimento do yaw
 
-# ---- camada 3: superfícies ----
-KP_PITCH, KI_PITCH = 6.0, 12.0   # 1/s e 1/s²: da diferença na velocidade de giro para a aceleração angular pedida
-KP_ROLL = 5.0            # 1/s
-KI_ROLL = 2.0            # 1/s²: só perto da inclinação pedida, para o aileron que o avião torto precisa
-INTEGRA_ROLL = math.radians(5.0)   # rad: mais longe que isso, o integral do roll fica parado
+# ---- camada 2: superfícies ----
+KP_PITCH, KI_PITCH = 2.0, 10.0
+KP_ROLL, KI_ROLL = 5.0, 5.0
 AUTORIDADE_MIN = 0.2     # rad/s²: abaixo disso, o que o jogo informa é ruído (evita dividir por quase zero)
 
 # ---- alpha floor: perto do estol, acelerador no máximo ----
 ALFA_FLOOR = ALFA_MAX - 0.5   # graus: com o ângulo de ataque acima disso, entra (a curva devagar usa até ~90% de ALFA_MAX)
 ALFA_FLOOR_SAI = ALFA_MAX - 5.0  # graus: sai com o ângulo de ataque abaixo disso...
 FLOOR_SAI_DEPOIS = 2.0       # s: ...por esse tempo seguido
-GAMA_RECUPERA = -5.0         # graus: no alpha floor, o ponto começa pelo menos isso abaixo do horizonte...
+GAMA_RECUPERA = -5.0         # graus: no alpha floor, o caminho começa pelo menos isso abaixo do horizonte...
 VEL_RECUPERA = 2.0           # graus/s: ...e desce mais, devagar, enquanto a asa não folga (sem motor, precisa)...
 GAMA_RECUPERA_MIN = -15.0    # graus: ...até no máximo isso
 
@@ -278,17 +278,17 @@ class FlyByWire:
         self.ligado = True           # botão do FBW; mesmo ligado, no chão a lei é a direta
         self.lei = DIRETA
         self.motivo = "no chão"      # por que a lei é a direta
-        self.ponto = None            # (ângulo de subida, rumo) em graus: onde o piloto pôs o ponto
-        self.comando = None          # o que o FBW persegue: o ponto, corrigido pela trava de altitude
+        self.comando = None
         self.altitude_travada = None  # m
         self.velocidade_alvo = None  # m/s: acelerador automático (SPD); None = acelerador na mão
         self.ap = dict.fromkeys(MODOS_AP, False)        # modos do piloto automático ligados
         self.ap_valores = dict.fromkeys(MODOS_AP, None)  # rumo (graus), altitude (m), velocidade vertical (m/s)
         self.alt_capturada = False   # o ALT chegou na altitude e segura nela
-        self._sem_trava_auto = False  # a trava foi solta no korry: não trava sozinho até o manche mexer
         self.estol = False           # alpha floor ligado: acelerador no máximo
         self._alfa = 0.0             # graus: ângulo de ataque da última volta
         self._floor_abaixo = 0.0     # s seguidos com o ângulo de ataque abaixo de ALFA_FLOOR_SAI
+        self._gama_recupera = 0.0
+        self.inclinacao_segura = None
         self.taxas = (0.0, 0.0, 0.0)  # rad/s: giro medido em pitch, roll e yaw
         self.diagnostico = {}        # o que cada camada pediu, para o terminal e a gravação
         self._no_ar_desde = None     # ut da decolagem
@@ -350,7 +350,6 @@ class FlyByWire:
             return
         if self.altitude_travada is not None:
             self.altitude_travada = None
-            self._sem_trava_auto = True
         else:
             self._pedido_trava = True
             self.ap["ALT"] = self.ap["VS"] = False
@@ -373,17 +372,13 @@ class FlyByWire:
     def _trocar_lei(self, lei, l):
         self.lei = lei
         self.altitude_travada = None
-        self._pedido_trava = self._sem_trava_auto = False
+        self._pedido_trava = False
         self.estol = False
+        self.comando = None
+        self.inclinacao_segura = None
         if lei == DIRETA:
-            # Sem o FBW, não há ponto: o piloto automático desliga, como no avião.
-            self.ponto = self.comando = None
             self.ap = dict.fromkeys(MODOS_AP, False)
             return
-        # O ponto começa onde o avião já está indo, e os integradores com o
-        # comando que já estava no jogo: a troca não dá tranco.
-        gama, rumo = direcao(l.velocidade)
-        self.ponto = self.comando = (limitar(gama, GAMA_MIN, GAMA_MAX), rumo)
         self._carga_maxima = None
         self._integral = {
             "pitch": self._saida.pitch,
@@ -425,43 +420,40 @@ class FlyByWire:
 
     # ---- a lei do FBW ----
 
-    def _mover_ponto(self, l, m, dt, rumo_trajetoria):
-        gama, rumo = self.ponto
-        puxa, lado = curva(m.pitch), curva(m.roll)
-        # Mexer no manche devolve o ponto ao piloto, no eixo que ele mexeu.
+    def _soltar_modos(self, puxa, lado):
+        """Mexer no manche devolve ao piloto o eixo que ele mexeu."""
         if puxa != 0.0:
             self.altitude_travada = None
-            self._sem_trava_auto = False
+            self._pedido_trava = False
             self.ap["ALT"] = self.ap["VS"] = False
         if lado != 0.0:
             self.ap["HDG"] = False
-        gama = limitar(gama + VEL_PONTO_PITCH * puxa * dt, GAMA_MIN, GAMA_MAX)
-        rumo += VEL_PONTO_RUMO * lado * dt
+
+    def _gama_automatico(self, l, v, puxa, dt):
+        """O ângulo de subida que o piloto automático, a trava ou o alpha floor pedem, ou None com o manche."""
         if self.estol:
-            # Recuperação do estol: nariz para baixo (o manche ainda pode
-            # descer mais, mas não subir) e asas niveladas, sem curva, a não
-            # ser que o piloto mexa para o lado. Enquanto a asa continua no
-            # limite, o ponto desce mais: sem motor, só a descida dá velocidade.
-            gama = min(gama, GAMA_RECUPERA)
+            if puxa != 0.0:
+                return None
             if self._alfa > ALFA_FLOOR_SAI:
-                gama = max(gama - VEL_RECUPERA * dt, min(gama, GAMA_RECUPERA_MIN))
-            if lado == 0.0:
-                rumo = rumo_trajetoria
-        if self.ap["HDG"]:
-            rumo = self._valor("HDG", rumo_trajetoria)
-        # Longe demais para o lado, o ponto sairia da navball: fica na beirada
-        # e vai sendo levado pelo avião enquanto ele vira.
-        lado_do_progrado = limitar(angulo180(rumo - rumo_trajetoria), -LADO_MAX, LADO_MAX)
-        rumo = (rumo_trajetoria + lado_do_progrado) % 360.0
-        subindo = self.ap["ALT"] or self.ap["VS"]
-        if not self.estol and (self._pedido_trava or (
-            puxa == 0.0 and self.altitude_travada is None and not subindo
-            and not self._sem_trava_auto and abs(gama) < TRAVA_GAMA
-        )):
+                self._gama_recupera = max(self._gama_recupera - VEL_RECUPERA * dt, GAMA_RECUPERA_MIN)
+            return self._gama_recupera
+        if self._pedido_trava:
             self.altitude_travada = l.altitude
             self._pedido_trava = False
-            gama = 0.0
-        self.ponto = (gama, rumo)
+        subida = self._subida_do_piloto(l, v)
+        if subida is None and self.altitude_travada is not None:
+            subida = limitar(K_ALTITUDE * (self.altitude_travada - l.altitude), -VV_TRAVA_MAX, VV_TRAVA_MAX)
+        if subida is None:
+            return None
+        return limitar(math.degrees(math.asin(limitar(subida / v, -1.0, 1.0))), GAMA_MIN, GAMA_MAX)
+
+    def _rumo_automatico(self, rumo, puxa, lado):
+        """O rumo que o HDG ou o alpha floor pedem, ou None com o manche."""
+        if self.ap["HDG"]:
+            return self._valor("HDG", rumo)
+        if self.estol and puxa == 0.0 and lado == 0.0:
+            return rumo
+        return None
 
     def _valor(self, nome, atual):
         """O valor escolhido para o modo; sem valor, fica o de agora."""
@@ -488,73 +480,73 @@ class FlyByWire:
     def _voar(self, l, m, base, dt):
         v = modulo(l.velocidade)
         gama, rumo = direcao(l.velocidade)
-        self._mover_ponto(l, m, dt, rumo)
+        puxa, lado, pe = curva(m.pitch), curva(m.roll), curva(m.yaw)
+        self._soltar_modos(puxa, lado)
 
-        gama_c, rumo_c = self.ponto
-        subida = self._subida_do_piloto(l, v)
-        if subida is not None:
-            # O ponto fica no ângulo de subida do piloto automático: soltar o
-            # modo mexendo no manche começa dali, sem tranco.
-            gama_c = limitar(math.degrees(math.asin(limitar(subida / v, -1.0, 1.0))), GAMA_MIN, GAMA_MAX)
-            self.ponto = (gama_c, rumo_c)
-        elif self.altitude_travada is not None:
-            subida = limitar(K_ALTITUDE * (self.altitude_travada - l.altitude), -VV_TRAVA_MAX, VV_TRAVA_MAX)
-            gama_c = math.degrees(math.asin(limitar(subida / v, -1.0, 1.0)))
-        self.comando = (gama_c, rumo_c)
-
-        # O que a asa está fazendo agora.
         g = l.g
         frente, direita, cima = base
         alfa, beta = angulos_do_ar(l.velocidade, base)
         carga = escalar(l.forca_aero, cima) / (l.massa * g)
         phi = math.radians(l.rolagem)
+        cos_gama = math.cos(math.radians(gama))
         inclinacao_max = self._inclinacao_maxima(carga, alfa, dt)
 
-        # 1. Trajetória: quanto o caminho tem que girar para cima e para o
-        # lado, e a aceleração que a asa precisa fazer para isso (a gravidade
-        # puxa o caminho para baixo, então a asa soma g · cos γ).
-        cos_gama = math.cos(math.radians(gama))
-        giro_gama = limitar(
-            K_TRAJETORIA * math.radians(gama_c - gama), -GIRO_TRAJETORIA_MAX, GIRO_TRAJETORIA_MAX
-        )
-        giro_rumo = K_TRAJETORIA * math.radians(angulo180(rumo_c - rumo))
-        a_cima = v * giro_gama + g * cos_gama
-        a_lado = v * cos_gama * giro_rumo
-        inclinacao_c = math.degrees(math.atan2(a_lado, max(a_cima, A_CIMA_MIN * g)))
-        inclinacao_c = limitar(inclinacao_c, -inclinacao_max, inclinacao_max)
-        # A carga é a que segura a parte de cima com a inclinação de agora: na
-        # curva, a asa tem que puxar mais para o avião não descer.
-        cos_inclinacao = max(math.cos(math.radians(l.rolagem)), math.cos(math.radians(70.0)))
-        carga_c = limitar(a_cima / (g * cos_inclinacao), CARGA_MIN, CARGA_MAX)
+        gama_c = self._gama_automatico(l, v, puxa, dt)
+        rumo_c = self._rumo_automatico(rumo, puxa, lado)
+        if gama_c is None and rumo_c is None:
+            self.comando = None
+        else:
+            self.comando = (gama if gama_c is None else gama_c, rumo if rumo_c is None else rumo_c)
 
-        # 2. Pitch: a carga vira giro do nariz. Com a carga certa, o nariz
-        # gira junto com o caminho (a primeira parte); se falta carga, gira
-        # mais rápido para aumentar o ângulo de ataque (a segunda).
+        a_cima = g * cos_gama
+        if gama_c is None:
+            if puxa >= 0.0:
+                carga_c = cos_gama + puxa * (CARGA_MANCHE_MAX - cos_gama)
+            else:
+                carga_c = cos_gama + puxa * (cos_gama - CARGA_MANCHE_MIN)
+        else:
+            giro_gama = limitar(
+                K_TRAJETORIA * math.radians(gama_c - gama), -GIRO_TRAJETORIA_MAX, GIRO_TRAJETORIA_MAX
+            )
+            a_cima += v * giro_gama
+            cos_inclinacao = max(math.cos(phi), math.cos(math.radians(70.0)))
+            carga_c = limitar(a_cima / (g * cos_inclinacao), CARGA_MIN, CARGA_MAX)
+
+        if rumo_c is not None:
+            self.inclinacao_segura = None
+            giro_rumo = K_TRAJETORIA * math.radians(angulo180(rumo_c - rumo))
+            a_lado = v * cos_gama * giro_rumo
+            inclinacao_c = math.degrees(math.atan2(a_lado, max(a_cima, A_CIMA_MIN * g)))
+            inclinacao_c = limitar(inclinacao_c, -inclinacao_max, inclinacao_max)
+            giro_roll_c = limitar(
+                K_INCLINACAO * math.radians(angulo180(inclinacao_c - l.rolagem)), -GIRO_ROLL_MAX, GIRO_ROLL_MAX
+            )
+        elif lado != 0.0 or abs(l.pitch) > PITCH_SEM_ROLAGEM or (
+            self.inclinacao_segura is None and abs(self.taxas[1]) > GIRO_ROLL_PARADO
+        ):
+            self.inclinacao_segura = None
+            inclinacao_c = None
+            giro_roll_c = lado * GIRO_ROLL_MANCHE
+        else:
+            if self.inclinacao_segura is None:
+                self.inclinacao_segura = l.rolagem
+            inclinacao_c = self.inclinacao_segura
+            giro_roll_c = limitar(
+                K_INCLINACAO * math.radians(angulo180(inclinacao_c - l.rolagem)), -GIRO_ROLL_MAX, GIRO_ROLL_MAX
+            )
+
         giro_caminho = g * (carga - cos_gama * math.cos(phi)) / v
         giro_pitch_c = g * (carga_c - cos_gama * math.cos(phi)) / v + K_CARGA * (carga_c - carga) * g / v
-        # Proteção do ângulo de ataque: perto do limite, o nariz só gira o
-        # bastante para o ângulo parar no limite.
         giro_pitch_c = min(giro_pitch_c, giro_caminho + K_ALFA * (math.radians(ALFA_MAX) - alfa))
         giro_pitch_c = max(giro_pitch_c, giro_caminho + K_ALFA * (math.radians(ALFA_MIN) - alfa))
         giro_pitch_c = limitar(giro_pitch_c, -GIRO_PITCH_MAX, GIRO_PITCH_MAX)
 
-        # Roll: vai até a inclinação pedida, girando mais devagar perto dela.
-        erro_inclinacao = math.radians(angulo180(inclinacao_c - l.rolagem))
-        giro_roll_c = limitar(K_INCLINACAO * erro_inclinacao, -GIRO_ROLL_MAX, GIRO_ROLL_MAX)
-
-        # 3. Superfícies.
         giro_pitch, giro_roll, giro_yaw = self.taxas
         a_pitch, a_roll, a_yaw = (max(a, AUTORIDADE_MIN) for a in l.autoridade)
         pitch = self._pi("pitch", giro_pitch_c - giro_pitch, a_pitch, dt, KP_PITCH, KI_PITCH)
-        # O integral do roll soma a diferença na inclinação, e não no giro, e
-        # só perto dela: se somasse durante a rolagem, o aileron guardado
-        # levaria a asa além da inclinação pedida.
-        passo = KI_ROLL * erro_inclinacao / a_roll * dt if abs(erro_inclinacao) < INTEGRA_ROLL else 0.0
-        roll = self._integrar("roll", passo, KP_ROLL * (giro_roll_c - giro_roll) / a_roll, -1.0, 1.0)
-        # Yaw: na curva coordenada o nariz gira em yaw g · sen φ / v, e o
-        # avião não escorrega de lado.
-        giro_yaw_c = g * math.sin(phi) / v
-        yaw = limitar((K_BETA * beta + K_YAW * (giro_yaw_c - giro_yaw)) / a_yaw, -1.0, 1.0)
+        roll = self._pi("roll", giro_roll_c - giro_roll, a_roll, dt, KP_ROLL, KI_ROLL)
+        giro_yaw_c = g * math.sin(phi) * cos_gama / v + giro_roll * math.tan(alfa)
+        yaw = limitar((K_BETA * beta + K_YAW * (giro_yaw_c - giro_yaw)) / a_yaw + pe, -1.0, 1.0)
 
         self.diagnostico = {
             "inclinacao_c": inclinacao_c,
@@ -566,18 +558,17 @@ class FlyByWire:
             "giro_pitch_c": math.degrees(giro_pitch_c),
             "giro_roll_c": math.degrees(giro_roll_c),
         }
-        self._alpha_floor(math.degrees(alfa), dt)
+        self._alpha_floor(l, gama, math.degrees(alfa), dt)
         return Comandos(pitch, roll, yaw, self._acelerador(l, m, v, dt))
 
-    def _alpha_floor(self, alfa, dt):
+    def _alpha_floor(self, l, gama, alfa, dt):
         """Liga o alpha floor perto do estol; desliga quando a asa folga por um tempo."""
         self._alfa = alfa
         if not self.estol:
             if alfa > ALFA_FLOOR:
                 self.estol = True
                 self._floor_abaixo = 0.0
-                # O piloto automático e a trava desligam: nenhum dos dois
-                # pode segurar o nariz para cima agora.
+                self._gama_recupera = min(gama, GAMA_RECUPERA)
                 self.ap = dict.fromkeys(MODOS_AP, False)
                 self.altitude_travada = None
                 self._pedido_trava = False
@@ -585,10 +576,7 @@ class FlyByWire:
         self._floor_abaixo = self._floor_abaixo + dt if alfa < ALFA_FLOOR_SAI else 0.0
         if self._floor_abaixo >= FLOOR_SAI_DEPOIS:
             self.estol = False
-            # Recuperado: o ponto volta ao horizonte, e a trava pega a
-            # altitude nova na próxima volta, para o avião não seguir descendo.
-            self.ponto = (0.0, self.ponto[1])
-            self._sem_trava_auto = False
+            self._pedido_trava = True
 
     def _inclinacao_maxima(self, carga, alfa, dt):
         """Até onde as asas podem inclinar sem o avião descer.
@@ -829,8 +817,8 @@ class SemJoystick:
     """No lugar do joystick (--sem-joystick): o manche fica sempre solto.
 
     Na lei direta, o avião é pilotado pelo teclado do jogo (decolagem e
-    pouso). No ar, o FBW segura o ponto, e quem mexe nele é o piloto
-    automático, pelo painel de sistemas (a página de botões da ponte da tela).
+    pouso). No ar, o FBW segura o caminho e a inclinação, e quem muda é o
+    piloto automático, pelo painel de sistemas (a página de botões da ponte da tela).
     """
 
     nome = "nenhum (--sem-joystick: teclado na lei direta, piloto automático no FBW)"
@@ -844,8 +832,8 @@ class SemJoystick:
 
 def linhas_de_estado(fbw):
     """O estado do FBW nas linhas do protocolo da tela (docs/protocolo.md):
-    o ponto, a lei, a trava e os modos do piloto automático."""
-    if fbw is None or fbw.lei != FBW:
+    o caminho do piloto automático, a lei, a trava e os modos do piloto automático."""
+    if fbw is None or fbw.lei != FBW or fbw.comando is None:
         ponto = "FBW OFF"
     else:
         pitch, rumo = fbw.comando
@@ -928,8 +916,7 @@ class Gravador:
     """Grava cada volta numa planilha (CSV), para ver a resposta do avião e ajustar os ganhos."""
 
     COLUNAS = (
-        "ut", "lei", "manche_pitch", "manche_roll", "ponto_gama", "ponto_rumo",
-        "comando_gama", "comando_rumo", "gama", "rumo", "altitude", "velocidade",
+        "ut", "lei", "manche_pitch", "manche_roll", "manche_yaw", "comando_gama", "comando_rumo", "gama", "rumo", "altitude", "velocidade",
         "pitch", "rolagem", "inclinacao_c", "alfa", "beta", "carga", "carga_c",
         "giro_pitch", "giro_pitch_c", "giro_roll", "giro_roll_c", "giro_yaw",
         "cmd_pitch", "cmd_roll", "cmd_yaw", "pressao",
@@ -944,11 +931,10 @@ class Gravador:
 
     def gravar(self, l, m, c, fbw):
         gama, rumo = direcao(l.velocidade) if modulo(l.velocidade) > 0 else (0.0, 0.0)
-        ponto = fbw.ponto or (None, None)
         comando = fbw.comando or (None, None)
         d = fbw.diagnostico if fbw.lei == FBW else {}
         linha = (
-            l.ut, fbw.lei, m.pitch, m.roll, *ponto, *comando, gama, rumo, l.altitude,
+            l.ut, fbw.lei, m.pitch, m.roll, m.yaw, *comando, gama, rumo, l.altitude,
             modulo(l.velocidade), l.pitch, l.rolagem, d.get("inclinacao_c"), d.get("alfa"),
             d.get("beta"), d.get("carga"), d.get("carga_c"),
             math.degrees(fbw.taxas[0]), d.get("giro_pitch_c"), math.degrees(fbw.taxas[1]),
@@ -986,9 +972,11 @@ def status(l, fbw, c):
             f"{nome}{'*' if fbw.estado_ap(nome) == 2 else ''}" for nome in MODOS_AP if fbw.ap[nome]
         )
         trava += f"  piloto {modos}" if modos else ""
+        if fbw.comando is not None:
+            texto += f"  caminho {fbw.comando[0]:+5.1f} {fbw.comando[1]:5.1f}"
+        inclinacao_c = "" if d["inclinacao_c"] is None else f"/{d['inclinacao_c']:+4.0f}"
         texto += (
-            f"  ponto {fbw.comando[0]:+5.1f} {fbw.comando[1]:5.1f}{trava}"
-            f"  inclinacao {l.rolagem:+4.0f}/{d['inclinacao_c']:+4.0f}"
+            f"{trava}  inclinacao {l.rolagem:+4.0f}{inclinacao_c}"
             f"  alfa {d['alfa']:4.1f}  carga {d['carga']:4.2f}/{d['carga_c']:4.2f} g"
         )
     else:

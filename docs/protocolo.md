@@ -87,7 +87,7 @@ No **celular** (`bridge/mfd_celular.py`), as mesmas linhas vão por HTTP, pelo W
 | `RDL <p> <r>` ou `RDL OFF` | Radial para fora: perpendicular ao movimento, do lado de fora do planeta. `OFF` como o `NRM` | Radial para fora e para dentro, em ciano | 10 por segundo |
 | `TGT <p> <r>` ou `TGT OFF` | Do alvo. `OFF` sem alvo ou com o alvo a menos de 1 m | Alvo e anti-alvo, em rosa, em qualquer modo | 10 por segundo |
 | `MNV <p> <r>` ou `MNV OFF` | Da queima que falta no próximo nó de manobra. `OFF` sem nó ou com a queima terminada | Nó de manobra, em azul (sem oposto) | 10 por segundo |
-| `FBW <p> <r>` ou `FBW OFF` | Para onde o fly by wire (`scripts/fbw.py`) está levando o avião: o ponto do manche, já corrigido pela trava de altitude. `OFF` sem o FBW voando | Ponto do FBW: quatro cantos de um quadrado, em verde (sem oposto), em qualquer modo | 10 por segundo |
+| `FBW <p> <r>` ou `FBW OFF` | O caminho que o fly by wire (`scripts/fbw.py`) persegue com o piloto automático, a trava de altitude ou o alpha floor. `OFF` sem o FBW voando, ou voando na mão | Ponto do FBW: quatro cantos de um quadrado, em verde (sem oposto), em qualquer modo | 10 por segundo |
 
 **Números**, que valem só até chegar um `MODO` diferente, exceto `VV` e `ACEL`:
 

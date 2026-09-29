@@ -95,7 +95,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Uma tela no meio para todos os módulos**, a tela multifunção, no lugar de um LCD por módulo | Os olhos vão sempre ao mesmo lugar, os painéis ficam menores e só com botões, e sai um LCD por módulo da lista de compras. A página troca sozinha para o módulo em uso e volta depois, então não é preciso escolher a página na mão. Quem decide a troca é a ponte, que já recebe todos os eventos do painel: a tela continua só desenhando. |
 | **Korry switches** (botões iluminados com legenda, de avião) nos sistemas que o jogo também muda | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: corpo impresso em 3D e tampa de acrílico cortada a laser. Na seção de sistemas de controle, todos; nas outras, a decidir. |
 | **Caixa em MDF cortado a laser, com peças impressas em 3D** | A laser do colégio faz as peças planas e grandes (paredes, painéis com legendas); a impressora de casa, as pequenas e complicadas (korry, knobs, suportes). Cada seção é um painel removível com o seu módulo atrás. |
-| **Fly by wire pelo ponto na navball**: o manche move para onde o avião vai, e não as superfícies | É o jeito do Airbus e dos caças: soltar o manche segura o caminho, e as proteções ficam simples, porque o ponto tem limites. O piloto automático do avião vira um piloto que só mexe no ponto. |
+| **Fly by wire com a lei de um caça**: o manche pede carga (g) e velocidade de rolagem, e não mexe nas superfícies | A primeira versão movia um ponto na navball, e o avião ia até ele: estável, mas lenta e "interventora" no jogo (o voo gravado mostrou o avião respondendo quase 1 s depois e seguindo o ponto depois de o manche ser solto). Pedindo carga e rolagem, o avião responde na hora, e soltar o manche segura o caminho e a inclinação. O piloto automático pede um caminho, e o FBW calcula a carga e a inclinação para chegar nele. |
 | **Ganhos do FBW divididos pela autoridade do avião** (torque disponível ÷ inércia, informados pelo kRPC) | A força das superfícies cresce com o quadrado da velocidade: um ganho fixo, bom na decolagem, faz o avião balançar rápido, e cada avião precisaria do seu. Nos testes, o FBW segura o avião com a autoridade informada errada pela metade ou pelo dobro. |
 | **Scripts mandam marcadores à ponte da tela por UDP**, com a própria linha do protocolo da tela | O script continua rodando sozinho: sem a ponte aberta, a linha se perde e nada acontece. A ponte só confere e repassa. |
 | **O `fbw.py` lê o joystick sozinho**, por enquanto | A ponte ainda não lê o joystick. Quando ler, a leitura passa para ela, e o script recebe o manche da ponte. |
@@ -300,34 +300,34 @@ Os scripts ficam em [`scripts/`](scripts/), fora da ponte: cada um roda sozinho 
 
 **Status: script escrito e testado num avião simulado; falta testar no jogo.** Roteiro de testes, ajuste dos ganhos e problemas comuns em [docs/fbw.md](docs/fbw.md).
 
-Como nos aviões da Airbus, o manche não mexe nas superfícies: ele diz para onde o piloto quer ir. [`scripts/fbw.py`](scripts/fbw.py) lê o joystick (o Extreme 3D Pro, ou um controle de Xbox) e pilota o avião pelo kRPC.
+Como nos caças, o manche não mexe nas superfícies: ele pede o que o avião deve fazer, e o FBW decide as superfícies. [`scripts/fbw.py`](scripts/fbw.py) lê o joystick (o Extreme 3D Pro, ou um controle de Xbox) e pilota o avião pelo kRPC.
 
-- **O ponto do FBW:** o manche move um ponto na navball, um rumo e um ângulo de subida, e o avião voa até o pró-grado ficar em cima dele. Soltando o manche, o ponto fica onde está. Com o manche solto e o ponto perto do horizonte, o avião trava a altitude.
-- **Proteções:** asas até 60° (menos se a asa não aguenta: a curva abre em vez de o avião descer), subida entre −30° e +30° e ângulo de ataque até 15°.
-- **Alpha floor:** devagar demais para a asa (ângulo de ataque perto dos 15°), o FBW recupera sozinho: acelerador no máximo, piloto automático e trava desligados, asas niveladas e nariz para baixo até a asa folgar; depois nivela numa altitude nova. A luz ESTOL do painel pisca e a tela toca um alarme.
+- **O manche:** para trás e para a frente pede carga, de −1 g a 4 g; solto, 1 g, e o caminho não curva. Para os lados pede velocidade de rolagem, até 90°/s; solto, a inclinação fica onde parou. A torção soma ao leme. O FBW não trava a altitude sozinho: numa curva, o piloto puxa.
+- **Proteções:** ângulo de ataque entre −8° e 15° e carga até 4 g. No piloto automático, também asas até 60° e subida entre −30° e +30°.
+- **Alpha floor:** devagar demais para a asa (ângulo de ataque perto dos 15°), acelerador no máximo e piloto automático e trava desligados. Com o manche solto, o FBW recupera sozinho (asas niveladas e nariz para baixo até a asa folgar, depois nivela numa altitude nova); com o manche mexido, quem manda é o piloto. A luz ESTOL do painel pisca e a tela toca um alarme.
 - **Lei direta** no chão e com o botão do FBW desligado: o manche vai direto para as superfícies. O FBW assume 1 s depois da decolagem.
 - **Sem joystick** (`--sem-joystick`): decola pelo teclado do jogo, na lei direta, e no ar o piloto automático voa pelo painel.
 - **O acelerador fica com o piloto.** O acelerador automático (SPD) já existe por dentro, ainda sem interface.
-- **Na tela:** o ponto aparece na navball da [tela multifunção](docs/mfd.md), como os quatro cantos verdes de um quadrado. Com o avião no ponto, o pró-grado fica dentro dele.
-- **Por dentro, três camadas:** a diferença entre o ponto e o pró-grado vira inclinação das asas e carga (g); a carga e a inclinação viram velocidades de giro; os giros viram superfícies, com o ganho dividido pela autoridade do avião.
+- **Na tela:** com o piloto automático ou a trava, o caminho pedido aparece na navball da [tela multifunção](docs/mfd.md), como os quatro cantos verdes de um quadrado. Com o avião nele, o pró-grado fica dentro do quadrado.
+- **Por dentro, duas camadas:** a carga e a rolagem pedidas viram velocidades de giro; os giros viram superfícies, com proporcional e integral e o ganho dividido pela autoridade do avião.
 
-**Pronto quando:** um avião decola na lei direta e, com o FBW, voa reto, faz curvas, sobe e desce só pelo ponto, sem balançar.
+**Pronto quando:** um avião decola na lei direta e, com o FBW, responde ao manche na hora, sem balançar: puxar dá carga, rolar dá rolagem, e soltar segura o que estava.
 
 **Anotado depois dos primeiros voos no jogo** (a fazer):
 
-- [ ] **O FBW está muito instável no jogo.** Ainda falta ver como ele fica e o porquê; gravar um voo com `--gravar voo.csv` ajuda a achar qual camada balança ([Ajustar](docs/fbw.md#ajustar)).
+- [x] **O FBW está muito instável no jogo.** O voo gravado mostrou o nariz oscilando a 1,5 vez por segundo (ganho de pitch alto para o atraso do kRPC) e um avião lento e "interventor". Refeito com a lei de caça e ganhos menores, testados com a leitura atrasada ([docs/fbw.md](docs/fbw.md)). Falta confirmar no jogo.
 - [ ] **Não ligar o FBW sozinho na decolagem.** Hoje ele assume 1 s depois de sair do chão; passa a começar desligado e só liga pelo korry FBW (ou pelo botão do joystick).
 - [ ] **Tirar a recuperação automática do estol**, que só deu problema no jogo. A decidir: tirar só o nariz para baixo, as asas niveladas e a trava solta (#36), ou também o acelerador no máximo e o piloto automático desligado (#34).
 - [ ] **Avisar o estol também fora do FBW** (na lei direta): a luz ESTOL e o alarme pelo ângulo de ataque, mesmo sem o FBW voando.
 
 ### Piloto automático de avião
 
-**Status: código escrito e testado com o avião simulado e a demonstração; falta testar no jogo.** O `fbw.py` voa HDG, ALT e V/S mexendo no ponto ([docs/fbw.md](docs/fbw.md#piloto-automático)), e o painel de sistemas é, por enquanto, uma página de botões aberta pela ponte da tela ([docs/mfd.md](docs/mfd.md#painel-de-sistemas-de-controle)), com a roda do SAS e a página do piloto na tela.
+**Status: código escrito e testado com o avião simulado e a demonstração; falta testar no jogo.** O `fbw.py` voa HDG, ALT e V/S pedindo um caminho ao FBW ([docs/fbw.md](docs/fbw.md#piloto-automático)), e o painel de sistemas é, por enquanto, uma página de botões aberta pela ponte da tela ([docs/mfd.md](docs/mfd.md#painel-de-sistemas-de-controle)), com a roda do SAS e a página do piloto na tela.
 
 - [x] Página de botões no celular, no lugar do painel, como a do editor de manobras.
 - [x] Ponte da tela (`bridge/mfd.py` e `bridge/sistemas.py`): modos do SAS, SAS e RCS no jogo; azul ou verde pelo erro até o marcador; o menu do piloto; as páginas do SAS e do piloto, com a volta à navball.
 - [x] Tela do celular e simulador: a roda dos modos do SAS e a página do piloto.
-- [x] `scripts/fbw.py`: HDG, ALT e V/S mexendo no ponto; FBW e TRAVA pelo painel; estado e comandos por UDP com a ponte da tela; testes no avião simulado.
+- [x] `scripts/fbw.py`: HDG, ALT e V/S pedindo um caminho; FBW e TRAVA pelo painel; estado e comandos por UDP com a ponte da tela; testes no avião simulado.
 - [ ] Testar no jogo: os modos do SAS e as luzes ([roteiro](docs/mfd.md#testar-o-painel-sem-o-ksp)), e o piloto automático num avião ([roteiro](docs/fbw.md#piloto-automático)).
 - [ ] **Tela: tirar os botões redondos SAS e RCS da navball.** Eles ficam só no painel.
 - [ ] **Tela: as páginas que abrem sozinhas** (a roda do SAS, a do piloto e as outras que aparecem por cima da navball) **ficam 6 s** depois do último toque, em vez de 10 s.
@@ -340,17 +340,17 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
   - **ALT:** sobe ou desce até a altitude escolhida e segura. Enquanto não chega, fica **armado** (azul na tela); ao chegar, nivela e fica verde.
   - **V/S:** sobe ou desce com a velocidade vertical escolhida. Com o ALT ligado junto, nivela ao chegar na altitude escolhida.
   - **SPD:** acelerador automático, segura a velocidade escolhida. Fica para depois, como mais uma linha do menu.
-  - Sem HDG ligado, mantém as asas niveladas.
+  - Sem HDG ligado, a rolagem fica com o manche, e a inclinação fica onde o piloto deixou.
 - **No painel de [sistemas de controle](hardware/construcao.md#painel-de-sistemas-de-controle)**, junto do SAS, do RCS e do FBW:
   - **Um encoder só**, mexido pelo menu da página do piloto na tela multifunção: girar move o cursor entre HDG, ALT e V/S; apertar escolhe a linha, e girar muda o valor (horário soma); apertar de novo sai; segurar 1 s liga ou desliga o modo da linha. Girando devagar, o valor muda de 1 em 1 (1°, 10 m, 0,1 m/s); rápido, de 10 em 10.
   - **Uma luz verde por modo**, ao lado do encoder, acesa quando o modo está ligado no FBW. Sem displays de 7 segmentos: os valores ficam na tela.
   - Korry **FBW** (liga e desliga o FBW, como o botão do joystick) e **TRAVA ALT** (trava e destrava a altitude do momento).
-- **Na tela:** a página do piloto, com os modos (azul armado, verde ligado) e os valores escolhidos, abre sozinha quando o encoder é mexido e volta para a navball uns 10 s depois. Para onde o avião vai já aparece na navball: é o ponto do FBW.
-- **Por dentro:** o piloto automático fica por cima do [fly by wire](#fly-by-wire-de-avião) e só mexe no ponto, como um piloto que não cansa:
-  - HDG põe o rumo do ponto no rumo escolhido; sem HDG, o ponto fica no rumo em que o avião está;
-  - ALT e V/S mexem no ângulo de subida do ponto (o FBW já trava a altitude com o ponto no horizonte);
+- **Na tela:** a página do piloto, com os modos (azul armado, verde ligado) e os valores escolhidos, abre sozinha quando o encoder é mexido e volta para a navball uns 10 s depois. O caminho pedido aparece na navball: é o ponto verde do FBW.
+- **Por dentro:** o piloto automático fica por cima do [fly by wire](#fly-by-wire-de-avião) e pede um caminho, como um piloto que não cansa:
+  - HDG pede o rumo escolhido, que vira inclinação das asas; sem HDG, a rolagem fica com o manche;
+  - ALT, V/S e a TRAVA ALT pedem o ângulo de subida, que vira carga; sem eles, o pitch fica com o manche;
   - SPD liga o acelerador automático que já existe no `fbw.py`;
-  - as proteções do FBW continuam valendo, e mexer no manche devolve o ponto ao piloto.
+  - as proteções do FBW continuam valendo, e mexer no manche devolve o eixo ao piloto.
 - **Precisa de:** o encoder e as luzes do painel de sistemas. Para começar, uma página de botões no celular faz o papel do painel.
 
 **Pronto quando:** um avião decola na mão, e o piloto automático leva ele até a altitude e o rumo escolhidos no painel e segura lá.
