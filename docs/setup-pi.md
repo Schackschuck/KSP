@@ -59,6 +59,12 @@ pip install krpc pyserial   # pygame só a partir da fase 3
 
 O Raspberry Pi OS atual recusa `pip install` fora de um *venv*.
 
+Para a voz dos [avisos de voo](avisos.md) (GPWS), no alto-falante ligado no Pi:
+
+```bash
+sudo apt install -y espeak-ng alsa-utils
+```
+
 ## 5. Código do projeto no Pi (git)
 
 O repositório é público, então dá para clonar sem senha:

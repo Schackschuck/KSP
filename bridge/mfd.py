@@ -16,6 +16,9 @@ Uso:
     python mfd.py --porta COM7       # a mikromedia de verdade, pela porta PROG
     python mfd.py --painel 8002      # a página de botões do painel noutra porta (padrão: 8001)
     python mfd.py --sem-painel       # sem a página de botões
+    python mfd.py --sem-voz          # avisos só no terminal e na luz, sem falar
+    python mfd.py --voz plughw:1,0   # a voz num alto-falante escolhido (aplay -l lista)
+    python mfd.py --testar-voz       # fala todos os avisos uma vez e sai
 
 Os scripts de voo também podem pôr um marcador na navball: o fly by wire
 (scripts/fbw.py) manda o ponto para onde o avião vai, por UDP, e esta ponte
@@ -27,6 +30,10 @@ existe, uma página de botões no navegador (celular/painel.html) manda as
 mesmas linhas. Apertar um modo abre a roda do SAS na tela, e mexer no
 encoder abre a página do piloto automático; uns 10 s depois, a tela volta
 para a navball.
+
+Os avisos de voo por voz (avisos.py), como o GPWS: SINK RATE, TERRAIN, PULL
+UP, TOO LOW GEAR, BANK ANGLE, OVERSPEED e as chamadas de altura no pouso,
+em qualquer nave voando na atmosfera, com a luz GPWS no painel.
 
 O painel de scripts também (painel_scripts.py): segurar o korry POUSO 5 s abre
 o scripts/pouso.py num processo próprio, e segurar de novo 5 s aborta. O
@@ -43,6 +50,7 @@ from dataclasses import dataclass
 
 import serial
 
+from avisos import FRASES, Avisos, Voo, Voz
 from painel_scripts import PainelScripts, processo_pouso
 from ponte import BAUD, ESPERA_READY, Painel, conectar_krpc, esperar_nave
 from sistemas import Remetente, Sistemas
@@ -137,6 +145,9 @@ class Telemetria:
     sem_ec: bool = False  # sem carga elétrica
     sem_mp: bool = False  # sem monopropelente
     erro_sas: float = None  # graus até o marcador; None = a ponte calcula (só a demonstração manda)
+    no_ar: bool = False
+    trem: bool = None
+    pressao: float = 0.0
 
 
 def inteiro32(valor):
@@ -547,6 +558,11 @@ class NaveKrpc:
         for nome, propriedade in SISTEMAS.items():
             self._streams[nome] = stream(getattr, nave.control, propriedade)
         self._streams["sas_modo"] = stream(getattr, nave.control, "sas_mode")
+        self._streams["situacao"] = stream(getattr, nave, "situation")
+        self._streams["trem"] = stream(getattr, nave.control, "gear")
+        self._streams["pressao"] = stream(getattr, voo, "dynamic_pressure")
+        self._tem_trem = len(nave.parts.wheels) + len(nave.parts.legs) > 0
+        self._no_ar = {space_center.VesselSituation.flying, space_center.VesselSituation.sub_orbital}
         self._streams["ec"] = stream(nave.resources.amount, "ElectricCharge")
         self._streams["mp"] = stream(nave.resources.amount, "MonoPropellant")
         self._sas_mode = space_center.SASMode
@@ -651,6 +667,9 @@ class NaveKrpc:
             sas_modo=MODOS_DO_KRPC.get(s["sas_modo"]().name),
             sem_ec=s["ec"]() < RECURSO_MIN,
             sem_mp=s["mp"]() < RECURSO_MIN,
+            no_ar=s["situacao"]() in self._no_ar,
+            trem=s["trem"]() if self._tem_trem else None,
+            pressao=s["pressao"](),
         )
 
     def escolher_modo(self, nome):
@@ -901,7 +920,14 @@ class Acoes:
         self.comando_fbw = scripts.comando_fbw
 
 
-def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistemas=None, painel_scripts=None):
+def voo_dos_avisos(t):
+    sup = t.velocidades["SUP"]
+    return Voo(radar=t.radar, vv=sup[0], velocidade=modulo(sup), rolagem=t.rolagem,
+               pressao=t.pressao, no_ar=t.no_ar, trem=t.trem)
+
+
+def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistemas=None, painel_scripts=None,
+         voz=None):
     """Mantém a tela atualizada até continua_valida() dizer que não.
 
     painel: a página de botões do painel de sistemas e de scripts (ou, um
@@ -915,10 +941,14 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
     sistemas.acoes = Acoes(fonte, scripts)
     luzes_painel = Remetente(painel.enviar) if painel is not None else None
     luzes_tela = Remetente(tela.enviar)
+    avisos = Avisos()
     proxima_verificacao = proximas_luzes = 0.0
     while True:
         agora = time.monotonic()
         t = fonte.ler()
+        fala = avisos.atualizar(voo_dos_avisos(t), agora)
+        if fala is not None and voz is not None:
+            voz.falar(fala)
 
         anterior = modo.modo
         for linha in tela.linhas():
@@ -948,6 +978,7 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
             sas, rcs = t.sistemas["SAS"], t.sistemas["RCS"]
             luzes = sistemas.luzes(sas, rcs, t.sas_modo, erro, t.sem_ec, t.sem_mp, scripts.estado_fbw())
             luzes.update(painel_scripts.luzes(agora))
+            luzes["GPWS"] = f"GPWS {avisos.nivel}"
             na_tela = sistemas.tela(luzes, erro, sas)
             na_tela.update(scripts.estado_pouso())
             luzes_tela.mandar(na_tela, agora)
@@ -962,7 +993,7 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
         time.sleep(0.01)
 
 
-def acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, painel_scripts):
+def acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, painel_scripts, voz):
     """Acompanha uma nave até ela deixar de ser a ativa ou trocar de planeta.
 
     Ao trocar de planeta (ex.: entrar na esfera de influência da Mun), os
@@ -981,6 +1012,7 @@ def acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, pa
             painel,
             sistemas,
             painel_scripts,
+            voz,
         )
     finally:
         fonte.remover()
@@ -1064,6 +1096,13 @@ def abrir_painel(args):
         sys.exit(f"Não foi possível abrir a porta {args.painel} para o painel: {e}")
 
 
+def testar_voz(voz):
+    """Fala cada aviso, um depois do outro, para conferir o alto-falante."""
+    for nome in FRASES:
+        voz.falar(nome)
+        time.sleep(2.0)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Ponte kRPC ⇄ tela multifunção.")
     parser.add_argument(
@@ -1099,6 +1138,10 @@ def main():
         help=f"porta de rede da página de botões do painel de sistemas (padrão: {PORTA_PAINEL})",
     )
     painel.add_argument("--sem-painel", action="store_true", help="não abre a página de botões do painel")
+    vozes = parser.add_mutually_exclusive_group()
+    vozes.add_argument("--sem-voz", action="store_true", help="os avisos de voo só no terminal e na luz, sem falar")
+    vozes.add_argument("--voz", metavar="DISPOSITIVO", help="alto-falante da voz dos avisos, como o aplay -D (ex.: plughw:1,0)")
+    parser.add_argument("--testar-voz", action="store_true", help="fala todos os avisos de voo uma vez e sai")
     parser.add_argument(
         "--zoom",
         type=int,
@@ -1107,6 +1150,10 @@ def main():
         help="quantas vezes ampliar a janela do simulador (padrão: 2)",
     )
     args = parser.parse_args()
+    voz = Voz(args.voz, ligada=not args.sem_voz)
+    if args.testar_voz:
+        testar_voz(voz)
+        return
 
     # O kRPC primeiro: enquanto o connect espera alguém aceitar a conexão no
     # jogo, a janela do simulador ficaria congelada.
@@ -1122,13 +1169,13 @@ def main():
             print("Demonstração: a nave se mexe sozinha. Clique nos botões da tela e do painel.")
             print("Segurar o POUSO 5 s pousa uma nave simulada (scripts/pouso.py --demo).")
             scripts = Demo()
-            voar(tela, transmissor, scripts, scripts, lambda: True, painel, sistemas, painel_scripts)
+            voar(tela, transmissor, scripts, scripts, lambda: True, painel, sistemas, painel_scripts, voz)
         else:
             scripts = Scripts()
             while True:
                 nave = esperar_nave(conn, tela)
                 try:
-                    acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, painel_scripts)
+                    acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, painel_scripts, voz)
                 except (ValueError, RuntimeError):
                     # A nave deixou de existir ou o jogo saiu da cena de voo.
                     pass

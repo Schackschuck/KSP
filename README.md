@@ -98,6 +98,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Fly by wire com a lei de um caça**: o manche pede carga (g) e velocidade de rolagem, e não mexe nas superfícies | A primeira versão movia um ponto na navball, e o avião ia até ele: estável, mas lenta e "interventora" no jogo (o voo gravado mostrou o avião respondendo quase 1 s depois e seguindo o ponto depois de o manche ser solto). Pedindo carga e rolagem, o avião responde na hora, e soltar o manche segura o caminho e a inclinação. O piloto automático pede um caminho, e o FBW calcula a carga e a inclinação para chegar nele. |
 | **Ganhos do FBW divididos pela autoridade do avião** (torque disponível ÷ inércia, informados pelo kRPC) | A força das superfícies cresce com o quadrado da velocidade: um ganho fixo, bom na decolagem, faz o avião balançar rápido, e cada avião precisaria do seu. Nos testes, o FBW segura o avião com a autoridade informada errada pela metade ou pelo dobro. |
 | **Scripts mandam marcadores à ponte da tela por UDP**, com a própria linha do protocolo da tela | O script continua rodando sozinho: sem a ponte aberta, a linha se perde e nada acontece. A ponte só confere e repassa. |
+| **Avisos de voo (GPWS) na ponte da tela, falados no Pi** | A ponte já lê o jogo o tempo todo, então avisa em qualquer avião, com ou sem o fly by wire. A voz sai por um alto-falante USB no Pi, pelo `espeak-ng` ou por gravações; o áudio da mikromedia (VS1053) fica para os alarmes da própria tela. |
 | **O `fbw.py` lê o joystick sozinho**, por enquanto | A ponte ainda não lê o joystick. Quando ler, a leitura passa para ela, e o script recebe o manche da ponte. |
 | **ESP32** fica para depois | Candidato a painel sem fio ou módulo extra (fase 8). |
 
@@ -108,6 +109,7 @@ bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de 
                   tela multifunção: ponte (mfd.py), simulador, navball e a página do celular (celular/);
                   painel de sistemas de controle (sistemas.py), com a página de botões (celular/painel.html);
                   painel de scripts (painel_scripts.py): o korry POUSO abre o scripts/pouso.py;
+                  avisos de voo por voz, como o GPWS (avisos.py);
                   editor de nós de manobra com botões na página (manobras.py); testes em bridge/tests/
 scripts/          scripts de voo (pouso, fly by wire...), que rodam com ou sem o cockpit; testes em scripts/tests/
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
@@ -322,6 +324,23 @@ Como nos caças, o manche não mexe nas superfícies: ele pede o que o avião de
 - [x] **Os modos do piloto automático ligavam sozinhos** ao ligar o FBW (o avião tentava subir para uma altitude): era a trava de altitude automática, que saiu. Falta confirmar no jogo.
 - [ ] **Avisar o estol também fora do FBW** (na lei direta): a luz ESTOL e o alarme pelo ângulo de ataque, mesmo sem o FBW voando.
 
+### Avisos de voo (GPWS)
+
+**Status: código escrito e testado sem o jogo; falta ouvir no Pi e voar.** Roteiro, limites e como ligar o alto-falante em [docs/avisos.md](docs/avisos.md).
+
+Como o GPWS dos aviões de linha, a ponte da tela fala os avisos em inglês, num alto-falante USB ligado no Pi, em qualquer nave voando na atmosfera:
+
+- **Vermelhos:** `PULL UP` (descendo rápido demais para a altura) e `TERRAIN` (o chão chegando rápido; vira `PULL UP` se continuar).
+- **Âmbar:** `SINK RATE`, `DON'T SINK` (perdendo altura depois da decolagem), `TOO LOW, GEAR` e `TOO LOW, TERRAIN` (baixo com o trem recolhido), `BANK ANGLE` e `OVERSPEED`.
+- **Chamadas de altura** no pouso: 100, 50, 40, 30, 20 e 10 pés.
+- **Luz** GPWS (âmbar) / PULL UP (vermelha) no painel de sistemas; por enquanto, na página de botões.
+
+- [x] `bridge/avisos.py`: os avisos, a prioridade e a voz (`espeak-ng` ou gravações em `bridge/sons/`); `--voz`, `--sem-voz` e `--testar-voz` no `mfd.py`; testes.
+- [x] Luz GPWS / PULL UP na página de botões.
+- [ ] Ouvir no Pi com o alto-falante USB e ajustar os limites no jogo.
+- [ ] Luz GPWS no desenho do painel de sistemas.
+- [ ] Olhar o terreno à frente (EGPWS), pela altura do terreno do kRPC.
+
 ### Piloto automático de avião
 
 **Status: código escrito e testado com o avião simulado e a demonstração; falta testar no jogo.** O `fbw.py` voa HDG, ALT e V/S pedindo um caminho ao FBW ([docs/fbw.md](docs/fbw.md#piloto-automático)), e o painel de sistemas é, por enquanto, uma página de botões aberta pela ponte da tela ([docs/mfd.md](docs/mfd.md#painel-de-sistemas-de-controle)), com a roda do SAS e a página do piloto na tela.
@@ -476,6 +495,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [x] Cabo mini-USB **com fios de dados**, para a PROG (o antigo alimenta a placa, mas o Windows não reconhece o FT232)
 - [ ] Cartão microSD (para os sons de alarme)
 - [ ] Fone ou caixinha de som com plugue P2
+- [ ] Alto-falante USB para o Pi (a voz dos [avisos de voo](docs/avisos.md))
 - [ ] Gravador JTAG compatível com ARM7 (opcional, só para depurar passo a passo)
 
 ### Fase 7 — Hardware definitivo
