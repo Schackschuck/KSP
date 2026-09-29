@@ -287,7 +287,7 @@ class TestConversaComOFbw(unittest.TestCase):
         guiagem.estol = True
         self.tela.enviar(guiagem)
         self.assertTrue(self.esperar(lambda: self.ponte.estado_fbw()["ESTOL"] == "ESTOL 1"))
-        guiagem.estol = False   # no alpha floor o piloto automático não liga
+        guiagem.estol = False
         self.assertEqual(self.ponte.ponto_fbw(), (2.0, 90.0))
 
         self.ponte.comando_fbw("CMD HDG")

@@ -6,7 +6,7 @@ Como nos caças (F-16, Gripen), o manche não mexe nas superfícies: ele pede um
 
 **Onde estamos:** o script passa nos testes com um avião simulado ([`scripts/tests/test_fbw.py`](../scripts/tests/test_fbw.py)), em 100, 150, 200 e 280 m/s, e com um avião "nervoso" (superfícies fortes, pouco amortecimento e a leitura do kRPC atrasada em até 160 ms), como o do primeiro voo gravado.
 
-**Por que mudou:** a primeira versão movia um ponto na navball, e o avião ia até ele devagar. O voo gravado mostrou que ela era lenta demais (o ponto andava a 8°/s e o avião levava 2,5 s para chegar), que soltar o manche não parava a curva (o avião continuava indo atrás do ponto), que empurrar o manche mal descia (a carga mínima era 0 g) e que o nariz oscilava sozinho a 1,5 vez por segundo, entre −2 g e +5 g (ganho alto demais para o atraso do kRPC). A lei de caça resolve os três primeiros; ganhos menores e o integral certo resolvem o último.
+**Por que mudou:** a primeira versão movia um ponto na navball, e o avião ia até ele devagar. O voo gravado mostrou que ela era lenta demais (o ponto andava a 8°/s e o avião levava 2,5 s para chegar), que soltar o manche não parava a curva (o avião continuava indo atrás do ponto), que empurrar o manche mal descia (a carga mínima era 0 g) e que o nariz oscilava sozinho a 1,5 vez por segundo, entre −2 g e +5 g (ganho alto demais para o atraso do kRPC). A lei de caça resolve os três primeiros; ganhos menores e o integral certo resolvem o último. Depois, a recuperação automática do estol e o limite de ângulo de ataque no manche também saíram: sobrou só o aviso ([Aviso de estol](#aviso-de-estol)).
 
 ## O manche
 
@@ -23,22 +23,13 @@ Como nos caças (F-16, Gripen), o manche não mexe nas superfícies: ele pede um
 - **O FBW não trava a altitude sozinho.** Para segurar a altitude, use o korry **TRAVA ALT** ou o piloto automático.
 - Perto da vertical (nariz a mais de 75° do horizonte), a inclinação não é segurada: só a rolagem para.
 
-**Proteções**, que valem mesmo com o manche todo para um lado:
+**Sem proteção de estol no manche:** puxando tudo devagar, o avião estola, como no jogo sem o script. O único limite é a carga pedida, até 4 g. O piloto automático e a TRAVA ALT continuam com o ângulo de ataque entre −8° e 15°, para não estolarem o avião sozinhos.
 
-- **Ângulo de ataque até 15°:** puxar o manche não estola o avião. Devagar, a carga pedida não chega: a asa para no limite.
-- **Ângulo de ataque até −8°**, empurrando.
-- **Carga até 4 g.**
+### Aviso de estol
 
-### Alpha floor
-
-Devagar demais, a asa no limite do ângulo de ataque não sustenta o peso, e o avião vai afundando: a proteção não deixa estolar, mas também não faz milagre. Então o FBW ajuda:
-
-- Com o ângulo de ataque acima de **14,5°** (0,5° antes do limite), o **acelerador vai a 100%**, o **piloto automático e a trava desligam** e o painel acende a luz **ESTOL**, vermelha e piscando, com dois bipes por segundo na tela. O terminal mostra `ESTOL`.
-- **Com o manche solto**, a recuperação é do próprio FBW: as asas nivelam e o caminho desce para **5° abaixo do horizonte**. Se a asa continuar no limite, desce mais, 2° por segundo, até **−15°**: sem motor, só a descida dá velocidade.
-- **Com o manche mexido, quem manda é o piloto.** Puxando, a proteção segura o ângulo de ataque no limite; empurrando ou rolando, o avião obedece. O FBW só recupera sozinho com o manche solto.
-- Com o ângulo de ataque abaixo de **10°** por **2 s**, o alarme para e a trava pega a **altitude nova**, para o avião não seguir descendo (importante com `--sem-joystick`). Mexer o manche para trás ou para a frente solta a trava.
-- **O acelerador fica no máximo** até o piloto mexer nele (a alavanca do joystick, ou Shift e Ctrl), como o TOGA LOCK do Airbus: ninguém tira a potência sem querer.
-- Durante o alpha floor, o piloto automático não liga.
+- Com o ângulo de ataque acima de **14,5°**, o painel acende a luz **ESTOL**, vermelha e piscando, com dois bipes por segundo na tela. O terminal mostra `ESTOL`. Abaixo de **13°**, apaga.
+- **É só um aviso: o FBW não mexe em nada.** O acelerador, o piloto automático, a trava e o manche continuam como estavam. Quem recupera é o piloto: empurra o manche e põe motor.
+- A primeira versão tinha um alpha floor (acelerador a 100%, piloto automático e trava desligados, nariz para baixo e a trava ligando sozinha na altitude nova). Saiu porque tirava o avião do piloto, e a trava que ligava sozinha parecia o piloto automático subindo para uma altitude.
 
 **Lei direta:** no chão, e com o FBW desligado pelo botão, o manche mexe direto nas superfícies, como no jogo sem o script. O FBW assume sozinho 1 s depois de o avião sair do chão, e volta para a lei direta ao tocar no chão. No ar ralo, ou muito devagar, as superfícies não seguram o avião, e também fica a lei direta.
 
@@ -56,7 +47,7 @@ Por cima do FBW, como um piloto que não cansa: cada modo pede um caminho (um ru
 
 - **Só liga voando na lei do FBW.** Na lei direta (no chão, ou com o FBW desligado), os modos desligam, como no avião.
 - **Mexer no manche devolve o eixo ao piloto:** para os lados desliga o HDG; para trás ou para a frente, o ALT, o V/S e a trava. Cada eixo é separado: com o ALT ligado, o piloto pode rolar e fazer a curva na mão, e a altitude continua segura.
-- **Trava de altitude:** o korry **TRAVA ALT** trava a altitude do momento (e desliga o ALT e o V/S) ou solta a trava. Ela não liga sozinha, a não ser depois do alpha floor.
+- **Trava de altitude:** o korry **TRAVA ALT** trava a altitude do momento (e desliga o ALT e o V/S) ou solta a trava. Ela não liga sozinha, e nenhum modo do piloto automático liga sem ser pedido no painel.
 - **Korry FBW:** o mesmo que o botão do FBW no joystick.
 
 **Na ponte:** o `fbw.py` manda à ponte da tela, 10 vezes por segundo, num pacote UDP, o caminho pedido (`FBW`, ou `FBW OFF` voando na mão), a lei (`LEI`), a trava (`TRAVA`) e os modos (`APL`). A ponte responde para o mesmo endereço com os toques do painel (`CMD FBW`, `CMD TRAVA`, `CMD HDG`...) e os valores do menu (`APV`). Protocolo em [docs/protocolo.md](protocolo.md#ponte-da-tela--fly-by-wire).
@@ -71,7 +62,8 @@ Por cima do FBW, como um piloto que não cansa: cada modo pede um caminho (um ru
 | Escolhe ALT 300 m acima e liga, com o V/S ligado | ALT azul (armado); perto da altitude, nivela, fica verde e o V/S desliga |
 | Mexe o manche para o lado | O HDG desliga (luz apagada); o ALT continua |
 | Aperta TRAVA ALT | A trava liga na altitude do momento; o terminal mostra `trava` no status |
-| Com a trava ligada e o HDG virando, tira o motor (Ctrl ou X) e espera | O avião perde velocidade. Perto de 14,5° de ângulo de ataque: `ESTOL`, acelerador em 100%, HDG e trava desligados, asas niveladas, nariz para baixo (o ponto verde 5° abaixo do horizonte), luz ESTOL piscando e alarme. Depois de recuperar, o alarme para e a trava pega a altitude nova; o acelerador fica no máximo até você mexer |
+| Com a trava ligada e o HDG virando, tira o motor (Ctrl ou X) e espera | O avião perde velocidade. Perto de 14,5° de ângulo de ataque: `ESTOL`, luz ESTOL piscando e alarme. O HDG e a trava continuam ligados, o acelerador fica em zero e o ângulo de ataque não passa de 15°: o avião vai afundando. Empurre o manche e ponha motor para sair |
+| Liga o FBW (korry ou botão) sem mexer em nada do painel | Nenhum modo acende e a TRAVA fica apagada |
 
 **Pronto quando:** um avião decola na mão, e o piloto automático leva ele até a altitude e o rumo escolhidos no painel e segura lá.
 
@@ -150,7 +142,7 @@ Para ver o caminho do piloto automático na tela, rode a ponte da tela em outro 
 | Empurra todo por 2 s e solta | A carga vai abaixo de zero e o nariz desce rápido; soltando, para |
 | Manche todo para a direita por 1 s e solta | O avião rola rápido e para uns poucos graus depois de soltar. A inclinação fica ali |
 | Com 60° de inclinação, puxa o manche | O avião vira mais rápido; com uns 2 g, a altitude fica |
-| Motor em zero, manche todo para trás | O ângulo de ataque para em ~15° (terminal: `alfa`), o avião não estola, a luz ESTOL pisca e o acelerador vai a 100%. Com o manche puxado, o nariz fica com você |
+| Motor em zero, manche todo para trás | Perto de 14,5° de ângulo de ataque (terminal: `alfa`), a luz ESTOL pisca. O FBW não segura: o avião estola, e o acelerador continua em zero. Empurre para recuperar |
 | Aperta o botão 3 | `FBW desligado (lei direta)`: o manche volta a mexer direto nas superfícies. Apertando de novo, o FBW volta |
 | Pousa | Aproxime na mão, uns 3° abaixo do horizonte. Para arredondar, puxe o manche devagar, ou desligue o FBW no botão e pouse na lei direta. Ao tocar: `--> lei DIRETA (no chão)` |
 
@@ -160,7 +152,8 @@ Para ver o caminho do piloto automático na tela, rode a ponte da tela em outro 
 - [ ] O FBW assume depois da decolagem sem tranco.
 - [ ] Puxar e empurrar respondem na hora, e soltar não faz o nariz balançar.
 - [ ] Rolar e soltar: a inclinação fica onde parou.
-- [ ] Com o manche todo para trás, o ângulo de ataque não passa de ~16°.
+- [ ] Com o manche todo para trás e devagar, a luz ESTOL pisca antes de o avião estolar, e o FBW não mexe em nada.
+- [ ] Ligar o FBW não liga nenhum modo nem a trava.
 - [ ] O botão 3 troca entre FBW e lei direta.
 - [ ] Com a TRAVA ALT ou o piloto automático, o ponto verde da tela bate com o que o terminal mostra.
 
@@ -188,14 +181,14 @@ A guiagem (`FlyByWire`) não conhece o kRPC nem o joystick, como a do pouso: rec
 
 ```
  manche em pitch ──▶ carga (−1 a 4 g; solto, 1 g · cos γ)
- ALT, V/S, TRAVA, alpha floor ──▶ caminho ──▶ carga para curvar até ele
+ ALT, V/S, TRAVA ──▶ caminho ──▶ carga para curvar até ele
                     │
  1. giros           ▼
-            carga → giro do nariz em pitch   (limitado pelo ângulo de ataque)
+            carga → giro do nariz em pitch   (no piloto automático, limitado pelo ângulo de ataque)
 
  manche de lado ──▶ velocidade de rolagem (até 90°/s)
  solto ──▶ segura a inclinação em que parou
- HDG, alpha floor ──▶ rumo ──▶ inclinação (até 60°) ──▶ velocidade de rolagem
+ HDG ──▶ rumo ──▶ inclinação (até 60°) ──▶ velocidade de rolagem
             escorregamento → leme (+ torção do manche)
                     │
  2. superfícies     ▼
@@ -209,8 +202,8 @@ A guiagem (`FlyByWire`) não conhece o kRPC nem o joystick, como a do pouso: rec
 - **Inclinação segura:** soltando o manche de lado, a rolagem para primeiro (o giro cai abaixo de 3°/s) e só então a inclinação daquele momento fica segura, para não voltar para trás.
 - **Leme:** zera o escorregamento e, rolando com ângulo de ataque, gira o nariz junto para a rolagem ser em volta do caminho, e não do nariz.
 - **Troca de lei sem tranco:** ao assumir, os integrais começam com o comando que já estava no jogo.
-- **Na tela:** com o piloto automático, a trava ou o alpha floor, o script manda o caminho pedido, `FBW <pitch> <rumo>`, por UDP para a ponte da tela, que repassa para a navball ([protocolo](protocolo.md#scripts--ponte-da-tela)), junto com a lei, a trava e os modos do piloto, e recebe os toques do painel de volta. Voando na mão, manda `FBW OFF`.
-- **Piloto automático:** `_gama_automatico()` dá o ângulo de subida do ALT, do V/S, da trava ou do alpha floor, e `_rumo_automatico()` o rumo do HDG ou do alpha floor. Cada um vale só no seu eixo; sem eles, o eixo fica com o manche.
+- **Na tela:** com o piloto automático ou a trava, o script manda o caminho pedido, `FBW <pitch> <rumo>`, por UDP para a ponte da tela, que repassa para a navball ([protocolo](protocolo.md#scripts--ponte-da-tela)), junto com a lei, a trava e os modos do piloto, e recebe os toques do painel de volta. Voando na mão, manda `FBW OFF`.
+- **Piloto automático:** `_gama_automatico()` dá o ângulo de subida do ALT, do V/S ou da trava, e `_rumo_automatico()` o rumo do HDG. Cada um vale só no seu eixo; sem eles, o eixo fica com o manche.
 
 ## Problemas comuns
 
@@ -223,10 +216,11 @@ A guiagem (`FlyByWire`) não conhece o kRPC nem o joystick, como a do pouso: rec
 | O avião balança no FBW | Ganho alto para esse avião | Ver [Ajustar](#ajustar) |
 | `--> lei DIRETA (ar ralo...)` voando | Pressão dinâmica abaixo de 500 Pa: muito alto ou muito devagar | Normal: as superfícies não seguram o avião ali |
 | O SAS liga sozinho e o terminal diz `SAS desligado` de novo | Alguém apertou T | O FBW desliga o SAS, que brigaria com ele pelo manche |
-| O ponto verde não aparece na tela | Voando na mão, ele não aparece: só com o piloto automático, a trava ou o alpha floor. Com eles, a ponte da tela não está aberta, ou está em outro computador | Abrir o `mfd.py`; em outro computador, `--tela <IP>` e liberar a porta UDP 50100 no firewall |
+| O ponto verde não aparece na tela | Voando na mão, ele não aparece: só com o piloto automático ou a trava. Com eles, a ponte da tela não está aberta, ou está em outro computador | Abrir o `mfd.py`; em outro computador, `--tela <IP>` e liberar a porta UDP 50100 no firewall |
 | O painel mostra `FBW FECHADO` e os modos não ligam | A ponte não recebe o `fbw.py` | Abrir o `fbw.py`, com `--tela <IP>` se a ponte está noutro computador. As respostas voltam para a porta de onde o `fbw.py` manda: no firewall, liberar o Python |
-| Segurar o encoder não liga o modo | O avião está na lei direta (no chão, ou FBW desligado), ou no alpha floor | Normal: o piloto automático só liga voando no FBW, fora do alpha floor |
-| O avião afunda com o manche puxado, e a luz ESTOL pisca | Devagar demais para a asa | O alpha floor já pôs o acelerador no máximo; se não houver motor, desça para ganhar velocidade ([Alpha floor](#alpha-floor)) |
+| Segurar o encoder não liga o modo | O avião está na lei direta (no chão, ou FBW desligado) | Normal: o piloto automático só liga voando no FBW |
+| O avião afunda com o manche puxado, e a luz ESTOL pisca | Devagar demais para a asa | Empurre o manche e ponha motor; sem motor, desça para ganhar velocidade ([Aviso de estol](#aviso-de-estol)) |
+| Um modo do piloto automático ou a TRAVA acende sem você pedir | Com o `fbw.py` antigo, a trava ligava sozinha com o manche solto perto do horizonte e depois do alpha floor | Atualizar (`git pull`): agora nada liga sozinho. Se ainda acontecer, anote o que estava aceso e grave o voo |
 | `Nenhum joystick encontrado`, e não há joystick | O script espera um joystick | `--sem-joystick`: decola pelo teclado, e o piloto automático voa ([Sem joystick](#sem-joystick)) |
 
 ## Próximos passos

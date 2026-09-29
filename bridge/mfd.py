@@ -817,7 +817,7 @@ class FbwDemo:
 
     Os modos ligam e desligam com os comandos do painel, e o ALT fica armado
     por uns segundos antes de chegar na altitude. A cada 2 minutos, por 8 s,
-    o avião fica devagar demais: o alpha floor liga (ESTOL), e os modos desligam.
+    o avião fica devagar demais e acende o aviso de estol (ESTOL).
     """
 
     ALT_DEMORA = 6.0   # s até o ALT armado "chegar"
@@ -856,8 +856,6 @@ class FbwDemo:
     def estado(self):
         t = time.monotonic() - self._inicio
         estol = self.ligado and self.ESTOL_A_CADA - self.ESTOL_DURA <= t % self.ESTOL_A_CADA
-        if estol:
-            self.modos = dict.fromkeys(self.modos, False)   # o piloto automático desliga
         alt = 0
         if self.modos["ALT"]:
             alt = 1 if time.monotonic() - self._alt_desde > self.ALT_DEMORA else 2

@@ -87,7 +87,7 @@ No **celular** (`bridge/mfd_celular.py`), as mesmas linhas vão por HTTP, pelo W
 | `RDL <p> <r>` ou `RDL OFF` | Radial para fora: perpendicular ao movimento, do lado de fora do planeta. `OFF` como o `NRM` | Radial para fora e para dentro, em ciano | 10 por segundo |
 | `TGT <p> <r>` ou `TGT OFF` | Do alvo. `OFF` sem alvo ou com o alvo a menos de 1 m | Alvo e anti-alvo, em rosa, em qualquer modo | 10 por segundo |
 | `MNV <p> <r>` ou `MNV OFF` | Da queima que falta no próximo nó de manobra. `OFF` sem nó ou com a queima terminada | Nó de manobra, em azul (sem oposto) | 10 por segundo |
-| `FBW <p> <r>` ou `FBW OFF` | O caminho que o fly by wire (`scripts/fbw.py`) persegue com o piloto automático, a trava de altitude ou o alpha floor. `OFF` sem o FBW voando, ou voando na mão | Ponto do FBW: quatro cantos de um quadrado, em verde (sem oposto), em qualquer modo | 10 por segundo |
+| `FBW <p> <r>` ou `FBW OFF` | O caminho que o fly by wire (`scripts/fbw.py`) persegue com o piloto automático ou a trava de altitude. `OFF` sem o FBW voando, ou voando na mão | Ponto do FBW: quatro cantos de um quadrado, em verde (sem oposto), em qualquer modo | 10 por segundo |
 
 **Números**, que valem só até chegar um `MODO` diferente, exceto `VV` e `ACEL`:
 
@@ -182,7 +182,7 @@ As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão 
 | `SEMEC <0\|1>`, `SEMMP <0\|1>` | `1` com o SAS ligado sem carga elétrica, ou o RCS ligado sem monopropelente | Metade de baixo do SAS e do RCS, em âmbar | — |
 | `LEI <FBW\|DIRETA\|CHAO\|OFF>` | A lei do fly by wire: `FBW`, `DIRETA` no ar, `CHAO` (direta no chão). `OFF` sem o `fbw.py` aberto | `FBW` verde; `DIRETA` âmbar | Linha do FBW, na página do piloto |
 | `TRAVA <metros>` ou `TRAVA OFF` | A altitude travada pelo FBW | TRAVA ALT verde | Linha do FBW |
-| `ESTOL <0\|1>` | `1` com o alpha floor do FBW ligado: o avião devagar demais para a asa | Luz ESTOL vermelha, piscando | Alarme sonoro: dois bipes por segundo |
+| `ESTOL <0\|1>` | `1` com o aviso de estol do FBW: o ângulo de ataque perto do limite da asa. Só aviso, o FBW não mexe em nada | Luz ESTOL vermelha, piscando | Alarme sonoro: dois bipes por segundo |
 | `APL <HDG\|ALT\|VS> <0\|1\|2>` | Modo do piloto: `0` desligado, `1` ligado, `2` armado (o ALT subindo ou descendo até a altitude) | Luz do modo, verde com `1` ou `2` | Azul armado, verde ligado |
 | `APV <HDG\|ALT\|VS> <valor>` | O valor escolhido: rumo em graus (0 a 359), altitude em metros, velocidade vertical em décimos de m/s | — | O valor da linha |
 | `APC <HDG\|ALT\|VS> <0\|1>` | A linha do cursor, e `1` se ela está escolhida (girar muda o valor) | — | O cursor, ou a caixa âmbar no valor |
@@ -194,7 +194,7 @@ As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão 
 
 ### Ponte da tela ⇄ fly by wire
 
-O `fbw.py` manda por UDP para a porta **50100** da ponte da tela, 10 vezes por segundo, num pacote só, uma linha por vez: o ponto (`FBW`), a lei (`LEI`), a trava (`TRAVA`), o alpha floor (`ESTOL`) e os modos do piloto (`APL`), como na tabela acima. A ponte responde para o endereço de onde o pacote veio:
+O `fbw.py` manda por UDP para a porta **50100** da ponte da tela, 10 vezes por segundo, num pacote só, uma linha por vez: o ponto (`FBW`), a lei (`LEI`), a trava (`TRAVA`), o aviso de estol (`ESTOL`) e os modos do piloto (`APL`), como na tabela acima. A ponte responde para o endereço de onde o pacote veio:
 
 | Mensagem | Quando | Significado |
 |---|---|---|
