@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 import fbw
 from fbw import (
-    ALFA_MAX, DIRETA, FBW, GAMA_MAX, INCLINACAO_MAX, LADO_MAX, FlyByWire, Leitura, Manche,
+    ALFA_MAX, DIRETA, FBW, INCLINACAO_MAX, FlyByWire, Leitura, Manche,
     angulo180, base_da_nave, curva, direcao, escalar, modulo,
 )
 
@@ -206,17 +206,17 @@ class Aviao:
         self.t += dt
 
 
-def voar(aviao, guiagem, duracao, manche=lambda t: Manche(), a_cada_passo=None):
-    """Voa `duracao` segundos. O FBW decide a cada PASSO_FBW com a leitura da volta anterior."""
+def voar(aviao, guiagem, duracao, manche=lambda t: Manche(), a_cada_passo=None, atraso=1):
+    """Voa `duracao` segundos. O FBW decide a cada PASSO_FBW com a leitura de `atraso` voltas antes."""
     passos_por_decisao = round(PASSO_FBW / PASSO_FISICA)
-    leitura_atrasada = aviao.leitura()
-    comandos = guiagem.passo(leitura_atrasada, manche(aviao.t))
+    leituras = [aviao.leitura()] * atraso
+    comandos = guiagem.passo(leituras[0], manche(aviao.t))
     fim = aviao.t + duracao
     i = 0
     while aviao.t < fim - 1e-9:
         if i % passos_por_decisao == 0:
-            comandos = guiagem.passo(leitura_atrasada, manche(aviao.t))
-            leitura_atrasada = aviao.leitura()
+            comandos = guiagem.passo(leituras.pop(0), manche(aviao.t))
+            leituras.append(aviao.leitura())
             if a_cada_passo is not None:
                 a_cada_passo(aviao, guiagem)
         aviao.passo(comandos)
@@ -235,6 +235,16 @@ def fbw_no_ar(aviao, **kwargs):
 
 def trajetoria(aviao):
     return direcao(aviao.velocidade)
+
+
+def rolagem(aviao):
+    return angulos_da_base(aviao.base[0], aviao.base[1])[2]
+
+
+def aviao_nervoso(**kwargs):
+    """Superfícies fortes e pouco amortecimento, como o avião do voo gravado, que oscilava em pitch."""
+    return Aviao(velocidade=(0.0, 0.0, 200.0), profundor=5.5, aileron=12.0,
+                 amortecimento_pitch=2.0, amortecimento_roll=2.5, **kwargs)
 
 
 class Extremos:
@@ -279,16 +289,15 @@ class TestLeis(unittest.TestCase):
         self.assertEqual(guiagem.lei, DIRETA)
         self.assertEqual((c.pitch, c.roll, c.yaw, c.acelerador), (curva(0.8), curva(-0.3), curva(0.5), 0.7))
 
-    def test_assume_depois_de_um_segundo_no_ar_com_o_ponto_no_progrado(self):
+    def test_assume_depois_de_um_segundo_no_ar_sem_travar_nada(self):
         aviao = Aviao()
         guiagem = FlyByWire()
         voar(aviao, guiagem, fbw.TEMPO_DECOLAGEM - 0.2)
         self.assertEqual(guiagem.lei, DIRETA)
         voar(aviao, guiagem, 0.4)
         self.assertEqual(guiagem.lei, FBW)
-        gama, rumo = trajetoria(aviao)
-        self.assertAlmostEqual(guiagem.ponto[0], 0.0, delta=0.5)
-        self.assertAlmostEqual(angulo180(guiagem.ponto[1] - rumo), 0.0, delta=0.5)
+        self.assertIsNone(guiagem.comando)
+        self.assertIsNone(guiagem.altitude_travada)
 
     def test_desligado_no_botao_e_lei_direta(self):
         aviao = Aviao()
@@ -296,7 +305,6 @@ class TestLeis(unittest.TestCase):
         guiagem.ligado = False
         c = guiagem.passo(aviao.leitura(), Manche(pitch=0.3))
         self.assertEqual(guiagem.lei, DIRETA)
-        self.assertIsNone(guiagem.ponto)
         self.assertEqual(c.pitch, curva(0.3))
 
     def test_ar_ralo_e_lei_direta(self):
@@ -306,103 +314,83 @@ class TestLeis(unittest.TestCase):
         self.assertEqual(guiagem.lei, DIRETA)
 
 
-class TestPonto(unittest.TestCase):
-    def test_manche_para_tras_sobe_o_ponto_e_solto_ele_para(self):
-        aviao = Aviao()
-        guiagem = fbw_no_ar(aviao)
-        voar(aviao, guiagem, 1.0, lambda t: Manche(pitch=1.0))
-        self.assertAlmostEqual(guiagem.ponto[0], fbw.VEL_PONTO_PITCH * 1.0, delta=0.5)
-        self.assertIsNone(guiagem.altitude_travada)
-        antes = guiagem.ponto
-        voar(aviao, guiagem, 2.0)
-        self.assertAlmostEqual(guiagem.ponto[0], antes[0], places=6)
+class TestManche(unittest.TestCase):
+    def test_solto_segura_o_caminho_e_as_asas(self):
+        for velocidade in (150.0, 280.0):
+            with self.subTest(velocidade=velocidade):
+                aviao = Aviao(velocidade=(0.0, 0.0, velocidade))
+                guiagem = fbw_no_ar(aviao, velocidade_alvo=velocidade)
+                altitude = aviao.altitude
+                voar(aviao, guiagem, 30.0)
+                self.assertAlmostEqual(aviao.altitude, altitude, delta=20.0)
+                self.assertAlmostEqual(trajetoria(aviao)[0], 0.0, delta=1.0)
+                self.assertAlmostEqual(rolagem(aviao), 0.0, delta=1.0)
 
-    def test_o_ponto_nao_passa_dos_limites(self):
-        aviao = Aviao()
+    def test_puxar_pede_carga_na_hora(self):
+        aviao = Aviao(velocidade=(0.0, 0.0, 200.0))
         guiagem = fbw_no_ar(aviao)
-        voar(aviao, guiagem, 10.0, lambda t: Manche(pitch=1.0, roll=1.0))
-        self.assertLessEqual(guiagem.ponto[0], GAMA_MAX)
-        _, rumo = trajetoria(aviao)
-        self.assertLessEqual(abs(angulo180(guiagem.ponto[1] - rumo)), LADO_MAX + 1e-6)
+        voar(aviao, guiagem, 2.5, lambda t: Manche(pitch=0.6))
+        d = guiagem.diagnostico
+        self.assertGreater(d["carga_c"], 2.0)
+        self.assertAlmostEqual(d["carga"], d["carga_c"], delta=0.25)
 
-    def test_trava_a_altitude_com_o_manche_solto_perto_do_horizonte(self):
+    def test_empurrar_pede_menos_de_zero_g(self):
+        aviao = Aviao(velocidade=(0.0, 0.0, 200.0))
+        guiagem = fbw_no_ar(aviao)
+        voar(aviao, guiagem, 2.0, lambda t: Manche(pitch=-1.0))
+        self.assertLess(guiagem.diagnostico["carga"], 0.0)
+
+    def test_soltar_o_manche_volta_a_1_g(self):
+        aviao = Aviao(velocidade=(0.0, 0.0, 200.0))
+        guiagem = fbw_no_ar(aviao)
+        voar(aviao, guiagem, 2.0, lambda t: Manche(pitch=0.6))
+        voar(aviao, guiagem, 3.0)
+        gama, _ = trajetoria(aviao)
+        self.assertAlmostEqual(guiagem.diagnostico["carga"], math.cos(math.radians(gama)), delta=0.1)
+        antes = gama
+        voar(aviao, guiagem, 5.0)
+        self.assertAlmostEqual(trajetoria(aviao)[0], antes, delta=1.5)
+
+    def test_manche_de_lado_rola_e_solto_segura_a_inclinacao(self):
+        aviao = Aviao()
+        guiagem = fbw_no_ar(aviao, velocidade_alvo=150.0)
+        voar(aviao, guiagem, 1.0, lambda t: Manche(roll=1.0))
+        self.assertGreater(rolagem(aviao), 40.0)
+        voar(aviao, guiagem, 1.0)
+        parou = rolagem(aviao)
+        voar(aviao, guiagem, 10.0)
+        self.assertAlmostEqual(rolagem(aviao), parou, delta=3.0)
+        voar(aviao, guiagem, 1.0, lambda t: Manche(roll=-1.0))
+        voar(aviao, guiagem, 10.0)
+        self.assertLess(rolagem(aviao), parou - 30.0)
+
+    def test_rola_de_costas_como_um_caca(self):
+        aviao = Aviao(velocidade=(0.0, 0.0, 200.0))
+        guiagem = fbw_no_ar(aviao)
+        maior = {"rolagem": 0.0}
+        voar(aviao, guiagem, 2.5, lambda t: Manche(roll=1.0),
+             lambda a, g: maior.update(rolagem=max(maior["rolagem"], abs(rolagem(a)))))
+        self.assertGreater(maior["rolagem"], 150.0)
+
+    def test_nao_oscila_com_superficies_fortes_e_leitura_atrasada(self):
+        aviao = aviao_nervoso()
+        guiagem = fbw_no_ar(aviao)
+        giros = []
+        voar(aviao, guiagem, 1.5, lambda t: Manche(pitch=1.0, roll=0.4), atraso=3)
+        voar(aviao, guiagem, 6.0, a_cada_passo=lambda a, g: giros.append(g.taxas), atraso=3)
+        fim = giros[-25:]
+        self.assertLess(max(abs(math.degrees(p)) for p, _, _ in fim), 3.0)
+        self.assertLess(max(abs(math.degrees(r)) for _, r, _ in fim), 3.0)
+
+    def test_torcao_do_manche_mexe_no_leme(self):
         aviao = Aviao()
         guiagem = fbw_no_ar(aviao)
-        self.assertIsNotNone(guiagem.altitude_travada)
-        voar(aviao, guiagem, 0.5, lambda t: Manche(pitch=0.5))
-        self.assertIsNone(guiagem.altitude_travada)
+        solto = guiagem.passo(aviao.leitura(), Manche())
+        torcido = guiagem.passo(aviao.leitura(), Manche(yaw=1.0))
+        self.assertGreater(torcido.yaw, solto.yaw + 0.5)
 
 
 class TestVoo(unittest.TestCase):
-    def assertSeguiuOPonto(self, aviao, guiagem, tolerancia=0.5):
-        gama, rumo = trajetoria(aviao)
-        gama_c, rumo_c = guiagem.comando
-        self.assertAlmostEqual(gama, gama_c, delta=tolerancia)
-        self.assertAlmostEqual(angulo180(rumo - rumo_c), 0.0, delta=tolerancia)
-
-    def test_segura_reto_e_nivelado(self):
-        for velocidade in (100.0, 150.0, 280.0):
-            with self.subTest(velocidade=velocidade):
-                aviao = Aviao(velocidade=(0.0, 0.0, velocidade))
-                guiagem = fbw_no_ar(aviao, velocidade_alvo=velocidade)
-                altitude = guiagem.altitude_travada
-                voar(aviao, guiagem, 60.0)
-                self.assertAlmostEqual(aviao.altitude, altitude, delta=3.0)
-                self.assertSeguiuOPonto(aviao, guiagem)
-                _, _, rolagem = angulos_da_base(aviao.base[0], aviao.base[1])
-                self.assertAlmostEqual(rolagem, 0.0, delta=1.0)
-
-    def test_curva_de_90_graus(self):
-        for velocidade in (100.0, 150.0, 280.0):
-            with self.subTest(velocidade=velocidade):
-                aviao = Aviao(velocidade=(0.0, 0.0, velocidade))
-                guiagem = fbw_no_ar(aviao, velocidade_alvo=velocidade)
-                altitude = guiagem.altitude_travada
-                extremos = Extremos()
-                # Manche para a direita até o ponto andar 90°, e solta.
-                duracao = 90.0 / fbw.VEL_PONTO_RUMO
-                voar(aviao, guiagem, duracao, lambda t: Manche(roll=1.0), extremos)
-                voar(aviao, guiagem, 60.0, a_cada_passo=extremos)
-                # Rápido, o avião vira devagar e o ponto fica na beirada (LADO_MAX), sendo levado.
-                self.assertGreater(angulo180(guiagem.ponto[1] - 90.0), LADO_MAX)
-                self.assertSeguiuOPonto(aviao, guiagem)
-                self.assertLessEqual(extremos.inclinacao, INCLINACAO_MAX + 3.0)
-                self.assertAlmostEqual(aviao.altitude, altitude, delta=5.0)
-
-    def test_devagar_a_curva_abre_em_vez_de_descer(self):
-        # A 100 m/s, 60° de inclinação pediriam mais que ALFA_MAX da asa.
-        aviao = Aviao(velocidade=(0.0, 0.0, 100.0))
-        guiagem = fbw_no_ar(aviao, velocidade_alvo=100.0)
-        altitude = guiagem.altitude_travada
-        pior = {"altitude": 0.0}
-
-        def medir(aviao, guiagem):
-            pior["altitude"] = max(pior["altitude"], abs(aviao.altitude - altitude))
-
-        extremos = Extremos()
-        voar(aviao, guiagem, 90.0 / fbw.VEL_PONTO_RUMO, lambda t: Manche(roll=1.0), extremos)
-        voar(aviao, guiagem, 60.0, a_cada_passo=lambda a, g: (extremos(a, g), medir(a, g)))
-        self.assertLess(extremos.inclinacao, 50.0)
-        self.assertLess(pior["altitude"], 15.0)
-        self.assertLessEqual(aviao.maior_alfa, ALFA_MAX + 1.0)
-        self.assertSeguiuOPonto(aviao, guiagem)
-
-    def test_sobe_e_nivela(self):
-        aviao = Aviao()
-        guiagem = fbw_no_ar(aviao, velocidade_alvo=150.0)
-        # Manche para trás até o ponto chegar a uns 10°.
-        voar(aviao, guiagem, 10.0 / fbw.VEL_PONTO_PITCH, lambda t: Manche(pitch=1.0))
-        voar(aviao, guiagem, 20.0)
-        self.assertAlmostEqual(guiagem.ponto[0], 10.0, delta=0.5)
-        self.assertSeguiuOPonto(aviao, guiagem)
-        # Para a frente até o ponto voltar a quase zero: trava a altitude.
-        voar(aviao, guiagem, 9.7 / fbw.VEL_PONTO_PITCH, lambda t: Manche(pitch=-1.0))
-        voar(aviao, guiagem, 1.0)
-        self.assertIsNotNone(guiagem.altitude_travada)
-        altitude = guiagem.altitude_travada
-        voar(aviao, guiagem, 40.0)
-        self.assertAlmostEqual(aviao.altitude, altitude, delta=3.0)
-
     def test_leme_coordena_a_curva(self):
         # Cauda fraca: sem o leme, o avião escorregaria de lado na curva.
         aviao = Aviao(velocidade=(0.0, 0.0, 100.0), cata_vento=2.0)
@@ -412,8 +400,9 @@ class TestVoo(unittest.TestCase):
         def medir(aviao, guiagem):
             pior["beta"] = max(pior["beta"], abs(guiagem.diagnostico.get("beta", 0.0)))
 
-        voar(aviao, guiagem, 6.0, lambda t: Manche(roll=1.0), medir)
-        voar(aviao, guiagem, 30.0, a_cada_passo=medir)
+        voar(aviao, guiagem, 1.5, lambda t: Manche(roll=1.0), medir)
+        voar(aviao, guiagem, 20.0, lambda t: Manche(pitch=0.3), medir)
+        self.assertGreater(abs(rolagem(aviao)), 20.0)
         self.assertLess(pior["beta"], 6.0)
 
     def test_protecao_do_angulo_de_ataque(self):
@@ -431,13 +420,17 @@ class TestVoo(unittest.TestCase):
             with self.subTest(erro=erro):
                 aviao = Aviao(erro_autoridade=erro)
                 guiagem = fbw_no_ar(aviao, velocidade_alvo=150.0)
-                altitude = guiagem.altitude_travada
+                guiagem.definir("HDG", 0.0)
+                guiagem.alternar_modo("HDG")
+                guiagem.alternar_trava()
+                altitude = aviao.altitude
                 extremos = Extremos()
-                voar(aviao, guiagem, 90.0 / fbw.VEL_PONTO_RUMO, lambda t: Manche(roll=-1.0), extremos)
                 voar(aviao, guiagem, 60.0, a_cada_passo=extremos)
-                self.assertSeguiuOPonto(aviao, guiagem)
-                self.assertLessEqual(extremos.inclinacao, INCLINACAO_MAX + 5.0)
+                self.assertAlmostEqual(angulo180(trajetoria(aviao)[1]), 0.0, delta=1.0)
+                self.assertLessEqual(extremos.inclinacao, INCLINACAO_MAX + 8.0)
                 self.assertAlmostEqual(aviao.altitude, altitude, delta=8.0)
+                voar(aviao, guiagem, 2.0, lambda t: Manche(pitch=0.5))
+                self.assertGreater(guiagem.diagnostico["carga"], 1.5)
 
     def test_acelerador_automatico(self):
         aviao = Aviao(velocidade=(0.0, 0.0, 120.0))
@@ -456,16 +449,23 @@ class TestVoo(unittest.TestCase):
 
 class TestPilotoAutomatico(unittest.TestCase):
     def test_hdg_vira_para_o_rumo_e_segura(self):
-        aviao = Aviao()
-        guiagem = fbw_no_ar(aviao, velocidade_alvo=150.0)
-        altitude = aviao.altitude
-        guiagem.definir("HDG", 180.0)   # de leste para sul: 90° à direita
-        self.assertTrue(guiagem.alternar_modo("HDG"))
-        voar(aviao, guiagem, 60.0)
-        _, rumo = trajetoria(aviao)
-        self.assertAlmostEqual(angulo180(rumo - 180.0), 0.0, delta=1.0)
-        self.assertEqual(guiagem.estado_ap("HDG"), 1)
-        self.assertAlmostEqual(aviao.altitude, altitude, delta=10.0)
+        for velocidade in (100.0, 150.0, 280.0):
+            with self.subTest(velocidade=velocidade):
+                aviao = Aviao(velocidade=(0.0, 0.0, velocidade))
+                guiagem = fbw_no_ar(aviao, velocidade_alvo=velocidade)
+                guiagem.alternar_trava()
+                altitude = aviao.altitude
+                extremos = Extremos()
+                guiagem.definir("HDG", 180.0)
+                self.assertTrue(guiagem.alternar_modo("HDG"))
+                voar(aviao, guiagem, 60.0, a_cada_passo=extremos)
+                _, rumo = trajetoria(aviao)
+                self.assertAlmostEqual(angulo180(rumo - 180.0), 0.0, delta=1.0)
+                self.assertEqual(guiagem.estado_ap("HDG"), 1)
+                self.assertAlmostEqual(aviao.altitude, altitude, delta=15.0)
+                self.assertLessEqual(extremos.inclinacao, INCLINACAO_MAX + 6.0)
+                self.assertLessEqual(aviao.maior_alfa, ALFA_MAX + 1.0)
+                self.assertEqual(guiagem.comando[1], 180.0)
 
     def test_vs_sobe_com_a_velocidade_escolhida(self):
         aviao = Aviao()
@@ -523,25 +523,38 @@ class TestPilotoAutomatico(unittest.TestCase):
         self.assertEqual(guiagem.lei, DIRETA)
         self.assertFalse(guiagem.ap["HDG"])
 
-    def test_korry_da_trava_solta_e_trava(self):
+    def test_korry_da_trava_trava_e_solta(self):
         aviao = Aviao()
-        guiagem = fbw_no_ar(aviao)
-        self.assertIsNotNone(guiagem.altitude_travada)
-        guiagem.alternar_trava()
-        voar(aviao, guiagem, 2.0)
-        self.assertIsNone(guiagem.altitude_travada)       # não trava sozinho de novo
+        guiagem = fbw_no_ar(aviao, velocidade_alvo=150.0)
         guiagem.alternar_trava()
         voar(aviao, guiagem, 0.1)
-        self.assertAlmostEqual(guiagem.altitude_travada, aviao.altitude, delta=2.0)
+        altitude = guiagem.altitude_travada
+        self.assertAlmostEqual(altitude, aviao.altitude, delta=2.0)
+        voar(aviao, guiagem, 0.6, lambda t: Manche(roll=1.0))
+        voar(aviao, guiagem, 30.0)
+        self.assertAlmostEqual(aviao.altitude, altitude, delta=5.0)
+        guiagem.alternar_trava()
+        voar(aviao, guiagem, 2.0)
+        self.assertIsNone(guiagem.altitude_travada)
+        guiagem.alternar_trava()
+        voar(aviao, guiagem, 0.5, lambda t: Manche(pitch=0.5))
+        self.assertIsNone(guiagem.altitude_travada)
 
 
 class TestConversaComAPonte(unittest.TestCase):
     def test_linhas_de_estado(self):
         aviao = Aviao()
         guiagem = fbw_no_ar(aviao)
+        self.assertEqual(fbw.linhas_de_estado(guiagem)[0], "FBW OFF")
+        guiagem.alternar_trava()
+        voar(aviao, guiagem, 0.1)
+        self.assertTrue(any(linha.startswith("TRAVA 20") for linha in fbw.linhas_de_estado(guiagem)))
+        guiagem.definir("ALT", 3000.0)
         guiagem.alternar_modo("ALT")
+        voar(aviao, guiagem, 0.1)
         linhas = fbw.linhas_de_estado(guiagem)
         self.assertTrue(linhas[0].startswith("FBW "))
+        self.assertNotEqual(linhas[0], "FBW OFF")
         self.assertIn("LEI FBW", linhas)
         self.assertIn("TRAVA OFF", linhas)              # o ALT soltou a trava
         self.assertIn("APL ALT 2", linhas)
@@ -622,6 +635,7 @@ class TestAlphaFloor(unittest.TestCase):
         guiagem = fbw_no_ar(aviao)
         self.assertFalse(guiagem.estol)
         altitude = aviao.altitude
+        guiagem.alternar_trava()
         guiagem.definir("HDG", 90.0)
         guiagem.alternar_modo("HDG")
         visto = {"estol": False, "ap_com_estol": False, "menor": aviao.altitude}
@@ -645,12 +659,14 @@ class TestAlphaFloor(unittest.TestCase):
     def test_voo_normal_nao_entra(self):
         aviao = Aviao()
         guiagem = fbw_no_ar(aviao, velocidade_alvo=150.0)
-        voar(aviao, guiagem, 30.0, lambda t: Manche(roll=0.5))
+        voar(aviao, guiagem, 0.8, lambda t: Manche(roll=0.5))
+        voar(aviao, guiagem, 30.0, lambda t: Manche(pitch=0.2))
         self.assertFalse(guiagem.estol)
 
     def test_lei_direta_sai_e_a_linha_vai_para_a_ponte(self):
         aviao = Aviao(velocidade=(0.0, 0.0, 80.0), acelerador=0.0)
-        guiagem = fbw_no_ar(aviao)          # a 80 m/s, nivelado já passa do limite
+        guiagem = fbw_no_ar(aviao)
+        voar(aviao, guiagem, 2.0, lambda t: Manche(pitch=1.0))
         self.assertTrue(guiagem.estol)
         self.assertIn("ESTOL 1", fbw.linhas_de_estado(guiagem))
         self.assertFalse(guiagem.alternar_modo("HDG"))   # não liga o piloto no alpha floor
@@ -662,7 +678,8 @@ class TestAlphaFloor(unittest.TestCase):
 
 class TestRecuperacaoDoEstol(unittest.TestCase):
     def estolar(self, aviao, guiagem, limite=120.0):
-        """Voa até o alpha floor ligar; devolve quanto tempo levou."""
+        """Segura a altitude sem motor até o alpha floor ligar."""
+        guiagem.alternar_trava()
         inicio = aviao.t
         while not guiagem.estol and aviao.t - inicio < limite:
             voar(aviao, guiagem, 0.2)
@@ -671,15 +688,15 @@ class TestRecuperacaoDoEstol(unittest.TestCase):
     def test_no_estol_solta_a_trava_baixa_o_nariz_e_nivela_as_asas(self):
         aviao = Aviao(velocidade=(0.0, 0.0, 110.0), acelerador=0.0)
         guiagem = fbw_no_ar(aviao)
-        guiagem.definir("HDG", 180.0)          # virando para o sul quando estolar
+        guiagem.definir("HDG", 180.0)
         guiagem.alternar_modo("HDG")
         self.estolar(aviao, guiagem)
         voar(aviao, guiagem, 0.2)
         self.assertIsNone(guiagem.altitude_travada)
-        self.assertLessEqual(guiagem.ponto[0], fbw.GAMA_RECUPERA)
-        # O ponto não segue mais o rumo do HDG: fica no rumo em que o avião está.
+        self.assertLessEqual(guiagem.comando[0], fbw.GAMA_RECUPERA)
         _, rumo = trajetoria(aviao)
-        self.assertAlmostEqual(angulo180(guiagem.ponto[1] - rumo), 0.0, delta=1.0)
+        self.assertAlmostEqual(angulo180(guiagem.comando[1] - rumo), 0.0, delta=1.0)
+        self.assertEqual(guiagem.diagnostico["inclinacao_c"], 0.0)
 
     def test_recupera_e_nivela_numa_altitude_nova(self):
         aviao = Aviao(velocidade=(0.0, 0.0, 110.0), acelerador=0.0)
@@ -687,21 +704,28 @@ class TestRecuperacaoDoEstol(unittest.TestCase):
         self.estolar(aviao, guiagem)
         voar(aviao, guiagem, 60.0)
         self.assertFalse(guiagem.estol)
-        self.assertIsNotNone(guiagem.altitude_travada)   # a trava pegou a altitude nova
+        self.assertIsNotNone(guiagem.altitude_travada)
         altitude = guiagem.altitude_travada
         voar(aviao, guiagem, 30.0)
         self.assertAlmostEqual(aviao.altitude, altitude, delta=10.0)
         self.assertLessEqual(aviao.maior_alfa, ALFA_MAX + 1.0)
 
     def test_sem_motor_desce_em_vez_de_ficar_pendurado_na_asa(self):
-        # Um avião sem motor: o alpha floor não tem potência, então só o nariz para baixo salva.
         aviao = Aviao(velocidade=(0.0, 0.0, 110.0), acelerador=0.0, empuxo_max=0.0)
         guiagem = fbw_no_ar(aviao)
         self.estolar(aviao, guiagem)
         voar(aviao, guiagem, 20.0)
         gama, _ = trajetoria(aviao)
-        self.assertLess(gama, -2.0)                     # descendo, trocando altura por velocidade
+        self.assertLess(gama, -2.0)
         self.assertLess(guiagem.diagnostico["alfa"], fbw.ALFA_FLOOR)
+
+    def test_com_o_manche_puxado_o_piloto_manda_e_a_protecao_segura(self):
+        aviao = Aviao(velocidade=(0.0, 0.0, 90.0), acelerador=0.0)
+        guiagem = fbw_no_ar(aviao)
+        voar(aviao, guiagem, 10.0, lambda t: Manche(pitch=1.0))
+        self.assertTrue(guiagem.estol)
+        self.assertIsNone(guiagem.comando)
+        self.assertLessEqual(aviao.maior_alfa, ALFA_MAX + 1.5)
 
 
 if __name__ == "__main__":

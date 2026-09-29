@@ -77,7 +77,7 @@ O layout se inspira na navball do KSP2: a bola no centro, cercada por um aro esc
   | Ciano | Radial para fora: perpendicular ao movimento, do lado de fora do planeta | Radial para dentro |
   | Rosa | Alvo, quando há um alvo escolhido no jogo | Anti-alvo |
   | Azul | Nó de manobra: a direção da queima que falta | — |
-  | Verde (quatro cantos) | Ponto do [fly by wire](fbw.md): para onde o avião está sendo levado. Com o avião no ponto, o pró-grado fica dentro do quadrado | — |
+  | Verde (quatro cantos) | Ponto do [fly by wire](fbw.md): o caminho pedido pelo piloto automático ou pela trava (voando na mão, não aparece). Com o avião nele, o pró-grado fica dentro do quadrado | — |
 
 - **Caixa amarela, à esquerda:** a velocidade, com o modo no título (`VEL SUP`, `VEL ORB` ou `VEL ALVO`). **Tocar nela troca o modo**, como no KSP2.
 - **Caixa magenta, à direita:** `ALT`, acima do nível do mar. Abaixo de 5 km do chão vira `RADAR`, a altura acima do chão ou do mar; volta para `ALT` acima de 5,5 km.
