@@ -48,6 +48,7 @@ A ponte não sabe qual tela está do outro lado: para usar a placa, basta trocar
 | [`bridge/celular/index.html`](../bridge/celular/index.html) | A página do celular: o "firmware" do navegador, com a mesma navball e o mesmo layout |
 | [`bridge/navball.py`](../bridge/navball.py) | A conta da navball, escrita para ser passada para C |
 | [`bridge/sistemas.py`](../bridge/sistemas.py) | O painel de sistemas de controle: modos do SAS, SAS, RCS, FBW, o menu do piloto automático e a troca de página |
+| [`bridge/avisos.py`](../bridge/avisos.py) | Os [avisos de voo](avisos.md) por voz (GPWS) e a luz GPWS do painel |
 | [`bridge/painel_scripts.py`](../bridge/painel_scripts.py) | O painel de scripts: o korry POUSO segurado 5 s abre e aborta o `scripts/pouso.py` num processo |
 | [`bridge/celular/painel.html`](../bridge/celular/painel.html) | A página de botões dos painéis de sistemas e de scripts, no lugar do painel de verdade |
 | [`firmware/mfd/`](../firmware/mfd/) | O firmware da mikromedia, em C: a cópia do simulador na placa ([mikromedia.md](mikromedia.md)) |

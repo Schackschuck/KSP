@@ -265,7 +265,7 @@ class Sistemas:
         """O que vai só para a tela: a página, o erro e o menu, além das luzes."""
         # SAS e RCS já vão para a tela pelos botões de toque (Transmissor), e
         # a falta de carga elétrica e de monopropelente é só do painel.
-        estado = {chave: linha for chave, linha in luzes.items() if chave not in ("SAS", "RCS", "SEMEC", "SEMMP")}
+        estado = {chave: linha for chave, linha in luzes.items() if chave not in ("SAS", "RCS", "SEMEC", "SEMMP", "GPWS")}
         estado["PAG"] = f"PAG {self.pagina}"
         estado["SASE"] = "SASE OFF" if erro is None or not sas else f"SASE {round(erro * 10)}"
         estado.update(self.menu.linhas())

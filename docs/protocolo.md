@@ -173,7 +173,7 @@ Linhas do painel de sistemas de controle ([desenho](../hardware/construcao.md#pa
 
 ### Ponte → painel e tela
 
-As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão quando mudam e também 1 vez por segundo, calculadas 20 vezes por segundo. A tela não recebe `SEMEC` nem `SEMMP`, e o painel não recebe `SASE`, `APV`, `APC` nem `PAG`.
+As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão quando mudam e também 1 vez por segundo, calculadas 20 vezes por segundo. A tela não recebe `SEMEC`, `SEMMP` nem `GPWS`, e o painel não recebe `SASE`, `APV`, `APC` nem `PAG`.
 
 | Mensagem | Valores | No painel | Na tela |
 |---|---|---|---|
@@ -183,6 +183,7 @@ As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão 
 | `LEI <FBW\|DIRETA\|CHAO\|OFF>` | A lei do fly by wire: `FBW`, `DIRETA` no ar, `CHAO` (direta no chão). `OFF` sem o `fbw.py` aberto | `FBW` verde; `DIRETA` âmbar | Linha do FBW, na página do piloto |
 | `TRAVA <metros>` ou `TRAVA OFF` | A altitude travada pelo FBW | TRAVA ALT verde | Linha do FBW |
 | `ESTOL <0\|1>` | `1` com o aviso de estol do FBW: o ângulo de ataque perto do limite da asa. Só aviso, o FBW não mexe em nada | Luz ESTOL vermelha, piscando | Alarme sonoro: dois bipes por segundo |
+| `GPWS <0\|1\|2>` | Os [avisos de voo](avisos.md) da ponte: `0` nenhum, `1` um aviso âmbar (SINK RATE, TOO LOW, DON'T SINK, BANK ANGLE, OVERSPEED), `2` um vermelho (TERRAIN, PULL UP). A voz sai pela ponte, não pela tela | `1`: GPWS âmbar; `2`: PULL UP vermelha, piscando | — |
 | `APL <HDG\|ALT\|VS> <0\|1\|2>` | Modo do piloto: `0` desligado, `1` ligado, `2` armado (o ALT subindo ou descendo até a altitude) | Luz do modo, verde com `1` ou `2` | Azul armado, verde ligado |
 | `APV <HDG\|ALT\|VS> <valor>` | O valor escolhido: rumo em graus (0 a 359), altitude em metros, velocidade vertical em décimos de m/s | — | O valor da linha |
 | `APC <HDG\|ALT\|VS> <0\|1>` | A linha do cursor, e `1` se ela está escolhida (girar muda o valor) | — | O cursor, ou a caixa âmbar no valor |
