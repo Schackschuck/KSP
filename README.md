@@ -274,7 +274,7 @@ Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de fla
 
 ### Fase 7 — Hardware definitivo
 
-- PCB no **KiCad** a partir dos esquemáticos de [hardware/](hardware/README.md): uma placa de módulo, fabricada em quantidade, e o backplane. Fabricação na JLCPCB, PCBWay…
+- PCB no **KiCad** a partir dos esquemáticos de [hardware/](hardware/README.md): uma placa de módulo, fabricada em quantidade, e o backplane. Fabricação na JLCPCB, PCBWay… A do módulo médio já está pronta, com os Gerbers ([hardware/](hardware/README.md#pcb-do-módulo-médio)).
 - Caixa em MDF cortado a laser (no colégio), com peças impressas em 3D (em casa): um painel removível por seção, legendas gravadas, korry switches, Pi e mikromedia embutidos. Formato, aparência e ordem para construir em [hardware/construcao.md](hardware/construcao.md).
 
 ### Fase 8 — Embarcados avançado (opcional)
@@ -464,7 +464,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [x] 2–3× capas de proteção para chave ("missile switch cover")
 - [x] 4–6× botões arcade (24 ou 30 mm), de preferência com LED
 - [ ] Por módulo pequeno (6 no painel): 2× 74HC165, 1× 74HC595, 2× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 8× resistor 1 kΩ, 3× capacitor 100 nF, 1× capacitor 10 µF, 3 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
-- [ ] Por módulo médio (5 no painel): 3× 74HC165, 2× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 16× resistor 1 kΩ, 5× capacitor 100 nF, 1× capacitor 10 µF, 5 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
+- [ ] Por módulo médio (5 no painel): 3× 74HC165, 2× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 16× resistor 220 Ω, 5× capacitor 100 nF, 1× capacitor 470 µF, 5 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
 - [ ] Por módulo grande (1 no painel, o de sistemas de controle): 4× 74HC165, 4× 74HC595, 4× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 32× resistor 1 kΩ, 8× capacitor 100 nF, 1× capacitor 10 µF, 8 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
 - [ ] Backplane: 12× conector IDC 2x8, 5× resistor 47 Ω, 13× resistor 10 kΩ, capacitores de 470 µF e 100 nF, borne de 2 vias e jumper de 3 pinos
 - [x] Joystick: Logitech Extreme 3D Pro (3 eixos + acelerador, na USB do Pi)

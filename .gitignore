@@ -3,3 +3,5 @@ __pycache__/
 .venv/
 venv/
 firmware/mfd/obra/
+*.kicad_prl
+fp-info-cache
