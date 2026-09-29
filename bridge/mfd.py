@@ -1,9 +1,9 @@
 """Ponte kRPC ⇄ tela multifunção: navball, telemetria e botões de toque.
 
 A tela (a mikromedia for ARM, 320x240 com touch) só desenha o que recebe;
-toda a conta que envolve o jogo fica aqui. Enquanto o firmware da placa não
-existe, a tela é um simulador numa janela do PC (mfd_simulador.py) ou uma
-página no navegador do celular (mfd_celular.py). As três falam o mesmo
+toda a conta que envolve o jogo fica aqui. A tela pode ser a placa, com o
+firmware de firmware/mfd/, um simulador numa janela do PC (mfd_simulador.py)
+ou uma página no navegador do celular (mfd_celular.py). As três falam o mesmo
 protocolo. Protocolo em docs/protocolo.md; roteiro em docs/mfd.md.
 
 Uso:
@@ -13,7 +13,7 @@ Uso:
     python mfd.py --zoom 3           # janela do simulador maior
     python mfd.py --celular          # a tela no navegador do celular, pelo Wi-Fi
     python mfd.py --celular 8080     # idem, noutra porta (padrão: 8000)
-    python mfd.py --porta COM7       # a mikromedia de verdade, quando o firmware existir
+    python mfd.py --porta COM7       # a mikromedia de verdade, pela porta PROG
     python mfd.py --painel 8002      # a página de botões do painel noutra porta (padrão: 8001)
     python mfd.py --sem-painel       # sem a página de botões
 
@@ -44,7 +44,7 @@ from dataclasses import dataclass
 import serial
 
 from painel_scripts import PainelScripts, processo_pouso
-from ponte import Painel, conectar_krpc, esperar_nave
+from ponte import BAUD, ESPERA_READY, Painel, conectar_krpc, esperar_nave
 from sistemas import Remetente, Sistemas
 
 INTERVALO_ATITUDE = 0.05  # s: navball 20 vezes por segundo
@@ -881,7 +881,9 @@ def tratar_mensagem(linha, fonte, transmissor, modo):
         return True
 
     tipo, _, nome = linha.partition(" ")
-    if tipo == "TOQUE" and nome == "MODO":
+    if tipo == "ID":
+        print(f"Controlador da tela: {nome}")
+    elif tipo == "TOQUE" and nome == "MODO":
         modo.alternar()
     elif tipo == "TOQUE" and nome in SISTEMAS:
         fonte.alternar(nome)
@@ -986,6 +988,47 @@ def acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, pa
         fonte.remover()
 
 
+class TelaMikromedia(Painel):
+    """A mikromedia pela porta PROG, o conversor USB-serial (FT232RL) da placa.
+
+    Na PROG, o DTR vai direto no reset do LPC2148, e o RTS no pino P0.14, que
+    faz a placa entrar no bootloader: é assim que o Flash Magic grava o
+    firmware. O pyserial liga os dois ao abrir a porta, o que deixaria a placa
+    presa no reset. Aqui a porta abre com os dois desligados, e um pulso no DTR
+    reinicia a placa, como a Arduino IDE faz com o Mega.
+    """
+
+    PULSO_RESET = 0.05
+
+    def __init__(self, porta):
+        self._serial = serial.Serial()
+        self._serial.port = porta
+        self._serial.baudrate = BAUD
+        self._serial.timeout = 0
+        self._serial.dtr = False
+        self._serial.rts = False
+        self._serial.open()
+        self._buffer = b""
+        self._serial.dtr = True
+        time.sleep(self.PULSO_RESET)
+        self._serial.dtr = False
+        self._serial.reset_input_buffer()
+
+    def esperar_ready(self):
+        """Espera o READY e mostra o controlador da tela, que vem logo depois."""
+        limite = time.monotonic() + ESPERA_READY
+        pronta = False
+        while time.monotonic() < limite:
+            for linha in self.linhas():
+                if linha == "READY":
+                    pronta = True
+                    limite = min(limite, time.monotonic() + 0.2)
+                elif linha.startswith("ID "):
+                    print(f"Controlador da tela: {linha[3:]}")
+            time.sleep(0.01)
+        return pronta
+
+
 def abrir_tela(args):
     if args.celular:
         from mfd_celular import TelaCelular
@@ -1002,7 +1045,7 @@ def abrir_tela(args):
 
     print(f"Abrindo a tela em {args.porta}...")
     try:
-        tela = Painel(args.porta)   # a tela fala o mesmo tipo de linhas que o painel
+        tela = TelaMikromedia(args.porta)
     except serial.SerialException as e:
         sys.exit(f"Não foi possível abrir {args.porta}: {e}")
     if tela.esperar_ready():
