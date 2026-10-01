@@ -6,7 +6,7 @@ Para tarefas de programação que não sejam triviais, o agente principal (Opus)
 
 1. Escrever um plano detalhado em `PLANO.md`, com arquivos, funções, estruturas de dados, casos de borda e testes.
 2. Delegar cada etapa do plano ao subagente `implementador`, uma de cada vez.
-3. Revisar o diff ao final e corrigir os problemas encontrados.
+3. Revisar o diff ao final e corrigir os problemas encontrados. Se o diff mexe numa mensagem do protocolo, chamar o subagente `revisor-protocolo`; se mexe em `firmware/`, o `revisor-firmware`.
 
 Para debug difícil ou mudanças que atravessam o projeto inteiro, o agente principal pode fazer direto, sem delegar.
 
@@ -17,14 +17,16 @@ Este fluxo vem antes do merge automático abaixo: a revisão do diff faz parte d
 O dono do repositório **não revisa pull requests nem faz merge manualmente**. Toda alteração pronta deve ir para o `main` sem pedir confirmação:
 
 1. Antes de começar, trazer o `main` para o branch de trabalho com `git merge origin/main`. Não usar rebase nem push forçado.
-2. Fazer as alterações e **verificar antes de publicar**:
+2. Fazer as alterações e **verificar antes de publicar** com a skill `/verificar` (`python .claude/skills/verificar/verificar.py`):
    - firmware: compilar para o ATmega2560, sem avisos;
    - Python: rodar os scripts ou testes que existirem e o `pyflakes`.
 3. Fazer commit e push do branch de trabalho.
 4. Abrir o PR contra o `main` e fazer o merge com **squash** logo em seguida.
 5. Conferir que o `main` ficou igual ao código verificado e informar o link do PR.
 
-Se a verificação falhar, não fazer o merge: corrigir primeiro ou explicar o que está faltando.
+Se a verificação falhar, não fazer o merge: corrigir primeiro ou explicar o que está faltando. Os passos de 1 a 5 estão na skill `/publicar`.
+
+Um hook (`.claude/hooks/conferir_edicao.py`) roda o `pyflakes` em cada `.py` editado e acusa texto fora do ASCII nas strings de `firmware/`.
 
 ## Convenções
 

@@ -11,7 +11,7 @@ Regras:
 - Leia `PLANO.md` e o `CLAUDE.md` antes de começar e siga as convenções do projeto (código novo sem comentários, textos do LCD e da serial em ASCII, mensagens em português).
 - Implemente exatamente o que está no `PLANO.md`, **uma etapa por vez**. Faça só a etapa que foi pedida.
 - Não mude a arquitetura, não renomeie estruturas nem acrescente funcionalidades que o plano não prevê.
-- Depois de cada etapa, rode as verificações do projeto: compilar o firmware para o ATmega2560 sem avisos, e rodar os testes e o `pyflakes` no que for Python. Corrija o que quebrar dentro da própria etapa.
+- Depois de cada etapa, rode a verificação do projeto com `python .claude/skills/verificar/verificar.py` (testes, `pyflakes` e o firmware compilado para o ATmega2560 sem avisos). Corrija o que quebrar dentro da própria etapa.
 - Se algo no plano estiver ambíguo, contraditório ou errado, **pare e relate** o problema em vez de improvisar. Diga o que encontrou e o que precisa ser decidido.
 - Não faça commit, push nem PR. Isso é do agente principal.
 
