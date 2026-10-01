@@ -15,16 +15,15 @@ O objetivo principal é **aprender firmware/embarcados e eletrônica**, e de que
           ▼
  Raspberry Pi 4 = computador de bordo ............... bridge/
    • ponte kRPC ⇄ placas
-   • lê o joystick (Logitech Extreme 3D Pro) pela USB
-   • tela de telemetria (pygame)
-   • tela multifunção no navegador do celular, pelo Wi-Fi (enquanto a placa não fica pronta)
+   • tela multifunção de 7" no HDMI, a mesma página do celular
+   • tela multifunção no navegador do celular, pelo Wi-Fi
    • dispara os scripts de voo ....................... scripts/
-          ▲                              ▲
-          │ USB/serial                   │ USB/serial
-          │ (protocolo próprio)          │ (mesmo protocolo)
-          ▼                              ▼
- Arduino Mega = I/O do painel     mikromedia (LPC2148) = tela multifunção
- firmware/painel/                 firmware/mfd/
+          ▲
+          │ USB/serial
+          │ (protocolo próprio)
+          ▼
+ Arduino Mega = I/O do painel
+ firmware/painel/
           ▲
           │  SPI + linhas analógicas
           ▼
@@ -36,9 +35,9 @@ O objetivo principal é **aprender firmware/embarcados e eletrônica**, e de que
    pequeno: 8 entradas + 8 LEDs (1 × 74HC165 + 1 × 74HC595)
    médio: 16 entradas + 24 LEDs (2 × 74HC165 + 3 × 74HC595), com 12 jacks de korry
    grande: 24 entradas + 16 LEDs (3 × 74HC165 + 2 × 74HC595)
-   chaves, botões, LEDs, joysticks, acelerador
+   korry, botões, LEDs, sidestick, acelerador
 
- Instrumentos (fase 4): displays, ponteiros e fita de LED, direto no Mega
+ Barras de LEDs dos recursos: um MAX7219, direto no Mega
 ```
 
 Cada parte tem um papel bem definido:
@@ -47,10 +46,10 @@ Cada parte tem um papel bem definido:
 |---|---|---|
 | **KSP + kRPC** (PC) | Expõe o estado da nave e aceita comandos. | — |
 | **Computador de bordo** (Raspberry Pi 4, Python) | Conecta no kRPC pela rede, abre *streams* de telemetria, traduz eventos do painel em comandos do jogo e telemetria em mensagens para o painel. Desenha a tela de telemetria. Dispara os scripts de voo de `scripts/` (ex.: pouso autônomo). | Não lê pino nenhum. |
-| **Joystick** (Logitech Extreme 3D Pro, USB no Pi) | Manda eixos e botões para o computador de bordo, que os traduz em comandos do kRPC. | O KSP não enxerga o joystick: tudo passa pela ponte. |
+| **Sidestick** (joystick JH-D400X-R4 no painel, lido pelo Mega) | Manda os 3 eixos e o botão como qualquer controle do painel; a ponte os traduz em comandos do kRPC. | O KSP não enxerga o joystick: tudo passa pela ponte. |
 | **Painel** (Arduino Mega, C++) | Lê entradas (com debounce), envia eventos; recebe valores e atualiza LEDs, displays e ponteiros. | **Não sabe que o KSP existe.** É um painel de I/O genérico. |
 | **Celular** (opcional, página no navegador) | Mostra a tela multifunção pelo Wi-Fi, com o mesmo protocolo e o mesmo layout, sem precisar da mikromedia. | Não fala com o kRPC nem guarda estado: só desenha o que a ponte manda. |
-| **Tela multifunção** (mikromedia for ARM, LPC2148, C sem framework) | Recebe telemetria pelo mesmo protocolo serial, desenha páginas (atitude, órbita, pouso), troca de página pelo touch e toca alarmes sonoros. | Não fala com o kRPC; só mostra o que o computador de bordo manda. |
+| **Tela multifunção** (tela de 7" no HDMI do Pi, com a página do navegador) | Desenha as páginas (navball, órbita, pouso, piloto) com o que a ponte manda, e troca de página pelo toque ou pelos botões do painel. | Não fala com o kRPC; só mostra o que o computador de bordo manda. |
 
 Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o endereço do servidor kRPC e a porta serial.
 
@@ -91,9 +90,11 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Scripts de voo numa pasta própria** (`scripts/`), fora da ponte | Cada script roda sozinho pela linha de comando, no PC ou no Pi, com ou sem o cockpit. A ponte só dispara o script quando o botão do painel é apertado; o script não depende dela nem do painel. |
 | **Script liga segurando o korry 5 s**, e aborta segurando de novo 5 s, sem chave ARM | Um toque sem querer não entrega a nave ao script, e o mesmo gesto aborta, sem procurar outro botão. Economiza a chave ARM com capa e um botão por script. Quem conta o tempo é a ponte, como no encoder do piloto automático, e o korry pisca âmbar enquanto conta. |
 | **A ponte abre o script num processo próprio** e aborta com o Ctrl+C | O script continua sendo o mesmo da linha de comando, e o Ctrl+C já corta o motor e devolve a nave. O estado volta pelo UDP, como no fly by wire, e o código de saída diz se a nave pousou. |
-| **Um joystick só** (Logitech Extreme 3D Pro) na USB do Pi, lido pela ponte, com uma chave de 3 posições para o modo | Já está em casa e tem 3 eixos, acelerador, 12 botões e um chapéu. Passando pela ponte, dá para ter zona morta, os modos VOO, CÂMERA e TRANSLAÇÃO, e saber quando o piloto mexe no manche para tirar o controle de um script. Não precisa abrir o joystick. |
-| **Uma tela no meio para todos os módulos**, a tela multifunção, no lugar de um LCD por módulo | Os olhos vão sempre ao mesmo lugar, os painéis ficam menores e só com botões, e sai um LCD por módulo da lista de compras. A página troca sozinha para o módulo em uso e volta depois, então não é preciso escolher a página na mão. Quem decide a troca é a ponte, que já recebe todos os eventos do painel: a tela continua só desenhando. |
-| **Korry switches** (botões iluminados com legenda, de avião) nos sistemas que o jogo também muda | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: corpo impresso em 3D e tampa de acrílico cortada a laser. Na seção de sistemas de controle, todos; nas outras, a decidir. |
+| **Um joystick só, no painel** (JH-D400X-R4, um sidestick à direita), com o botão do manche trocando o modo | O cockpit fica como um avião: acelerador na mão esquerda, sidestick na direita. Os 3 eixos cabem nas 3 linhas analógicas de um slot do backplane, e o botão passa pelos modos VOO, CÂMERA e TRANSLAÇÃO, com três luzes. Passando pela ponte, dá para ter zona morta e saber quando o piloto mexe no manche para tirar o controle de um script. O Extreme 3D Pro fica para desenvolver no PC. |
+| **Uma tela no meio para todos os módulos**, a tela multifunção de 7", no lugar de um LCD por módulo | Os olhos vão sempre ao mesmo lugar, os painéis ficam menores e só com botões, e sai um LCD por módulo da lista de compras. A página troca sozinha para o módulo em uso e volta depois, então não é preciso escolher a página na mão. Quem decide a troca é a ponte, que já recebe todos os eventos do painel: a tela continua só desenhando. |
+| **Korry switches** (botões iluminados com legenda, de avião) onde a luz mostra um estado do jogo | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: impressos em duas cores numa peça só, com a legenda transparente, e uma plaquinha de placa perfurada atrás ([hardware/korry/](hardware/korry/README.md)). O que não tem estado para mostrar é botão de metal. |
+| **Cockpit em U, de 766 × 391 mm, com painéis de 125 mm** ([versão B](hardware/construcao.md#cockpit-versão-b)) | Um bloco no meio e duas asas, como num avião, sem painel vazio. Os controles foram juntados em 11 painéis para a caixa não passar de 80 cm; o que não cabe em 125 mm ocupa dois quadrados. O que cada botão faz foi conferido no código-fonte do kRPC antes de desenhar. |
+| **Tela de 7" no Pi** no lugar da mikromedia | A tela de 2,8" da mikromedia ficou pequena no meio do cockpit. A de 7" mostra a mesma página que o celular já usa, pelo HDMI, sem firmware novo. O firmware da mikromedia continua no repositório, fora do cockpit. |
 | **Caixa em MDF cortado a laser, com peças impressas em 3D** | A laser do colégio faz as peças planas e grandes (paredes, painéis com legendas); a impressora de casa, as pequenas e complicadas (korry, knobs, suportes). Cada seção é um painel removível com o seu módulo atrás. |
 | **Fly by wire com a lei de um caça**: o manche pede carga (g) e velocidade de rolagem, e não mexe nas superfícies | A primeira versão movia um ponto na navball, e o avião ia até ele: estável, mas lenta e "interventora" no jogo (o voo gravado mostrou o avião respondendo quase 1 s depois e seguindo o ponto depois de o manche ser solto). Pedindo carga e rolagem, o avião responde na hora, e soltar o manche segura o caminho e a inclinação. O piloto automático pede um caminho, e o FBW calcula a carga e a inclinação para chegar nele. |
 | **Ganhos do FBW divididos pela autoridade do avião** (torque disponível ÷ inércia, informados pelo kRPC) | A força das superfícies cresce com o quadrado da velocidade: um ganho fixo, bom na decolagem, faz o avião balançar rápido, e cada avião precisaria do seu. Nos testes, o FBW segura o avião com a autoridade informada errada pela metade ou pelo dobro. |
@@ -114,12 +115,13 @@ bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de 
 scripts/          scripts de voo (pouso, fly by wire...), que rodam com ou sem o cockpit; testes em scripts/tests/
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
 firmware/passos/  sketches de aprendizado, um por passo da fase 1
-firmware/mfd/     mikromedia for ARM / LPC2148 (C, compilado com o LLVM pelo compilar.py)
+firmware/mfd/     mikromedia for ARM / LPC2148 (C, compilado com o LLVM pelo compilar.py), fora do cockpit
 hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa; ver hardware/README.md
-                  e hardware/construcao.md (carcaça, aparência, painéis, joystick);
-                  cada peça própria numa pasta, com ficha e desenhos (hardware/korry/);
+                  e hardware/construcao.md (o cockpit da versão B, a caixa e os painéis);
+                  cada peça própria numa pasta, com ficha e desenhos (hardware/korry/:
+                  modelo no OpenSCAD, STL e a plaquinha em placa perfurada);
                   identidade visual (hardware/identidade_visual.md) e desenhos dos painéis
-                  gerados por código (hardware/desenho/)
+                  gerados por código (hardware/desenho/, SVG em hardware/img/)
 docs/             protocolo serial, pinagem, anotações
 ```
 
@@ -179,16 +181,29 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 ### Fase 2 — Painel de controle
 
-**Status: em andamento.** Chaves, botões e LEDs estão prontos para montar: pinagem, código e testes em [docs/fase2.md](docs/fase2.md). O joystick e o acelerador serão o Logitech Extreme 3D Pro, que já está em casa; falta o código na ponte.
+**Status: em andamento.** Chaves, botões e LEDs estão prontos para montar: pinagem, código e testes em [docs/fase2.md](docs/fase2.md). O cockpit inteiro está desenhado: a [versão B](hardware/construcao.md#cockpit-versão-b), em U, com 11 painéis de 125 mm, o sidestick e o acelerador no painel.
 
 - Chaves para SAS, RCS, trem de pouso, luzes e freios; STAGE e ABORT com capa de proteção. Depois, action groups.
-- **Painel de sistemas de controle** ([desenho](hardware/construcao.md#painel-de-sistemas-de-controle)): os 10 modos do SAS em korry de duas cores (azul virando, verde segurando), korry SAS, RCS, FBW e TRAVA ALT, e o encoder do [piloto automático](#piloto-automático-de-avião). Numa placa grande com 4 × 74HC595. Apertar um modo do SAS abre a roda dos modos na tela multifunção, só para ver. Trem de pouso, luzes e freios saíram desta seção: lugar a decidir.
+- **Painel VOO, de sistemas de controle** ([desenho](hardware/construcao.md#painel-de-sistemas-de-controle)): os 10 modos do SAS em korry de duas cores (azul virando, verde segurando), korry SAS, RCS, FBW e TRAVA ALT, e o encoder do [piloto automático](#piloto-automático-de-avião). Numa placa grande com 4 × 74HC595. Apertar um modo do SAS abre a roda dos modos na tela multifunção, só para ver. Trem de pouso, luzes e freios foram para o painel do acelerador.
 - A posição da chave é o estado desejado (para cima = ligado); o LED de cada sistema mostra o estado no jogo.
 - **Painel em módulos:** cada seção vira uma placa, ligada por cabo flat a um backplane de 12 slots no Mega. A placa pequena tem 8 entradas e 8 LEDs (1 × 74HC165 + 1 × 74HC595); a média, 16 e 24 (2 + 3), com um jack JST-XH para cada korry; a grande, 24 e 32 (3 + 4). Os LEDs só mostram o que vem do jogo: nenhum é ligado a um botão. Cada módulo tem uma etiqueta numa chave DIP, e o Mega descobre sozinho o que está encaixado. Esquemáticos, etiquetas e qual placa vai em cada seção em [hardware/](hardware/README.md).
 - Enquanto o primeiro módulo não fica pronto, os controles básicos continuam direto nos pinos do Mega, como em [docs/fase2.md](docs/fase2.md).
 - Próximo passo: o firmware do Mega lendo a fila de módulos pelas etiquetas, e testar o primeiro módulo direto no Mega.
-- **Joystick:** o Logitech Extreme 3D Pro, na USB do Pi, lido pela ponte e mandado ao jogo pelo kRPC. O acelerador é a alavanca da base dele. Mapeamento proposto em [hardware/construcao.md](hardware/construcao.md#joystick-logitech-extreme-3d-pro).
-- **Korry switches** (ideia): botões iluminados com legenda, como nos aviões, para SAS, RCS, luzes e outros sistemas. Um primeiro korry pode ser testado direto no Mega. Todos do mesmo tamanho, 22,5 × 22,5 mm; medidas, peças e circuito em [hardware/korry/](hardware/korry/README.md).
+- **Sidestick e acelerador no painel:** um joystick JH-D400X-R4 de 3 eixos, com o botão do manche trocando entre VOO, CÂMERA e TRANSLAÇÃO, e uma alavanca deslizante de 60 mm, os dois lidos pelo Mega nas linhas analógicas do backplane ([sidestick](hardware/construcao.md#sidestick), [acelerador](hardware/construcao.md#acelerador)). O Extreme 3D Pro fica para desenvolver no PC; mapeamento em [hardware/construcao.md](hardware/construcao.md#joystick-logitech-extreme-3d-pro).
+- **Korry switches:** botões iluminados com legenda, como nos aviões, 35 no cockpit. Impressos em duas cores na FlashForge Inventor, com a plaquinha em placa perfurada. O modelo, os STL de teste e a montagem estão em [hardware/korry/](hardware/korry/README.md); o primeiro passo é o teste de folga e um korry ligado direto no Mega.
+
+**A fazer na ponte, para a versão B** (o que cada controle faz e o comando do kRPC estão em [hardware/construcao.md](hardware/construcao.md#os-painéis)):
+
+- [ ] Definir no [protocolo](docs/protocolo.md) as mensagens dos painéis novos: tempo, navegação, action groups e peças, câmera, recursos e EVA, acelerador, sidestick e os botões de página da tela.
+- [ ] Tempo: WARP, PARAR, FISICO, ATE O NO, PAUSA, SALVAR, CARREGAR e REVERTER.
+- [ ] Navegação: escolher e limpar o alvo pelo encoder, com a página ALVO na tela; REFERENCIA; trocar de nave.
+- [ ] Action groups 1 a 10 e os korry das peças (paraquedas, painéis solares, antenas, compartimento de carga), com a luz do estado.
+- [ ] Câmera: MAPA, IVA, MODO CAM, FOTO e ESCONDER.
+- [ ] Acelerador pela alavanca; TREM, FREIOS e LUZES em korry.
+- [ ] Sidestick: os 3 eixos pelo Mega, e o botão trocando o modo, com as luzes.
+- [ ] Barras de recursos pelo MAX7219, no firmware do Mega.
+- [ ] EVA, quando houver o kRPC 0.7: andar e voar pelo manche, JATO, LUZ, SAIR, EMBARCAR, AGARRAR e SOLTAR.
+- [ ] Páginas novas na tela: ORBITA, DELTA-V, SUBIDA, ALVO, TEMPO e EVA.
 
 **Pronto quando:** dá para lançar e colocar um foguete em órbita usando só o painel.
 
@@ -197,7 +212,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - Interface em pygame no Pi: altitude, velocidades, apoapse/periapse, tempo até Ap/Pe, combustível e delta-v por estágio.
 - Depois: gráfico de altitude × tempo, desenho simples da órbita, indicador de atitude.
 - O Pi 4 tem folga de desempenho, mas vale o bom hábito: redesenhar só o que mudou e limitar a taxa de quadros.
-- A tela definitiva do Pi foi adiada. Enquanto isso, desenvolver com qualquer monitor ou TV HDMI (ou rodando a interface no PC).
+- A tela do cockpit é a de 7" (Waveshare 7" HDMI LCD (C)), no meio do painel. Enquanto ela não chega, desenvolver com qualquer monitor ou TV HDMI (ou rodando a interface no PC).
 - A tela multifunção ([docs/mfd.md](docs/mfd.md)) já mostra navball, velocidades, altitude e Ap/Pe numa página web. Uma tela HDMI com touch no Pi pode abri-la em tela cheia, no navegador, sem programar nada novo.
 
 **Pronto quando:** dá para circularizar uma órbita olhando só para a tela.
@@ -219,7 +234,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - Displays de 7 segmentos com MAX7219 para os números mais importantes.
 - Encoder rotativo para escolher o que cada display mostra. Lido pela mesma cadeia de 74HC165 dos módulos: o Mega lê a cadeia inteira mil vezes por segundo numa **interrupção de timer**, e assim o redesenho do LCD (~20 ms) não faz perder cliques. O painel acumula os cliques e manda `ENC <nome> <cliques>`.
 - **Editor de nós de manobra** (pelo kRPC: `control.add_node`, `node.prograde` etc.):
-  - Painel de 150 × 150 mm, desenho e peças em [hardware/construcao.md](hardware/construcao.md#painel-do-editor-de-manobras).
+  - Painel duplo de 250 × 125 mm, desenho e peças em [hardware/construcao.md](hardware/construcao.md#painel-do-editor-de-manobras).
   - **Δv por um encoder só**, porque os três eixos nunca são mexidos ao mesmo tempo. Três korry (PRO, NRM e RAD) escolhem o eixo, e a legenda do escolhido acende na cor da alça do nó no KSP. Girar no sentido horário soma o passo; no anti-horário, tira. Um nó novo já vem com o PRO escolhido. O painel manda `ENC DV <cliques>`, e quem sabe o eixo escolhido é a ponte.
   - **PERCURSO:** uma tecla basculante com mola para o centro, como a do TIME WARP, montada deitada, move o nó ao longo da órbita (para a esquerda, antes; para a direita, depois). Segurando, repete; o painel manda `INC TEMPO <passos>`. Embaixo dela, ANT e PROX trocam de nó.
   - **PASSO:** chave rotativa de 4 posições, com a legenda gravada em volta: 0,1 / 1 / 10 / 100 m/s no Δv e 1 s / 10 s / 1 min / 10 min no tempo.
@@ -227,7 +242,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
   - São 16 entradas e 3 LEDs (os korry de eixo): cabe numa placa média.
   - **Sem tela no módulo:** Δv, tempo de queima, T− até o nó e o Ap/Pe resultante aparecem numa página do editor na tela multifunção, que abre sozinha quando uma tecla ou botão do editor é usado (ver os [princípios](#princípios)).
   - O botão MAPA (liga e desliga o mapa do jogo) fica na seção da câmera. A câmera do mapa (girar, aproximar, trocar o foco entre nave, nó e planeta) fica no joystick, no modo CÂMERA, não no editor.
-- Barra de combustível com LEDs WS2812.
+- Barras de 10 LEDs com o que resta de combustível, oxidante, monopropelente e eletricidade, acesas por um MAX7219 ([recursos e EVA](hardware/construcao.md#recursos-e-eva)).
 - Ponteiro analógico com motor de passo X27.168.
 - Fonte 5V externa (a USB não aguenta muitos LEDs).
 
@@ -255,6 +270,8 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 ### Fase 6 — Tela multifunção (mikromedia for ARM)
 
+**Fora do cockpit:** na [versão B](hardware/construcao.md#tela-multifunção), a tela multifunção é uma tela de 7" no HDMI do Pi, mostrando a página que já existe para o celular. A tela de 2,8" da mikromedia ficou pequena no meio do painel. O firmware e a documentação dela continuam aqui, como o projeto de embarcados que foram.
+
 Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de flash, 32 KB de RAM), tela 320x240 com touch resistivo, microSD, saída de áudio e carregador de Li-Po. Aqui o firmware é escrito **sem framework**: C, registradores, script de linker e código de inicialização próprios.
 
 **Status: firmware pronto, falta rodar na placa.** O firmware em `firmware/mfd/` faz na placa o que o simulador faz no PC: navball, números, botões de toque e as páginas SAS, AP e POUSO, no protocolo em texto. Ele compila sem avisos e foi conferido no PC contra o simulador. Gravar e ligar: [docs/mikromedia.md](docs/mikromedia.md). A tela também roda no simulador do PC e no navegador do celular: [docs/mfd.md](docs/mfd.md).
@@ -275,7 +292,7 @@ Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de fla
 ### Fase 7 — Hardware definitivo
 
 - PCB no **KiCad** a partir dos esquemáticos de [hardware/](hardware/README.md): uma placa de módulo, fabricada em quantidade, e o backplane. Fabricação na JLCPCB, PCBWay… A do módulo médio já está pronta, com os Gerbers ([hardware/](hardware/README.md#pcb-do-módulo-médio)).
-- Caixa em MDF cortado a laser (no colégio), com peças impressas em 3D (em casa): um painel removível por seção, legendas gravadas, korry switches, Pi e mikromedia embutidos. Formato, aparência e ordem para construir em [hardware/construcao.md](hardware/construcao.md).
+- Caixa em MDF cortado a laser (no colégio), com peças impressas em 3D (em casa): um painel removível por seção, legendas gravadas, korry switches, o Pi e a tela de 7" embutidos. Formato, aparência e ordem para construir em [hardware/construcao.md](hardware/construcao.md).
 
 ### Fase 8 — Embarcados avançado (opcional)
 
@@ -423,7 +440,7 @@ Levar a nave até perto de outra em órbita. O script **não pilota até a últi
 ### Acoplamento assistido
 
 - Página nova na tela multifunção: a mira de alinhamento com a porta de acoplamento do alvo, a distância e a velocidade de aproximação.
-- A chave de modo do joystick na posição TRANSLAÇÃO: o manche move a nave com o RCS, sem girar ([os três modos](hardware/construcao.md#um-joystick-três-modos)).
+- O sidestick no modo TRANSLAÇÃO, escolhido pelo botão do manche: o manche move a nave com o RCS, sem girar ([os três modos](hardware/construcao.md#um-joystick-três-modos)).
 - Primeiro manual, com a tela ajudando. Depois automático: a nave se alinha e se aproxima devagar sozinha.
 - **Precisa de:** joystick (fase 2) e a tela multifunção.
 
@@ -463,29 +480,34 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [x] 10–15× chaves alavanca (toggle) ON-OFF
 - [x] 2–3× capas de proteção para chave ("missile switch cover")
 - [x] 4–6× botões arcade (24 ou 30 mm), de preferência com LED
-- [ ] Por módulo pequeno (6 no painel): 2× 74HC165, 1× 74HC595, 2× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 8× resistor 1 kΩ, 3× capacitor 100 nF, 1× capacitor 10 µF, 3 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
+- [ ] Por módulo pequeno (5 no painel): 2× 74HC165, 1× 74HC595, 2× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 8× resistor 1 kΩ, 3× capacitor 100 nF, 1× capacitor 10 µF, 3 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
 - [ ] Por módulo médio (5 no painel): 3× 74HC165, 3× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 24× resistor 220 Ω, 6× capacitor 100 nF, 1× capacitor 470 µF, 12× conector JST-XH de 4 vias, 6 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
-- [ ] Por módulo grande (1 no painel, o de sistemas de controle): 4× 74HC165, 4× 74HC595, 4× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 32× resistor 1 kΩ, 8× capacitor 100 nF, 1× capacitor 10 µF, 8 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
+- [ ] Por módulo grande (1 no painel, o VOO): 4× 74HC165, 4× 74HC595, 4× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 32× resistor 1 kΩ, 8× capacitor 100 nF, 1× capacitor 10 µF, 8 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
 - [ ] Backplane: 12× conector IDC 2x8, 5× resistor 47 Ω, 13× resistor 10 kΩ, capacitores de 470 µF e 100 nF, borne de 2 vias e jumper de 3 pinos
-- [x] Joystick: Logitech Extreme 3D Pro (3 eixos + acelerador, na USB do Pi)
-- [ ] 1× potenciômetro deslizante 10 kΩ linear, curso ≥ 60 mm (opcional: só para uma alavanca de acelerador própria)
-- [ ] Por korry switch ([lista completa](hardware/korry/README.md#lista-de-peças-um-korry)): 1 botão tátil 6 × 6 mm, até 2 LEDs difusos de alto brilho de 3 mm, plaquinha de 22 × 22 mm, conector de 4 vias; corpo impresso, tampa de acrílico leitoso de 3 mm
-- [ ] Placas perfuradas + barras de pinos (headers)
+- [x] Joystick: Logitech Extreme 3D Pro (para desenvolver no PC)
+- [ ] Sidestick: 1× joystick JH-D400X-R4, 10 kΩ, 3 eixos com botão
+- [ ] Acelerador: 1× potenciômetro deslizante Bourns PTA6043, 10 kΩ linear, curso de 60 mm
+- [ ] 35 korry switches ([lista completa](hardware/korry/README.md#lista-de-peças-um-korry)), cada um com 1 botão tátil 6 × 6 × 5 mm, até 2 LEDs difusos de alto brilho de 3 mm, 10 × 10 furos de placa perfurada de dupla face e 1 conector JST-XH de 4 vias; filamento PLA preto e transparente
+- [ ] 10× LED azul e verde de 3 mm, difuso, catodo comum (korry dos modos do SAS)
+- [ ] 36× botão de metal de 12 mm sem trava
+- [ ] 2× botão de metal de 22 mm com anel de LED (vermelho e branco), de 5 V ou 3 V, e 2× capa transparente para botão de 22 mm
+- [ ] 2× tecla KCD1 (ON)-OFF-(ON) de 21 × 15 mm
+- [ ] 5× barra de 10 LEDs verde (Kingbright DC-10GWA) e 1× MAX7219, para os recursos e a EVA
+- [ ] 7× LED de 3 mm com anel de metal (4 verdes e 1 vermelho do piloto, 3 brancos do sidestick)
+- [ ] Placas perfuradas de dupla face + barras de pinos (headers) e fio fino encapado (wire-wrap)
 
 ### Fase 3 — Tela de telemetria
 
-- **Tela do Pi: adiada** — decidir depois. Para desenvolver, qualquer monitor ou TV HDMI serve.
+- [ ] Tela Waveshare 7" HDMI LCD (C), 1024 × 600, com toque capacitivo: a tela multifunção do cockpit
 - [ ] Cabo ou adaptador **micro-HDMI → HDMI** (o Pi 4 só tem saída micro-HDMI)
 
 ### Fase 4 — Instrumentos físicos
 
 - [ ] 3–4× módulos MAX7219 com 8 dígitos de 7 segmentos (o piloto automático não usa mais: os valores vão para a tela)
 - [ ] 2× encoders rotativos (KY-040), para escolher o que os displays mostram
-- [ ] Editor de manobras ([peças e medidas](hardware/construcao.md#painel-do-editor-de-manobras)): 1× encoder EC11 com knob de alumínio de 30 mm; 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm; 1× tecla basculante (*rocker*) com mola para o centro, (ON)-OFF-(ON), de 21 × 15 mm; 2× botões de metal de 12 mm sem trava; 6 korry (peças na fase 2)
-- [ ] 1 botão para o MAPA, na seção da câmera, se não sobrar da fase 2
-- [ ] Sistemas de controle ([peças e medidas](hardware/construcao.md#painel-de-sistemas-de-controle)): 1× encoder EC11 com botão e knob de alumínio de 30 mm; 10× LED azul e verde de 3 mm, difuso, catodo comum (korry dos modos); 3× LED verde e 1× LED vermelho de 3 mm com anel de metal; 14 korry (peças na fase 2); 1 módulo grande
-- [ ] 1× chave de 3 posições (ON-OFF-ON, sem mola) para o modo do joystick: VOO, CÂMERA e TRANSLAÇÃO
-- [ ] 1 m de fita WS2812B (60 LEDs/m) + resistor 330 Ω + capacitor 1000 µF
+- [ ] Editor de manobras ([peças e medidas](hardware/construcao.md#painel-do-editor-de-manobras)): 1× encoder EC11 com knob de alumínio de 30 mm; 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm (a tecla, os botões e os korry estão na fase 2)
+- [ ] Navegação: 1× encoder EC11 com botão e knob de alumínio de 30 mm; 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm
+- [ ] VOO, de sistemas de controle ([peças e medidas](hardware/construcao.md#painel-de-sistemas-de-controle)): 1× encoder EC11 com botão e knob de alumínio de 30 mm (os korry e os LEDs estão na fase 2); 1 módulo grande
 - [ ] 2–4× motores de passo X27.168 (ponteiros)
 - [ ] 1× fonte 5V 3A + conector/borne
 

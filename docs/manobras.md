@@ -92,7 +92,7 @@ A última mensagem (resultado de um botão, erro do jogo) fica 6 s acima das tab
 
 ## Câmera do mapa: temporário
 
-**Tem que mudar:** no cockpit, a câmera do mapa vai ser mexida pelo **joystick, no modo CÂMERA** (a chave de 3 posições do joystick está em [hardware/construcao.md](../hardware/construcao.md#joystick-logitech-extreme-3d-pro)). Os botões `ESQ`, `DIR`, `CIMA`, `BAIXO`, `PERTO`, `LONGE` e `FOCO` só existem porque o joystick não está aqui agora. Quando ele estiver, saem da página, das linhas `BTN CAM_*` e de `Editor._camera` em `bridge/manobras.py`. O botão `MAPA` fica, na seção da câmera do painel.
+**Tem que mudar:** no cockpit, a câmera do mapa vai ser mexida pelo **joystick, no modo CÂMERA** (o modo é trocado pelo botão do manche do sidestick, em [hardware/construcao.md](../hardware/construcao.md#joystick-logitech-extreme-3d-pro)). Os botões `ESQ`, `DIR`, `CIMA`, `BAIXO`, `PERTO`, `LONGE` e `FOCO` só existem porque o joystick não está aqui agora. Quando ele estiver, saem da página, das linhas `BTN CAM_*` e de `Editor._camera` em `bridge/manobras.py`. O botão `MAPA` fica, na seção da câmera do painel.
 
 - `ESQ` / `DIR`: gira 15° em volta do foco. `CIMA` / `BAIXO`: 10° na inclinação.
 - `PERTO` / `LONGE`: distância ÷ ou × 1,5, dentro dos limites do jogo.

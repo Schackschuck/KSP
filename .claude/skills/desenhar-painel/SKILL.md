@@ -13,7 +13,7 @@ O argumento é o módulo a desenhar (ex.: `sistemas de controle`, `action groups
 
 Antes de perguntar ou desenhar, leia:
 
-- `hardware/identidade_visual.md`: cores, letras, painel de 150 × 150 mm, peças e as regras para organizar. **Siga à risca.**
+- `hardware/identidade_visual.md`: cores, letras, painel de 125 × 125 mm, peças e as regras para organizar. **Siga à risca.**
 - `hardware/construcao.md`: formato da caixa (onde o painel fica e qual mão usa), korry e os painéis já desenhados. A seção "Painel do editor de manobras" é o exemplo pronto.
 - `hardware/korry/README.md`: o korry, a peça mais usada.
 - `hardware/README.md`, tabela "Qual placa e qual etiqueta em cada seção": quantas entradas e LEDs o módulo tem hoje e em qual placa (8, 16 ou 24 entradas).
@@ -50,7 +50,7 @@ Use as peças de `hardware/desenho/pecas.js`, que já estão no tamanho real e n
 
 1. Crie um arquivo por versão em `hardware/desenho/paineis/`, copiando `editor_manobras.js`. Os rascunhos das versões podem ficar ali enquanto você trabalha, mas só a versão escolhida é commitada.
 2. Gere com `node hardware/desenho/desenhar.js <nome>`, confira o SVG e cole o conteúdo dele na página.
-3. Painel de 150 × 150 mm (ou 300 × 150), grupos a 10 mm das bordas dos lados e 6 mm entre si, 3 mm entre peças, título em cima, legendas em maiúsculas sem acento.
+3. Painel de 125 × 125 mm (ou 250 × 125), grupos a 10 mm das bordas dos lados e 6 mm entre si, 3 mm entre peças, título em cima, legendas em maiúsculas sem acento.
 4. Mostre o painel ligado: o korry do estado atual aceso, o knob numa posição.
 
 ## 5. Publicar a página
