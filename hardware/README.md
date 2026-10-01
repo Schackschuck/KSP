@@ -9,7 +9,7 @@ Esquemáticos do painel, feitos no KiCad. Cada pasta tem também um PDF do esque
 | [`modulo_grande/`](modulo_grande/) | Módulo grande: 24 entradas e 32 LEDs ([PDF](modulo_grande/modulo_grande.pdf)) | etiqueta + 3 × 74HC165, 4 × 74HC595 (o esquema ainda tem 2: ver [Próximos passos](#próximos-passos)) |
 | [`backplane/`](backplane/) | Backplane: liga até 12 módulos ao Mega ([PDF](backplane/backplane.pdf)) | — |
 
-A parte física (carcaça, aparência, painéis e o lugar do joystick) está em [construcao.md](construcao.md). Peças feitas em casa e usadas em vários painéis têm pasta própria, com a ficha e os desenhos: [`korry/`](korry/README.md). A [identidade visual](identidade_visual.md) diz como todo painel tem que parecer, e os desenhos dos painéis são gerados por código em [`desenho/`](desenho/README.md).
+A parte física (carcaça, aparência, os painéis da versão B e o sidestick) está em [construcao.md](construcao.md). Peças feitas em casa e usadas em vários painéis têm pasta própria, com a ficha e os desenhos: [`korry/`](korry/README.md). A [identidade visual](identidade_visual.md) diz como todo painel tem que parecer, e os desenhos dos painéis são gerados por código em [`desenho/`](desenho/README.md).
 
 As três placas de módulo usam o mesmo cabo flat e encaixam em qualquer slot. Cada uma tem uma **etiqueta**, um 74HC165 a mais ligado a uma chave DIP de 8 vias: é por ela que o Mega descobre sozinho qual módulo está em cada slot.
 
@@ -115,22 +115,21 @@ Assim, não existe tabela de slots no firmware. O Mega avisa a ponte qual módul
 
 | Seção do painel | Entradas | LEDs | Placa | Número | Chaves DIP em ON |
 |---|---|---|---|---|---|
-| Ação executiva (STAGE, ABORT) + [scripts](construcao.md#painel-de-scripts) (POUSO e 5 lugares vagos) | 8 | 14 | média | 1 | 1, 8 |
-| Tempo | 8 | 1 | pequena | 2 | 2, 7 |
-| Analógicos: rotação | 8 | 3 | pequena, slots 1 a 5 | 3 | 1, 2, 7 |
-| Analógicos: translação | 5 | 1 | pequena, slots 1 a 5 | 4 | 3, 7 |
-| Acelerador | 4 | 2 | pequena, slots 1 a 5 | 5 | 1, 3, 7 |
-| Telemetria | 4 | 0 | pequena | 6 | 2, 3, 7 |
-| Sistemas de controle (SAS, RCS, FBW e piloto automático) | 17 | 31 | grande | 7 | 1, 2, 3, 7, 8 |
-| Action groups 1 a 10 | 10 | 10 | média | 8 | 4, 8 |
-| EVA | 11 | 12 | média | 9 | 1, 4, 8 |
-| Navegação | 10 | 0 | média | 10 | 2, 4, 8 |
-| Câmera (com o MAPA) | 11 | 0 | média | 11 | 1, 2, 4, 8 |
-| Editor de manobras | 16 | 3 | média | 12 | 3, 4, 8 |
+| [Ação executiva](construcao.md#ação-executiva) (STAGE, ABORT e os 6 scripts) | 8 | 14 | média | 1 | 1, 8 |
+| [Tempo](construcao.md#tempo) | 9 | 1 | média | 2 | 2, 8 |
+| [Sidestick](construcao.md#sidestick) (3 eixos analógicos) | 1 | 3 | pequena, slots 1 a 5 | 3 | 1, 2, 7 |
+| [Tela multifunção](construcao.md#tela-multifunção) (páginas e SILENCIAR) | 5 | 0 | pequena | 4 | 3, 7 |
+| [Acelerador](construcao.md#acelerador) (alavanca analógica, trem, freios e luzes) | 3 | 3 | pequena, slots 1 a 5 | 5 | 1, 3, 7 |
+| [Recursos e EVA](construcao.md#recursos-e-eva) | 6 | 2 | pequena | 6 | 2, 3, 7 |
+| [Voo](construcao.md#painel-de-sistemas-de-controle) (sistemas de controle: SAS, RCS, FBW e piloto automático) | 17 | 31 | grande | 7 | 1, 2, 3, 7, 8 |
+| [Action groups](construcao.md#action-groups) (1 a 10 e as peças) | 14 | 4 | média | 8 | 4, 8 |
+| [Câmera](construcao.md#câmera) | 5 | 2 | pequena | 9 | 1, 4, 7 |
+| [Navegação](construcao.md#navegação) | 10 | 0 | média | 10 | 2, 4, 8 |
+| [Editor de manobras](construcao.md#painel-do-editor-de-manobras) | 16 | 3 | média | 12 | 3, 4, 8 |
 
-São 5 pequenas, 6 médias e 1 grande, que ocupam os 12 slots. A ação executiva passou para a média com o painel de scripts: 6 korry com LED de duas cores, sem a chave ARM. A grande é a de sistemas de controle: os 10 modos do SAS têm LED de duas cores, e ela passou a ter 4 × 74HC595 (32 LEDs) por causa deles ([desenho](construcao.md#painel-de-sistemas-de-controle)). Trem de pouso, luzes e freios saíram dessa seção e ainda não têm lugar. As seções da primeira linha ficam longe uma da outra no painel, mas podem dividir uma placa: os fios dos botões até a placa podem ter uns 30 cm.
+São 11 módulos da [versão B do cockpit](construcao.md#cockpit-versão-b): 5 pequenos, 5 médios e 1 grande, e sobra 1 slot. O sidestick e o acelerador vão nos slots 1 a 5, os únicos com linhas analógicas: o sidestick usa as três (X, Y e torção), o acelerador uma. As 4 barras de recursos e a da EVA (50 LEDs) não passam pelo backplane: um MAX7219 ligado direto em 3 pinos do Mega acende todas. As seções da mesma placa podem ficar longe uma da outra no painel: os fios dos botões até a placa podem ter uns 30 cm.
 
-A tabela ainda pode mudar: o joystick agora é o Extreme 3D Pro, na USB do Pi, e as seções analógicas podem ficar só com botões e LEDs. O editor de manobras ficou com um encoder para o Δv, três korry de eixo, uma tecla para o tempo e uma chave rotativa para o passo, sem LCD próprio (os números vão para a tela multifunção): são 16 entradas e 3 LEDs, e ele passou da placa grande para a média ([desenho](construcao.md#painel-do-editor-de-manobras)). Os korry switches também gastam mais LEDs que entradas. Ver [construcao.md](construcao.md#a-decidir).
+Os números 3, 4, 6, 9 e 11 mudaram de seção com a versão B: antes eram os analógicos de rotação e translação, a telemetria, a EVA e a câmera. O firmware ainda não lê as etiquetas, então nada no código muda.
 
 ## No módulo
 

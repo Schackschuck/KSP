@@ -330,4 +330,79 @@ function korrySas(x, y, modo, cor) {
   return s;
 }
 
-module.exports = { SAS, sasIcon, korrySas, C, KSP, esc, t, screw, panel, group, hexNut, tri, arrow, rocker, cap, korry, button, led, rotary, guardedToggle, dims, svg, encoder, encoderArc, rotaryReal, rockerReal, metalButton };
+function capa(x, y, w, h, cor) {
+  var s = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="2" fill="' + cor + '" opacity=".2"/>';
+  s += '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="2" fill="none" stroke="' + cor + '" stroke-width=".6"/>';
+  s += '<rect x="' + (x - 1) + '" y="' + (y - 2.4) + '" width="' + (w + 2) + '" height="3" rx="1" fill="#24282c" stroke="#5b6168" stroke-width=".3"/>';
+  s += '<rect x="' + (x + w / 2 - 5) + '" y="' + (y + h - 1.2) + '" width="10" height="2.6" rx="1" fill="' + cor + '" opacity=".55"/>';
+  return s;
+}
+
+function botaoGrande(x, y, r, cor) {
+  var s = '<circle cx="' + x + '" cy="' + y + '" r="' + (r + 3.2) + '" fill="url(#nut)" stroke="#2a2e32" stroke-width=".3"/>';
+  s += '<circle cx="' + x + '" cy="' + y + '" r="' + (r + 1) + '" fill="#07080a"/>';
+  s += '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + cor + '"/>';
+  s += '<circle cx="' + (x - r * .25) + '" cy="' + (y - r * .3) + '" r="' + (r * .55) + '" fill="#ffffff" opacity=".13"/>';
+  return s;
+}
+
+function capaMissil(x, y0) {
+  var s = '<rect x="' + (x - 8.5) + '" y="' + y0 + '" width="17" height="46.6" rx="3" fill="' + C.red + '" opacity=".22"/>';
+  s += '<rect x="' + (x - 8.5) + '" y="' + y0 + '" width="17" height="46.6" rx="3" fill="none" stroke="' + C.red + '" stroke-width=".6"/>';
+  s += '<rect x="' + (x - 9.5) + '" y="' + (y0 - 1.5) + '" width="19" height="4" rx="1" fill="#24282c" stroke="#5b6168" stroke-width=".3"/>';
+  return s;
+}
+
+function korryComCapa(x, y, legenda, cor) {
+  return korry(x, y, 22.5, 22.5, legenda, null, cor || C.unlit) + capa(x - 2.5, y - 2.5, 27.5, 28.5, C.red);
+}
+
+function barra(x, y, acesos) {
+  var s = '<rect x="' + x + '" y="' + y + '" width="10.1" height="25.4" rx=".6" fill="#07080a" stroke="#3a3f44" stroke-width=".3"/>';
+  for (var i = 0; i < 10; i++) {
+    var on = 9 - i < acesos, sy = y + 1.1 + i * 2.38;
+    if (on) s += '<rect x="' + (x + 1) + '" y="' + (sy - .5) + '" width="8.1" height="2.6" fill="' + C.green + '" opacity=".25"/>';
+    s += '<rect x="' + (x + 1.25) + '" y="' + sy + '" width="7.6" height="1.6" fill="' + (on ? C.green : "#262a2e") + '"/>';
+  }
+  return s;
+}
+
+function alavanca(cx, y0, len, p) {
+  var s = '<rect x="' + (cx - 3) + '" y="' + y0 + '" width="6" height="' + len + '" rx="3" fill="#07080a" stroke="#3a3f44" stroke-width=".35"/>';
+  var a = y0 + 7, b = y0 + len - 7;
+  for (var i = 0; i <= 4; i++) {
+    var yy = b - (b - a) * i / 4;
+    s += '<line x1="' + (cx - 23) + '" y1="' + yy + '" x2="' + (cx - 19) + '" y2="' + yy + '" stroke="' + C.legend + '" stroke-width=".45"/>';
+    s += t(cx - 24.5, yy + .9, String(i * 25), 2.4, "end");
+  }
+  var yh = b - (b - a) * p;
+  s += '<rect x="' + (cx - 2) + '" y="' + (yh - 3) + '" width="4" height="6" fill="#1a1d20"/>';
+  s += '<rect x="' + (cx - 16) + '" y="' + (yh - 5.5) + '" width="32" height="11" rx="2.2" fill="url(#knob)" stroke="#8a9096" stroke-width=".3"/>';
+  for (var j = -2; j <= 2; j++) s += '<line x1="' + (cx + j * 5) + '" y1="' + (yh - 3.5) + '" x2="' + (cx + j * 5) + '" y2="' + (yh + 3.5) + '" stroke="#0b0d0f" stroke-width=".6"/>';
+  return s;
+}
+
+function grade(cx, cy) {
+  var s = "";
+  for (var i = -3; i <= 3; i++) for (var j = -3; j <= 3; j++) {
+    if (i * i + j * j > 10) continue;
+    s += '<circle cx="' + (cx + i * 3) + '" cy="' + (cy + j * 3) + '" r=".85" fill="#0b0d0f"/>';
+  }
+  return s;
+}
+
+function manche(x, y, r) {
+  var s = '<rect x="' + (x - r - 5) + '" y="' + (y - r - 5) + '" width="' + (2 * r + 10) + '" height="' + (2 * r + 10) + '" rx="3" fill="#1a1d21" stroke="#3a4046" stroke-width=".4"/>';
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (d) { s += '<circle cx="' + (x + d[0] * (r + 1)) + '" cy="' + (y + d[1] * (r + 1)) + '" r="1.4" fill="url(#nut)"/>'; });
+  s += '<circle cx="' + x + '" cy="' + y + '" r="' + (r - 2) + '" fill="#0b0d0f"/>';
+  for (var i = 1; i <= 4; i++) s += '<circle cx="' + x + '" cy="' + y + '" r="' + (r - 2 - i * 3) + '" fill="none" stroke="#24282c" stroke-width=".8"/>';
+  s += '<circle cx="' + x + '" cy="' + y + '" r="8.5" fill="url(#knob)" stroke="#8a9096" stroke-width=".3"/>';
+  s += '<circle cx="' + x + '" cy="' + (y - 3) + '" r="2.4" fill="#c9302c" stroke="#0b0d0f" stroke-width=".3"/>';
+  return s;
+}
+
+function vago(x, y, nome) {
+  return korry(x, y, 22.5, 22.5, " ", null, C.unlit) + t(x + 11.25, y + 12.25, nome, 2.1, "middle", "#3d444b");
+}
+
+module.exports = { SAS, sasIcon, korrySas, C, KSP, esc, t, screw, panel, group, hexNut, tri, arrow, rocker, cap, korry, button, led, rotary, guardedToggle, dims, svg, encoder, encoderArc, rotaryReal, rockerReal, metalButton, capa, botaoGrande, capaMissil, korryComCapa, barra, alavanca, grade, manche, vago };

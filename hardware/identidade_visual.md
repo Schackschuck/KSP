@@ -1,8 +1,8 @@
 # Identidade visual do cockpit
 
-Como todo painel do cockpit tem que parecer: cores, letras, medidas e peças. Vale para os painéis de verdade (laser e impressora) e para os desenhos. O exemplo de referência é o painel do editor de manobras:
+Como todo painel do cockpit tem que parecer: cores, letras, medidas e peças. Vale para os painéis de verdade (laser e impressora) e para os desenhos. O exemplo de referência é o cockpit da [versão B](construcao.md#cockpit-versão-b):
 
-![Painel do editor de manobras, o exemplo da identidade visual](img/editor_manobras.svg)
+![O cockpit da versão B, o exemplo da identidade visual](img/cockpit.svg)
 
 A referência são os painéis de avião, como o overhead do A320 e o MCP do Boeing: sóbrios, cinza escuro, legendas brancas e botões iluminados. O KSP entra nos detalhes, como as cores das alças do nó de manobra.
 
@@ -10,11 +10,11 @@ A referência são os painéis de avião, como o overhead do A320 e o MCP do Boe
 
 | O quê | Como é |
 |---|---|
-| Tamanho | **150 × 150 mm**, igual em todos. Uma seção que precise de mais espaço ocupa dois quadrados (300 × 150 mm) |
+| Tamanho | **125 × 125 mm**, igual em todos. Uma seção que precise de mais espaço ocupa dois quadrados (250 × 125 mm), como a tela, o voo e o editor de manobras. Os desenhos antigos, de 150 mm, estão em [`img/antigos/`](img/antigos/) |
 | Material | MDF ou acrílico de 3 mm, cortado e gravado a laser |
 | Cor | Cinza escuro fosco, `#30353a` nos desenhos, com borda `#15181b` e cantos arredondados de 2,5 mm |
 | Fixação | 4 parafusos M3 nos cantos, com o centro a 6 mm das bordas |
-| Título | O nome da seção, gravado em cima e centrado, com letras de 4 mm. Ex.: `EDITOR DE MANOBRAS` |
+| Título | O nome da seção, gravado em cima e centrado, com letras de 4 mm. Ex.: `EDITOR DE MANOBRAS`. A tela multifunção não tem título: a tela de 7" ocupa a altura toda |
 | Margem | Os grupos começam a 10 mm das bordas dos lados, para não bater nos parafusos |
 
 ## Grupos
@@ -62,28 +62,46 @@ Sempre as mesmas peças, no mesmo tamanho, para os painéis combinarem e as peç
 
 | Peça | Na frente | Furo | Para quê |
 |---|---|---|---|
-| [Korry](korry/README.md) | 22,5 × 22,5 mm | 23 × 23 mm | Tudo que liga, desliga ou escolhe: a legenda acesa é o estado do jogo. Nos modos do SAS, a legenda é o marcador da navball, com a palavra embaixo |
-| LED de 3 mm com anel de metal | anel Ø 5 mm | Ø 5 mm | Mostrar um estado sem gastar um botão: os modos do piloto automático (verde) e o ESTOL (vermelho, piscando) |
+| [Korry](korry/README.md) | 22,5 × 22,5 mm | 23 × 23 mm | Tudo que liga, desliga ou escolhe e tem um estado no jogo: a legenda acesa é o estado. Nos modos do SAS, a legenda é o marcador da navball, com a palavra embaixo |
+| Botão de metal sem trava | Ø 14 mm | Ø 12 mm | Ações sem estado para mostrar: action groups, ANT e PROX, páginas da tela, FOTO |
+| LED de 3 mm com anel de metal | anel Ø 5 mm | Ø 5 mm | Mostrar um estado sem gastar um botão: os modos do piloto automático (verde), o ESTOL (vermelho, piscando), o modo do sidestick (branco) |
+| Barra de 10 LEDs | 25,4 × 10,16 mm | 25,6 × 10,4 mm | Uma quantidade: o que resta de combustível, oxidante, monopropelente e eletricidade, e a mochila da EVA |
 | Encoder EC11 com knob de alumínio | knob Ø 30 mm | Ø 7 mm | Ajustar um valor. Horário soma, anti-horário tira, com um arco `-` / `+` gravado em volta |
-| Chave rotativa, 12 posições com batente | knob de ponteiro Ø 22 mm | Ø 9,5 mm | Escolher entre poucas opções fixas, com a legenda gravada em volta |
-| Tecla basculante com mola para o centro | 21 × 15 mm | 19 × 13 mm | Mover para um lado ou outro, como o TIME WARP. Segurando, repete |
-| Botão de metal sem trava | Ø 14 mm | Ø 12 mm | Ações pequenas, como ANT e PROX |
-| Chave alavanca com capa vermelha | capa 14 × 22 mm | Ø 6 mm | Só o que precisa de duas ações de propósito: ARM |
-| Botão grande com capa | a definir | a definir | STAGE e ABORT, na faixa zebrada |
+| Chave rotativa, 12 posições com batente | knob de ponteiro Ø 22 mm | Ø 10 mm | Escolher entre poucas opções fixas, com a legenda gravada em volta |
+| Tecla basculante KCD1 com mola para o centro | 21 × 15 mm | 19 × 13 mm | Mover para um lado ou outro, como o WARP. Segurando, repete |
+| Potenciômetro deslizante de 60 mm | rasgo de 74 × 6 mm, alavanca impressa | rasgo de 64 × 3 mm | O acelerador |
+| Joystick de 3 eixos com botão | flange de ~50 mm | a medir | O sidestick |
+| Botão de 22 mm com anel de LED | Ø 25 mm | Ø 22 mm | STAGE e ABORT, debaixo de capa transparente |
+| Capa transparente para botão de 22 mm | 39 × 34 mm | colada | STAGE e ABORT |
+| Capa "missile" | 17 × 46,6 mm | no furo de 12 mm | CARREGAR e REVERTER, que perdem o voo atual |
+| Capa impressa para korry | 27,5 × 28,5 mm | colada | IVA |
 
 - **3 mm de borda a borda** entre peças vizinhas, no mínimo.
-- **Zona de perigo:** faixa zebrada amarela e preta em volta, com capa de proteção.
+- **Zona de perigo:** faixa zebrada amarela e preta em volta, com capa de proteção. Só o ABORT.
+- **Capa no que não tem volta:** ABORT, STAGE, IVA, CARREGAR e REVERTER.
 - **Sem tela nos módulos:** os números vão para a tela multifunção, no meio do cockpit, que troca para a página do módulo em uso.
 
 ## Como organizar um painel
 
-As regras que saíram do desenho do editor de manobras:
+As regras que saíram dos desenhos:
 
-1. **Um controle por coisa que se mexe junto.** O Δv nunca é mexido nos três eixos ao mesmo tempo, então é um encoder só, com korry para escolher o eixo.
-2. **O controle se mexe como a coisa no jogo.** A tecla do TEMPO fica deitada: para a esquerda o nó volta na órbita, para a direita avança. ANT e PROX, embaixo, no mesmo sentido.
-3. **Mostrar o estado sem olhar a tela** quando der de graça: a posição do knob da chave rotativa mostra o passo.
-4. **O que se usa mais é maior ou fica mais à mão.**
-5. **O que é perigoso fica longe e protegido.**
+1. **Korry só onde a luz diz alguma coisa.** O que não tem estado no jogo para mostrar (os action groups, NOVO, APAGAR) é botão de metal.
+2. **Um controle por coisa que se mexe junto.** O Δv nunca é mexido nos três eixos ao mesmo tempo, então é um encoder só, com korry para escolher o eixo.
+3. **O controle se mexe como a coisa no jogo.** A tecla do TEMPO fica deitada: para a esquerda o nó volta na órbita, para a direita avança. ANT e PROX, embaixo, no mesmo sentido.
+4. **Mostrar o estado sem olhar a tela** quando der de graça: a posição do knob da chave rotativa mostra o passo.
+5. **O que se usa mais é maior ou fica mais à mão.**
+6. **O que é perigoso fica longe e protegido.**
+
+## Como organizar o cockpit
+
+As regras que decidiram o lugar de cada painel na [versão B](construcao.md#cockpit-versão-b):
+
+1. **A tela no meio, na altura dos olhos,** com os painéis que abrem páginas nela dos lados.
+2. **O voo de todo dia no centro, perto das mãos:** os modos do SAS, os sistemas e a ação executiva, embaixo da tela.
+3. **Como num avião:** o acelerador na mão esquerda e o sidestick na direita, nas pontas de baixo das asas.
+4. **O que se usa junto fica junto:** o editor ao lado do tempo, a câmera ao lado do sidestick.
+5. **O que se mexe com calma fica nas pontas de cima:** action groups e editor.
+6. **Sem espaço vazio:** juntar controles num painel antes de aumentar a caixa.
 
 ## Desenhos
 

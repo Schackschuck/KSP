@@ -8,12 +8,13 @@ Este documento trata da parte física do cockpit: o formato da caixa, a aparênc
 
 | Ferramenta | Onde | Serve para |
 |---|---|---|
-| **Impressora 3D** | em casa | Peças pequenas e com forma complicada: korry switches, knobs, suportes de placa, moldura da tela, base do joystick, passa-cabos. |
+| **Impressora 3D** | em casa | Peças pequenas e com forma complicada: korry switches, a alavanca do acelerador, suportes de placa, moldura da tela, passa-cabos. |
 | **Corte a laser** | no colégio | Peças planas e grandes: as paredes da caixa e os painéis frontais, com furos e legendas gravadas. |
-| **Logitech Extreme 3D Pro** | em casa | Joystick de 3 eixos com acelerador. Substitui o joystick e o potenciômetro da lista de compras. |
+| **Logitech Extreme 3D Pro** | em casa | Joystick de 3 eixos com acelerador, para desenvolver no PC. No cockpit, o sidestick é o [JH-D400X-R4](#sidestick). |
+
+A impressora é uma **FlashForge Inventor**, com dois bicos: imprime duas cores na mesma peça, como o [korry](korry/README.md#como-imprimir), e tem mesa de 230 × 150 mm.
 
 **Anotar aqui quando souber:**
-- o tamanho da mesa da impressora 3D (limita o tamanho de cada peça impressa);
 - o tamanho da mesa da laser do colégio e quais materiais ela aceita;
 - a potência da laser (diz se corta MDF de 6 mm ou só de 3 mm).
 
@@ -23,34 +24,55 @@ A referência são os painéis de avião, como o overhead do A320 e o MCP do Boe
 
 Cores, letras, medidas do painel, grupos, peças e as regras para organizar um painel estão na [identidade visual](identidade_visual.md). Vale para todo painel novo.
 
-- **Zona de perigo:** o ABORT fica numa área com faixa zebrada amarela e preta, com capa de proteção vermelha. O STAGE e as chaves ARM também ficam debaixo de capas.
+- **Zona de perigo:** o ABORT fica numa área com faixa zebrada amarela e preta, com capa de proteção. O STAGE, o IVA, o CARREGAR e o REVERTER também ficam debaixo de capas.
 - **Iluminação das legendas (ideia):** gravadas num acrílico pintado, as legendas deixam passar a luz de LEDs brancos por trás e acendem no escuro. Um knob de brilho no painel (um potenciômetro, ou PWM do Mega) regula todas juntas.
 
-## Formato da caixa
+## Cockpit, versão B
 
-Um console de mesa em cunha: a parte de baixo, perto das mãos, quase deitada; a de cima, com as telas, mais em pé.
+O cockpit escolhido: **766 × 391 mm, em U**, com um bloco no meio e duas asas que descem dos lados, como num avião. A mão esquerda fica no acelerador e a direita no sidestick, e entre as asas sobra um vão de 484 mm para o piloto. Os painéis têm 125 × 125 mm, ou 250 × 125 os que precisam de mais espaço.
 
-```
- vista de cima (proposta inicial, sem medidas)
+![Cockpit da versão B: action groups, recursos e EVA e acelerador na asa esquerda; navegação, tela, ação executiva e voo no meio; editor, tempo, câmera e sidestick à direita](img/cockpit.svg)
 
- ┌──────────────────────────────────────────────────────────────────┐
- │  TEMPO    │      TELA MULTIFUNÇÃO      │   TELEMETRIA (displays)  │  ← mais em pé
- ├───────────┴──────┬─────────────────────┼──────────────────────────┤
- │ SISTEMAS (korry) │ EDITOR DE MANOBRAS  │  ACTION GROUPS 1–10       │
- ├──────────────────┼─────────────────────┼──────────────────────────┤
- │ EVA   │ CÂMERA   │ NAVEGAÇÃO           │  AÇÃO EXECUTIVA + SCRIPTS │  ← perto das mãos
- │       │          │                     │  STAGE, ABORT, POUSO...   │
- └──────────────────┴─────────────────────┴──────────────────────────┘
-                                                         ┌──────────┐
-                                                         │ Extreme  │  joystick à direita,
-                                                         │  3D Pro  │  fora da caixa
-                                                         └──────────┘
-```
+| | Asa esquerda | Meio | Lado direito |
+|---|---|---|---|
+| Em cima | Action groups | Navegação · **Tela multifunção** | Editor de manobras |
+| No meio | Recursos e EVA | **Ação executiva · Voo** | Tempo · Câmera |
+| Embaixo | **Acelerador** | (vão de 484 mm) | **Sidestick** |
 
-- **Mão direita no joystick, mão esquerda no painel.** Por isso o que se aperta com pressa (STAGE, ABORT, os scripts) fica embaixo, ao alcance da mão esquerda, e o que se mexe com calma (action groups, câmera) pode ficar mais longe.
-- **Inclinação:** uns 15° na parte de baixo e 45° a 60° na parte das telas. Testar no protótipo de papelão antes de cortar.
-- **Profundidade:** a caixa precisa de altura por dentro para os módulos, o backplane, o Mega, o Pi e os cabos flat. As chaves alavanca e os botões arcade ocupam uns 30 a 40 mm atrás do painel.
-- **Tela do Pi:** a compra foi adiada, mas a caixa deixa um espaço para ela na parte de cima (ou o celular num suporte impresso, enquanto isso).
+O porquê de cada lugar está nas regras de [como organizar o cockpit](identidade_visual.md#como-organizar-o-cockpit). O desenho é gerado por [`desenho/paineis/cockpit.js`](desenho/paineis/cockpit.js). As propostas anteriores, com painéis de 150 mm, estão em [`img/antigos/`](img/antigos/).
+
+### Formato da caixa
+
+- **Inclinação:** uns 15° na fileira de baixo e mais em pé na fileira da tela, de 45° a 60°. Testar no protótipo de papelão antes de cortar.
+- **Profundidade:** uns 70 mm por dentro, embaixo dos painéis. O mais fundo atrás do painel é o joystick (uns 40 mm, a medir), depois a chave rotativa (~30 mm) e o korry com o cabo (~30 mm), e o módulo vai atrás de cada painel.
+- **Tela:** a de 7" tem os conectores de HDMI e USB na lateral; deixar uns 15 mm livres do lado dela.
+- **Sem joystick solto:** o sidestick é um painel do cockpit, na ponta da asa direita.
+
+### Componentes
+
+Todos existem e são vendidos em lojas de eletrônica e no AliExpress. As medidas são de catálogo: conferir no paquímetro quando chegarem ([medir antes de cortar](#medir-antes-de-cortar)).
+
+| Peça | Qtd | Onde | Medida |
+|---|---|---|---|
+| [Korry impresso](korry/README.md) | 35 | Voo, ação executiva, editor, peças, rodas e luzes, EVA, câmera, tempo | 22,5 × 22,5 mm, furo de 23 × 23 mm |
+| Botão tátil 6 × 6 × 5 mm | 35 | Dentro de cada korry | |
+| LED de 3 mm difuso | ~40 | Korry de uma cor | |
+| LED de 3 mm azul e verde, catodo comum | 10 | Modos do SAS | 3 pernas |
+| Encoder EC11 com botão + knob de alumínio de 30 mm | 3 | Piloto automático, alvo, Δv | Eixo de 6 mm, 20 cliques por volta, furo de 7 mm |
+| Chave rotativa 1P12T com batente + knob de ponteiro | 2 | PASSO, REFERENCIA | Furo de 10 mm, corpo Ø ~26 mm |
+| Tecla KCD1 (ON)-OFF-(ON) | 2 | WARP, TEMPO do editor | 21 × 15 mm, furo de 19 × 13 mm |
+| Botão de metal de 12 mm sem trava | 36 | Action groups, páginas, navegação, editor, tempo, câmera, EVA | Cabeça Ø ~14 mm |
+| Botão de metal de 22 mm com anel de LED | 2 | ABORT (vermelho), STAGE (branco) | Cabeça Ø ~25 mm. LED de 5 V ou de 3 V |
+| Capa transparente para botão de 22 mm | 2 | ABORT, STAGE | 39 × 34 × 17 mm, colada |
+| Capa "missile" para furo de 12 mm | 2 | CARREGAR, REVERTER | 46,6 × 17 × 27,8 mm, já na bancada |
+| Capa impressa para korry | 1 | IVA | A desenhar |
+| Potenciômetro deslizante Bourns PTA6043, 10 kΩ linear | 1 | Acelerador | 75 × 9 × 6,5 mm, curso de 60 mm |
+| Joystick JH-D400X-R4, 10 kΩ, com botão | 1 | Sidestick | X e Y ±25 a 30°, torção ±45°. Corpo de ~50 mm; furo a medir |
+| Tela Waveshare 7" HDMI LCD (C), toque capacitivo | 1 | Tela multifunção | 164,9 × 107 × 8 mm, imagem de 154,2 × 85,9 mm, 1024 × 600 |
+| Barra de 10 LEDs verde (Kingbright DC-10GWA) | 5 | Recursos e EVA | 25,4 × 10,16 mm |
+| MAX7219 | 1 | Acende as 5 barras (50 LEDs) | Ligado direto no Mega, fora do backplane |
+| LED de 3 mm com anel de metal | 7 | HDG, ALT, V/S, ESTOL, modos do sidestick | Anel Ø 5 mm |
+| Alto-falante USB | 1 | Avisos de voz, atrás da grade da tela | |
 
 ## Construção
 
@@ -61,7 +83,7 @@ Cada seção do painel é **um painel frontal removível, com o seu módulo para
 - **Painel frontal:** MDF ou acrílico de 3 mm, cortado e gravado a laser. Furos, legendas e linhas das seções saem no mesmo corte.
 - **Módulo:** preso atrás do painel com espaçadores M3.
 - **Fixação na caixa:** parafusos M3 em insertos roscados, colocados a quente em peças impressas, ou em porcas cativas. Parafuso direto no MDF espana depois de algumas desmontagens.
-- **Tamanho padrão: 150 × 150 mm** ([identidade visual](identidade_visual.md#painel)). Todo painel de seção tem a mesma frente, então qualquer um troca de lugar com outro, e seções novas cabem sem refazer a caixa. Uma fileira de 4 painéis tem 600 mm. Uma seção que precise de mais espaço ocupa dois quadrados (300 × 150 mm). Parafusos M3 nos cantos, a 6 mm das bordas.
+- **Tamanho padrão: 125 × 125 mm** ([identidade visual](identidade_visual.md#painel)). Todo painel de seção tem a mesma frente, então qualquer um troca de lugar com outro, e seções novas cabem sem refazer a caixa. Uma seção que precise de mais espaço ocupa dois quadrados (250 × 125 mm). Parafusos M3 nos cantos, a 6 mm das bordas.
 
 ### Estrutura
 
@@ -85,13 +107,13 @@ Cada seção do painel é **um painel frontal removível, com o seu módulo para
 
 ### Peças impressas
 
-- Korry switches ([korry/](korry/README.md)).
-- Knobs dos encoders dos displays (eixo de 6 mm com lado chato), com um risco que marca a posição.
+- Korry switches, em duas cores ([korry/](korry/README.md)), e uma grade por grupo para prender as bases atrás do painel.
+- A capa do korry IVA.
+- A alavanca do acelerador, encaixada na haste do potenciômetro deslizante.
 - Tecla do TEMPO do editor de manobras, se a basculante pronta não funcionar bem deitada: uma tecla impressa sobre dois botões táteis, com uma mola que a traz de volta ao meio.
-- Moldura da mikromedia e suporte do celular.
+- Moldura da tela de 7".
 - Suportes das placas, do Mega e do Pi, com os furos no lugar certo.
 - Passa-cabos e presilhas para os cabos flat.
-- Berço do joystick (ver abaixo).
 
 PLA serve para tudo. Peças que ficam perto do Pi ou de LEDs fortes podem amolecer com o calor; nesse caso, PETG.
 
@@ -103,70 +125,123 @@ Cada chave, botão e encoder tem um diâmetro de rosca e uma espessura máxima d
 2. Cortar uma **plaquinha de teste** com um furo de cada tipo, em vários diâmetros (por exemplo 6,0 / 6,2 / 6,4 mm). A laser queima um pouco de material em volta do corte, e o furo sai maior que o desenho.
 3. Conferir que a porca da chave alavanca e a trava do botão arcade prendem no painel de 3 mm.
 
+## Os painéis
+
+Um por seção, todos desenhados com as peças reais. O que cada controle faz no jogo foi conferido no código-fonte do kRPC: quase tudo existe na versão 0.6, a lançada. A exceção é a EVA (ver [Recursos e EVA](#recursos-e-eva)).
+
+## Tela multifunção
+
+![Tela multifunção: tela de 7 polegadas no meio, VOO e ORBITA à esquerda, DELTA-V e SUBIDA à direita, o alto-falante dos avisos e SILENCIAR](img/tela.svg)
+
+- **Uma tela só, de 7", no meio:** a Waveshare de 1024 × 600 com toque, ligada no HDMI do Pi, mostrando em tela cheia a mesma página do celular ([docs/mfd.md](../docs/mfd.md)). Ocupa a altura toda do painel duplo, sem título. A mikromedia saiu do cockpit; o firmware dela continua no repositório.
+- **PAGINA:** quatro botões escolhem a página: VOO (a navball), ORBITA, DELTA-V e SUBIDA. As outras páginas (SAS, PILOTO, POUSO, MANOBRA, ALVO, TEMPO, EVA) abrem sozinhas quando o painel delas é mexido. Os botões não têm luz: a própria tela mostra a página.
+- **AVISOS:** a grade do alto-falante USB dos [avisos de voo](../docs/avisos.md). **SILENCIAR** cala o aviso que está tocando.
+- 5 entradas, nenhum LED: placa pequena.
+
+## Painel de sistemas de controle
+
+Na versão B, o painel **VOO**: os modos do SAS, os sistemas e o piloto automático de avião, num painel duplo embaixo da tela. O que cada controle faz está no roteiro do [piloto automático](../README.md#piloto-automático-de-avião) e no [protocolo](../docs/protocolo.md#painel-de-sistemas-de-controle).
+
+![Painel VOO: dez korry de modo do SAS com o PRO aceso em verde, korry SAS, RCS, FBW e TRAVA ALT, e o encoder do piloto automático com as luzes HDG, ALT, V/S e ESTOL](img/voo.svg)
+
+- **MODOS DO SAS:** os 10 modos em pares, o modo em cima e o oposto embaixo: ESTAB e MANOBRA, PRO e RETRO, NORMAL e ANTINRM, RAD FORA e RAD DENTRO, ALVO e ANTIALVO. A legenda é o marcador da navball, com a palavra embaixo. Cada korry tem um LED de duas cores: **azul** enquanto a nave vira para o marcador, **verde** quando chegou e o SAS segura nele, apagado quando o modo não está escolhido. Apertar um modo que o jogo não aceita (sem alvo, sem nó de manobra, SAS fraco) não faz nada.
+- **SISTEMAS:** SAS, RCS, FBW e TRAVA ALT. A metade de baixo acende em âmbar quando falta alguma coisa: `SEM EC` (o SAS sem carga elétrica), `SEM MP` (o RCS sem monopropelente) e `DIRETA` (o avião no ar na lei direta).
+- **PILOTO AUTO:** um encoder só para HDG, ALT e V/S, mexido pelo menu da página do piloto na tela multifunção: girar move o cursor, apertar escolhe a linha e girar muda o valor, apertar de novo sai, e segurar 1 s liga ou desliga o modo da linha. Três luzes verdes mostram, sem olhar a tela, quais modos estão ligados. Embaixo delas, a luz vermelha **ESTOL** pisca quando o ângulo de ataque passa de 14,5°, e a tela toca um alarme. É só o aviso: o FBW não mexe em nada ([docs/fbw.md](../docs/fbw.md#aviso-de-estol)).
+- 17 entradas (10 modos, 4 korry e as 3 do encoder) e 31 LEDs: placa grande, com 4 × 74HC595. O desenho de 150 mm, com o mesmo conteúdo, está em [`img/antigos/sistemas.svg`](img/antigos/sistemas.svg).
+
 ## Painel do editor de manobras
 
-O primeiro painel desenhado, no tamanho padrão de 150 × 150 mm e com as peças no tamanho de catálogo. O que cada controle faz está no [roteiro da fase 4](../README.md#fase-4--instrumentos-físicos) e no [protocolo](../docs/protocolo.md#no-painel).
+Painel duplo, de 250 × 125 mm. O que cada controle faz está no [roteiro da fase 4](../README.md#fase-4--instrumentos-físicos) e no [protocolo](../docs/protocolo.md#no-painel).
 
-![Painel do editor de manobras: korry PRO, NRM e RAD com o PRO aceso, encoder de ajuste, grupo PERCURSO, chave rotativa do passo e korry NOVO, APAGAR e CIRC](img/editor_manobras.svg)
+![Painel do editor de manobras: korry PRO, NRM e RAD com o PRO aceso, encoder de ajuste, grupo PERCURSO, chave rotativa do passo e botões NOVO, APAGAR e CIRC](img/editor_manobras.svg)
 
 - **DELTA-V:** três korry escolhem o eixo (PRO, NRM, RAD), e o encoder mexe nele: horário soma, anti-horário tira. A legenda do eixo escolhido acende na cor da alça do nó no KSP: verde-amarelo, magenta e ciano.
 - **PERCURSO:** anda pelo caminho da nave, nos dois sentidos. A tecla do TEMPO, deitada, move o nó pela órbita; ANT e PROX, embaixo dela e no mesmo sentido, trocam de nó.
 - **PASSO:** chave rotativa com a legenda gravada em volta. O ponteiro do knob mostra o passo, sem LED e sem olhar a tela.
-- **NO:** NOVO, APAGAR e CIRC, korry do mesmo tamanho que os de eixo. Os 6 korry do painel são a mesma peça.
+- **NO:** NOVO, APAGAR e CIRC, botões de metal: não têm estado para mostrar.
 - **Sem tela:** os números do nó vão para a página do editor na tela multifunção.
+- 16 entradas e 3 LEDs: placa média. O desenho de 150 mm está em [`img/antigos/editor_manobras.svg`](img/antigos/editor_manobras.svg).
 
-| Peça | Qtd | Na frente | Furo no painel | Atrás do painel | Onde |
-|---|---|---|---|---|---|
-| [Korry feito em casa](korry/README.md) | 6 | 22,5 × 22,5 mm | 23 × 23 mm | ~24 mm | PRO, NRM, RAD, NOVO, APAGAR, CIRC |
-| Encoder EC11 + knob de alumínio | 1 | knob Ø 30 × 17 mm | Ø 7 mm (rosca M7) | ~20 mm | Ajuste do Δv, 20 cliques por volta |
-| Chave rotativa de 1 polo e 12 posições | 1 | knob Ø 22 mm | Ø 9,5 mm (rosca M9) | ~30 mm, corpo Ø 26 mm | PASSO, com o anel de batente em 4 posições |
-| Tecla basculante (ON)-OFF-(ON) | 1 | 21 × 15 mm | 19 × 13 mm | ~20 mm | TEMPO, montada deitada |
-| Botão de metal de 12 mm, sem trava | 2 | Ø 14 mm | Ø 12 mm | ~20 mm | ANT e PROX |
-| Parafuso M3 | 4 | cabeça Ø 5,5 mm | Ø 3,2 mm | inserto roscado | Cantos |
+## Ação executiva
 
-As medidas são as de catálogo das peças comuns. Conferir cada uma no paquímetro e na plaquinha de teste antes de cortar o painel ([acima](#medir-antes-de-cortar)).
+STAGE, ABORT e os scripts de voo, no centro, a um palmo do acelerador.
 
-## Painel de sistemas de controle
+![Ação executiva: ABORT na faixa zebrada e STAGE, os dois com capa transparente, e os seis korry dos scripts com o POUSO aceso](img/acao_executiva.svg)
 
-O painel que junta o SAS, o RCS, o fly by wire e o piloto automático de avião: tudo que controla para onde a nave aponta. Tamanho padrão de 150 × 150 mm, com as peças no tamanho de catálogo. O que cada controle faz está no roteiro do [piloto automático](../README.md#piloto-automático-de-avião) e no [protocolo](../docs/protocolo.md#painel-de-sistemas-de-controle).
+- **ABORT** na faixa zebrada e **STAGE** embaixo, os dois botões de metal de 22 mm debaixo de uma capa transparente que abre. O anel de LED de cada um mostra o estado: o ABORT acende em vermelho depois de acionado (`control.abort`); o STAGE, em âmbar, com a trava de estágio do jogo ligada (`control.stage_lock`).
+- 8 entradas e 14 LEDs, com os scripts: placa média.
 
-![Painel de sistemas de controle: dez korry de modo do SAS com o PRO aceso em verde, korry SAS, RCS, FBW e TRAVA ALT, e o encoder do piloto automático com as luzes HDG, ALT, V/S e ESTOL](img/sistemas.svg)
+### Painel de scripts
 
-- **ATITUDE:** os 10 modos do SAS em pares, o modo em cima e o oposto embaixo: ESTAB e MANOBRA, PRO e RETRO, NORMAL e ANTINRM, RAD FORA e RAD DENTRO, ALVO e ANTIALVO. A legenda é o marcador da navball, com a palavra embaixo. Cada korry tem um LED de duas cores: **azul** enquanto a nave vira para o marcador, **verde** quando chegou e o SAS segura nele, apagado quando o modo não está escolhido. Apertar um modo que o jogo não aceita (sem alvo, sem nó de manobra, SAS fraco) não faz nada.
-- **SISTEMAS:** a nave em cima (SAS e RCS), o avião embaixo (FBW e TRAVA ALT). A metade de baixo acende em âmbar quando falta alguma coisa: `SEM EC` (o SAS sem carga elétrica), `SEM MP` (o RCS sem monopropelente) e `DIRETA` (o avião no ar na lei direta).
-- **PILOTO AUTO:** um encoder só para HDG, ALT e V/S, mexido pelo menu da página do piloto na tela multifunção: girar move o cursor, apertar escolhe a linha e girar muda o valor, apertar de novo sai, e segurar 1 s liga ou desliga o modo da linha. Três luzes verdes ao lado mostram, sem olhar a tela, quais modos estão ligados. Embaixo delas, separada por um traço, a luz vermelha **ESTOL** pisca quando o avião fica devagar demais para a asa: o FBW põe o acelerador no máximo e desliga o piloto automático (o *alpha floor*, ver [docs/fbw.md](../docs/fbw.md#alpha-floor)), e a tela toca um alarme.
-- **Sem tela:** os valores do piloto e a roda dos modos do SAS aparecem em páginas da tela multifunção, que abrem sozinhas quando o painel é mexido.
+Os scripts de voo que pilotam a nave sozinhos, um korry por script, na metade direita da ação executiva. O que o script faz está no roteiro da [fase 5](../README.md#fase-5--protocolo-v1--scripts-de-voo) e no [protocolo](../docs/protocolo.md#painel-de-scripts).
 
-| Peça | Qtd | Na frente | Furo no painel | Atrás do painel | Onde |
-|---|---|---|---|---|---|
-| [Korry feito em casa](korry/README.md), com LED azul e verde | 10 | 22,5 × 22,5 mm | 23 × 23 mm | ~24 mm | Modos do SAS |
-| [Korry feito em casa](korry/README.md), duas metades | 3 | 22,5 × 22,5 mm | 23 × 23 mm | ~24 mm | SAS, RCS, FBW |
-| [Korry feito em casa](korry/README.md), legenda única | 1 | 22,5 × 22,5 mm | 23 × 23 mm | ~24 mm | TRAVA ALT |
-| Encoder EC11 com botão + knob de alumínio | 1 | knob Ø 30 × 17 mm | Ø 7 mm (rosca M7) | ~20 mm | Piloto automático, 20 cliques por volta |
-| LED verde de 3 mm com anel de metal | 3 | anel Ø 5 mm | Ø 5 mm | ~10 mm | HDG, ALT, V/S |
-| LED vermelho de 3 mm com anel de metal | 1 | anel Ø 5 mm | Ø 5 mm | ~10 mm | ESTOL |
-| Parafuso M3 | 4 | cabeça Ø 5,5 mm | Ø 3,2 mm | inserto roscado | Cantos |
-
-São 17 entradas (10 modos, 4 korry e as 3 do encoder: A, B e o aperto) e 31 LEDs (20 dos modos, 2 do SAS, 2 do RCS, 2 do FBW, 1 da TRAVA, as 3 luzes do piloto e a do ESTOL): uma placa grande, com 4 × 74HC595. Ver a [tabela de placas](README.md#qual-placa-e-qual-etiqueta-em-cada-seção).
-
-## Painel de scripts
-
-Os scripts de voo que pilotam a nave sozinhos, um korry por script. Tamanho padrão de 150 × 150 mm, com as peças no tamanho de catálogo. O que o script faz está no roteiro da [fase 5](../README.md#fase-5--protocolo-v1--scripts-de-voo) e no [protocolo](../docs/protocolo.md#painel-de-scripts).
-
-![Painel de scripts: três faixas na ordem do voo, SUBIDA, ORBITA e DESCIDA, com o korry POUSO aceso em verde embaixo e cinco korry vagos](img/scripts.svg)
-
-- **Na ordem do voo:** três faixas de cima para baixo, como a nave: SUBIDA (do chão até a órbita), ORBITA (nós de manobra e encontro) e DESCIDA (da órbita até o chão). O POUSO fica embaixo, o mais perto da mão. A legenda de apoio à direita diz o que a faixa faz.
+- **Na ordem do voo:** três fileiras de cima para baixo, como a nave: subida (LANCAR), órbita (EXEC e ENCONTRO) e descida (POUSO e PRECISAO). O POUSO fica embaixo, o mais perto da mão.
 - **Segurar 5 s:** o korry só liga o script depois de 5 s apertado, e segurar de novo 5 s aborta: o script corta o motor e devolve a nave ao piloto. Soltar antes não faz nada. Assim não precisa de chave ARM, e um toque sem querer não entrega a nave. Enquanto conta, a tela multifunção abre a página do script e mostra quantos segundos faltam.
 - **A luz mostra o script, não o aperto:** apagado parado; **âmbar piscando** enquanto conta para ligar; **verde** com o script voando (piscando âmbar enquanto conta para abortar); **vermelho** por 10 s se o script foi abortado ou falhou. Quando a nave pousa, apaga, e a tela mostra `POUSADA`.
-- **Lugares vagos:** cinco korry com a tampa lisa, sem legenda, esperando os próximos scripts do [roteiro](../README.md#scripts-de-voo). No desenho, em cinza escuro, o script previsto para cada um: LANCAR (subida até a órbita), EXEC (executa o nó de manobra), ENCONTRO, PRECISAO (pouso de precisão) e um livre. A legenda é gravada numa tampa nova quando o script existir; o furo, o korry e os fios já ficam prontos.
+- **Lugares vagos:** cinco korry com a legenda em cinza, esperando os próximos scripts do [roteiro](../README.md#scripts-de-voo). O korry ganha a legenda quando o script existir; o furo e os fios já ficam prontos.
 - **Sem tela:** a fase, a altura, a descida e a freada aparecem na página POUSO da tela multifunção ([docs/mfd.md](../docs/mfd.md#painel-de-scripts-e-a-página-do-pouso)).
+- O desenho de 150 mm, quando os scripts tinham painel próprio, está em [`img/antigos/scripts.svg`](img/antigos/scripts.svg).
 
-| Peça | Qtd | Na frente | Furo no painel | Atrás do painel | Onde |
-|---|---|---|---|---|---|
-| [Korry feito em casa](korry/README.md), legenda única, LED vermelho e verde (os dois juntos dão o âmbar) | 6 | 22,5 × 22,5 mm | 23 × 23 mm | ~24 mm | POUSO e os cinco vagos |
-| Parafuso M3 | 4 | cabeça Ø 5,5 mm | Ø 3,2 mm | inserto roscado | Cantos |
+## Tempo
 
-São 6 entradas e 12 LEDs (dois por korry). O painel fica ao lado da ação executiva (STAGE e ABORT) e divide a placa com ela: juntos, 8 entradas e 14 LEDs, numa placa média. Ver a [tabela de placas](README.md#qual-placa-e-qual-etiqueta-em-cada-seção).
+![Tempo: tecla do WARP, PARAR, korry FISICO e ATE O NO em cima; PAUSA, SALVAR, e CARREGAR e REVERTER com capa embaixo](img/tempo.svg)
+
+- **ACELERAR:** a tecla do WARP, deitada como a do editor: para a esquerda mais devagar, para a direita mais rápido (`rails_warp_factor` e `physics_warp_factor`). Segurando, repete. **PARAR** volta ao tempo normal. **FISICO** escolhe o warp físico e acende em branco com ele ligado (`warp_mode`). **ATE O NO** acelera até o próximo nó de manobra (`warp_to`).
+- **JOGO:** PAUSA (`krpc.paused`), SALVAR (`quicksave`), CARREGAR (`quickload`) e REVERTER (volta ao lançamento, `revert_to_launch`). Os dois últimos perdem o voo atual e ficam debaixo de capas "missile".
+- 9 entradas e 1 LED: placa média.
+
+## Navegação
+
+![Navegação: encoder do alvo e LIMPAR, chave rotativa da referência da navball, e ANT e PROX para trocar de nave](img/navegacao.svg)
+
+- **ALVO:** girar o encoder percorre as naves e os planetas na página ALVO da tela; apertar escolhe (`target_vessel`, `target_body`). LIMPAR tira o alvo (`clear_target`).
+- **REFERENCIA:** o modo da navball: AUTO (troca sozinho, como no KSP), SUP, ORB ou ALVO. A ponte deixa a navball do jogo igual (`control.speed_mode`).
+- **NAVES:** ANT e PROX trocam a nave ativa (`active_vessel`).
+- 10 entradas, nenhum LED: placa média.
+
+## Action groups
+
+![Action groups: dez botões de metal e os korry PARAQUEDAS, SOLAR, ANTENAS e CARGA](img/action_groups.svg)
+
+- **GRUPOS:** os action groups 1 a 10, botões de metal (`toggle_action_group`). Não têm luz: o que cada grupo faz muda de nave para nave.
+- **PECAS:** PARAQUEDAS, SOLAR, ANTENAS e CARGA (`control.parachutes`, `solar_panels`, `antennas`, `cargo_bays`), em korry verdes que acendem com as peças abertas.
+- 14 entradas e 4 LEDs: placa média.
+
+## Câmera
+
+![Câmera: korry MAPA, korry IVA com capa, MODO CAM, FOTO e ESCONDER](img/camera.svg)
+
+- **VISTA:** MAPA e IVA, korry brancos que acendem com o mapa aberto e com a vista de dentro da cabine (`camera.mode`). O IVA fica debaixo de uma capa. MODO CAM passa pelos modos da câmera: automático, livre, perseguição, travado e orbital.
+- **IMAGEM:** FOTO (`screenshot`, salva no PC do jogo) e ESCONDER, que esconde a interface do jogo (`ui_visible`).
+- O modo do manche saiu daqui: é o botão do [sidestick](#sidestick).
+- 5 entradas e 2 LEDs: placa pequena.
+
+## Recursos e EVA
+
+![Recursos e EVA: quatro barras de 10 LEDs e os controles do kerbal](img/recursos_eva.svg)
+
+- **RESTANTE:** quatro barras de 10 LEDs, com o que resta no estágio atual de combustível líquido, oxidante, monopropelente e eletricidade. As barras são acesas por um MAX7219 ligado direto no Mega, fora do backplane.
+- **EVA:** o kerbal fora da nave. JATO abre a mochila e LUZ liga a lanterna do capacete; SAIR, EMBARCAR, AGARRAR e SOLTAR (a escada). Andar, virar e voar com a mochila são feitos pelo sidestick, e a barra MONO mostra a mochila.
+- **Precisa do kRPC 0.7:** no 0.6, o kRPC não mexe num kerbal em EVA (`control.rcs` e `lights` só ligam os grupos da nave, e não há como andar, sair ou embarcar). O 0.7 traz tudo isso, mas ainda não foi lançado. Não há comando para pular em nenhuma versão.
+- 6 entradas e 2 LEDs: placa pequena.
+
+## Acelerador
+
+![Acelerador: alavanca deslizante com 60 mm de curso e os korry TREM, FREIOS e LUZES](img/acelerador.svg)
+
+- **EMPUXO:** um potenciômetro deslizante de 60 mm (Bourns PTA6043), com uma alavanca impressa. Para cima acelera. É o único acelerador: a alavanca do joystick não é usada.
+- **RODAS E LUZES:** TREM, FREIOS e LUZES (`control.gear`, `brakes`, `lights`), em korry verdes, ao lado do acelerador, como num avião.
+- 3 entradas, 3 LEDs e 1 linha analógica: placa pequena num dos slots 1 a 5.
+
+## Sidestick
+
+![Sidestick: joystick de 3 eixos com botão e as luzes dos modos VOO, CAMERA e TRANSL](img/sidestick.svg)
+
+- **O joystick:** um JH-D400X-R4 para Arduino, com 3 eixos de 10 kΩ (X e Y ±25 a 30°, torção ±45°) e um botão no topo. Na ponta da asa direita, como o sidestick de um Airbus. Fios: VCC, GND, os 3 eixos e o botão.
+- **Lido pelo Mega:** os 3 eixos vão nas 3 linhas analógicas de um dos slots 1 a 5 do backplane; o botão e as luzes, numa placa pequena. A ponte recebe os eixos pela serial e os manda ao jogo como faria com o Extreme 3D Pro.
+- **O botão troca o modo:** cada aperto passa para o próximo, VOO, CAMERA e TRANSL, e volta ao VOO ([os três modos](#um-joystick-três-modos)). A ponte só troca com o manche no centro, para não dar tranco. Três luzes brancas mostram o modo, porque um botão não tem posição.
+- **Em EVA**, o manche anda e voa com o kerbal (kRPC 0.7).
+- 1 entrada, 3 LEDs e 3 linhas analógicas: placa pequena.
 
 ## Korry switches
 
@@ -187,20 +262,20 @@ A peça tem ficha própria em [korry/](korry/README.md): medidas, desenho, peça
 
 - **Um tamanho só, 22,5 × 22,5 mm**, em todo o cockpit. Furo de 23 × 23 mm no painel.
 - **Legenda em duas metades**, como o START do A320: em cima só as letras, embaixo as letras numa caixa. Ou uma legenda única, sem a divisória.
-- **Tampa de acrílico leitoso** pintada e gravada a laser; corpo, divisória e base impressos em PLA preto.
-- **Plaquinha atrás**, com um LED por metade e um botão tátil de 6 × 6 mm no meio, que o pino da divisória aperta. Conector de 4 pinos: GND, botão, LED de cima e LED de baixo.
+- **Impresso em duas cores numa peça só:** o corpo preto e a frente transparente, com a legenda vazada numa camada preta. Sem laser e sem cola.
+- **Plaquinha de placa perfurada atrás**, com um LED por metade e um botão tátil de 6 × 6 mm no meio, que o pino da divisória aperta. Conector de 4 pinos: GND, botão, LED de cima e LED de baixo.
 - **LEDs comuns, pelas saídas do 74HC595 do módulo.** A cor é a do LED, fixa por metade.
 
 **Alternativa pronta:** botões quadrados iluminados de 16 mm, vendidos no AliExpress. São mais fáceis, mas têm uma luz só, de uma cor, e a legenda fica por conta própria.
 
 ### No painel e no firmware
 
-- **Cada korry usa 1 entrada e 0, 1 ou 2 LEDs** de um módulo. A legenda de duas metades gasta mais LEDs que entradas, o contrário das chaves: a tabela de seções do [README do hardware](README.md#qual-placa-e-qual-etiqueta-em-cada-seção) precisa ser revista quando for decidido quais chaves viram korry.
+- **Cada korry usa 1 entrada e 1 ou 2 LEDs** de um módulo. A legenda de duas metades gasta mais LEDs que entradas, o contrário das chaves: a [tabela de seções](README.md#qual-placa-e-qual-etiqueta-em-cada-seção) já conta os LEDs dos korry da versão B.
 - **Protocolo:** o korry manda um evento de botão (`BTN SAS 1`) em vez de chave (`SW SAS 1`), e a ponte inverte o estado no jogo. A mudança fica toda na ponte: o firmware já manda botões.
 
 ## Joystick: Logitech Extreme 3D Pro
 
-O Extreme 3D Pro já está em casa e substitui o joystick de 3 eixos e o potenciômetro deslizante da lista de compras.
+**Fora do cockpit da versão B:** no painel, o manche é o [sidestick](#sidestick) e o acelerador é a [alavanca própria](#acelerador). O Extreme 3D Pro continua servindo para desenvolver e testar no PC (o FBW tem um perfil para ele, em [docs/fbw.md](../docs/fbw.md)). O mapeamento e os três modos abaixo valem para os dois.
 
 **O que ele tem:** 4 eixos (X, Y, torção do manche e uma alavanca de acelerador na base), 12 botões e um chapéu (*hat*) de 8 direções no topo. Liga por USB e o computador o vê como um joystick comum (HID).
 
@@ -220,7 +295,7 @@ O Extreme 3D Pro já está em casa e substitui o joystick de 3 eixos e o potenci
 
 ### Um joystick, três modos
 
-**Um joystick só**, sem um segundo para a translação: uma **chave de 3 posições no painel** (ON-OFF-ON, sem mola, 2 entradas) escolhe o que o manche faz. A ponte lê a chave e manda o manche para um lugar ou outro.
+**Um joystick só**, sem um segundo para a translação: o **botão do manche do sidestick** passa pelos três modos, e três luzes mostram o modo atual. A ponte lê o botão e manda o manche para um lugar ou outro. (Antes era uma chave de 3 posições no painel.)
 
 | Posição | Modo | O manche mexe em |
 |---|---|---|
@@ -242,43 +317,40 @@ Só uma proposta de mapeamento, para testar no jogo e mudar à vontade. O códig
 | Botões da base | Livres: action groups, trocar de nave | — | — |
 
 - **Fora do modo VOO, a nave não recebe o manche:** a ponte manda pitch, roll e yaw zerados, e o SAS segura a atitude. No modo CÂMERA dá para olhar em volta com a nave parada no rumo.
-- **A chave mostra o modo:** um LED por posição, ou o modo escrito na tela multifunção. Mudar de modo com o manche fora do centro não pode dar um tranco: a ponte só passa o manche para o modo novo depois que ele volta ao centro.
+- **As luzes mostram o modo:** um LED por modo no painel do sidestick, e o modo escrito na tela multifunção. Mudar de modo com o manche fora do centro não pode dar um tranco: a ponte só passa o manche para o modo novo depois que ele volta ao centro.
 - **TRANSLAÇÃO pede o RCS ligado.** Se estiver desligado, a ponte avisa (LED do RCS piscando ou na tela); ligar sozinha fica a decidir.
 - **STAGE e ABORT não vão no joystick:** ficam só no painel, debaixo das capas, para não serem apertados sem querer.
-- **O botão MAPA** (liga e desliga o mapa) fica na seção da câmera do painel, junto da chave de modo.
+- **O botão MAPA** (liga e desliga o mapa) fica no painel da câmera.
 
 ### Acelerador
 
-A alavanca da base do joystick é curta (uns 3 cm de curso). Serve para começar. Uma alavanca própria no painel, com curso longo, fica como ideia: um potenciômetro deslizante de 60 mm ou um quadrante de manete impresso em 3D, lido pelo módulo "Acelerador" do backplane. Se ela existir, a ponte usa a que se mexeu por último.
+A alavanca da base do joystick é curta (uns 3 cm de curso). No cockpit, o acelerador é uma alavanca própria, com um potenciômetro deslizante de 60 mm, no [painel do acelerador](#acelerador). A alavanca do joystick não é usada.
 
 ### Na mesa
 
-O joystick fica à direita da caixa, solto na mesa. Se a base escorregar, um berço impresso em 3D, ou uma placa de MDF com recorte da base, prende o joystick ao lado do console.
+Para desenvolver no PC, o Extreme 3D Pro fica solto na mesa. No cockpit, o sidestick é um painel, sem joystick solto.
 
 ## Arquivos
 
-Quando os desenhos começarem, ficam em `hardware/caixa/`:
+- **Desenhos dos painéis:** em código, em [`desenho/`](desenho/README.md), com os SVG em [`img/`](img/).
+- **Korry:** o modelo no OpenSCAD, os STL e a plaquinha em [`korry/`](korry/README.md).
+- **Caixa (a fazer):** em `hardware/caixa/`, o arquivo-fonte de cada peça, paramétrico, e os SVG ou DXF para a laser e os STL para a impressora, gerados a partir do fonte.
 
-- o **arquivo-fonte** de cada peça, paramétrico, para mudar uma medida e gerar tudo de novo;
-- os **SVG ou DXF** para a laser e os **STL ou 3MF** para a impressora, gerados a partir do fonte.
-
-Ferramenta de CAD: **a decidir.** O OpenSCAD desenha a peça com código, em texto, e o histórico fica legível no git, como o resto do projeto. O FreeCAD e o Fusion desenham com o mouse, o que é mais fácil para formas livres.
+Ferramenta de CAD: **OpenSCAD**, para as peças impressas. Desenha a peça com código, em texto, e o histórico fica legível no git, como o resto do projeto.
 
 ## Ordem para fazer
 
-1. **Protótipo de papelão**, na escala real, com os furos desenhados à mão. O objetivo é testar o alcance das mãos, a inclinação e o lugar do joystick.
-2. **Um korry**, impresso e montado, ligado direto num pino do Mega como na [fase 2](../docs/fase2.md). Testar o brilho, o clique e a legenda.
-3. **Plaquinha de teste na laser**, com os furos de cada peça, e a tabela de medidas preenchida.
+1. **Teste de folga e um korry de teste**, impressos e montados, ligados direto num pino do Mega como na [fase 2](../docs/fase2.md) ([korry/](korry/README.md#ordem-para-fazer)).
+2. **Protótipo de papelão** da caixa em U, na escala real, com os furos desenhados à mão: o alcance das mãos, a inclinação e o lugar do acelerador e do sidestick.
+3. **Plaquinha de teste na laser**, com os furos de cada peça, e as medidas conferidas no paquímetro.
 4. **Um painel de seção de verdade**, por exemplo a ação executiva: gravado, com o módulo atrás e as capas no lugar.
-5. **Caixa completa (fase 7)**, quando as seções e os módulos estiverem decididos.
+5. **Caixa completa (fase 7).**
 
 ## A decidir
 
-- Quais chaves viram korry nas outras seções, e a revisão da tabela de seções por causa dos LEDs a mais. Na de sistemas de controle já está decidido ([desenho](#painel-de-sistemas-de-controle)).
-- Para onde vão o trem de pouso, as luzes e os freios, que saíram da seção de sistemas de controle: action groups ou um painel próprio.
-- O que fazer com as seções "Analógicos: rotação" e "Analógicos: translação" do backplane. Não vai ter segundo joystick: o Extreme 3D Pro faz rotação, câmera e translação pela chave de modo. Podem ficar só com botões e LEDs (a chave de modo do joystick, por exemplo) ou sair.
-- Em que seção fica a chave de modo do joystick: na da câmera, junto do MAPA, ou numa das analógicas.
-- Alavanca de acelerador própria ou só a do joystick.
-- O lugar do painel de scripts na caixa: ao lado da ação executiva, embaixo à direita, perto da mão esquerda.
-- Ferramenta de CAD.
-- MDF pintado ou acrílico nos painéis definitivos, e se as legendas serão iluminadas.
+- JATO e LUZ na EVA: o RCS e o LUZES já abrem a mochila e ligam a lanterna do kerbal (kRPC 0.7). Podem sair, e o painel fica com mais espaço.
+- A chave REFERENCIA da navegação: o modo da navball já troca sozinho e pelo toque na tela.
+- EVA: esperar o kRPC 0.7, compilar do GitHub ou um programa no PC do jogo que aperta as teclas da EVA.
+- O furo do joystick JH-D400X-R4, quando ele chegar.
+- Colar as bases dos korry atrás do painel ou fazer uma grade impressa por grupo.
+- MDF pintado ou acrílico nos painéis definitivos, e se as legendas dos painéis serão iluminadas.
