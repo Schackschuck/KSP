@@ -119,7 +119,7 @@ firmware/mfd/     mikromedia for ARM / LPC2148 (C, compilado com o LLVM pelo com
 hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa; ver hardware/README.md
                   e hardware/construcao.md (o cockpit da versão B, a caixa e os painéis);
                   cada peça própria numa pasta, com ficha e desenhos (hardware/korry/:
-                  modelo no OpenSCAD, STL e o desenho da ligação);
+                  modelo no OpenSCAD, STL das legendas, das grades e das peças, gerar.py e o desenho da ligação);
                   identidade visual (hardware/identidade_visual.md) e desenhos dos painéis
                   gerados por código (hardware/desenho/, SVG em hardware/img/)
 docs/             protocolo serial, pinagem, anotações
@@ -190,7 +190,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - Enquanto o primeiro módulo não fica pronto, os controles básicos continuam direto nos pinos do Mega, como em [docs/fase2.md](docs/fase2.md).
 - Próximo passo: o firmware do Mega lendo a fila de módulos pelas etiquetas, e testar o primeiro módulo direto no Mega.
 - **Sidestick e acelerador no painel:** um joystick JH-D400X-R4 de 3 eixos, com o botão do manche trocando entre VOO, CÂMERA e TRANSLAÇÃO, e uma alavanca deslizante de 60 mm, os dois lidos pelo Mega nas linhas analógicas do backplane ([sidestick](hardware/construcao.md#sidestick), [acelerador](hardware/construcao.md#acelerador)). O Extreme 3D Pro fica para desenvolver no PC; mapeamento em [hardware/construcao.md](hardware/construcao.md#joystick-logitech-extreme-3d-pro).
-- **Korry switches:** botões iluminados com legenda, como nos aviões, 35 no cockpit. Legenda impressa em duas cores na FlashForge Inventor, encaixada num corpo igual para todos, com a chave e os LEDs num suporte impresso. O modelo, os STL de teste e a ligação estão em [hardware/korry/](hardware/korry/README.md); o primeiro passo é o teste de folga e um korry ligado direto no Mega.
+- **Korry switches:** botões iluminados com legenda, como nos aviões, 35 no cockpit. Legenda impressa em duas cores na FlashForge Inventor, encaixada num corpo igual para todos, com a chave e os LEDs num suporte impresso. As bases de cada grupo saem numa grade impressa, parafusada atrás do painel. O modelo, os STL das 31 legendas, das grades e das peças, o `gerar.py` e a ligação estão em [hardware/korry/](hardware/korry/README.md); o primeiro passo é o teste de folga e um korry ligado direto no Mega.
 
 **A fazer na ponte, para a versão B** (o que cada controle faz e o comando do kRPC estão em [hardware/construcao.md](hardware/construcao.md#os-painéis)):
 
@@ -489,6 +489,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [ ] Acelerador: 1× potenciômetro deslizante Bourns PTA6043, 10 kΩ linear, curso de 60 mm
 - [ ] 35 korry switches ([lista completa](hardware/korry/README.md#lista-de-peças-um-korry)), cada um com 1 chave PSW 8,5 × 8,5 mm sem trava, até 2 LEDs difusos de alto brilho de 3 mm, 4 fios finos e 1 conector JST-XH fêmea de 4 vias com os terminais; filamento PLA preto e transparente
 - [ ] 10× LED azul e verde de 3 mm, difuso, catodo comum (korry dos modos do SAS)
+- [ ] 17× parafuso M3 autoatarraxante de 8 mm, para as 9 grades dos korry ([fixação no painel](hardware/korry/README.md#fixação-no-painel))
 - [ ] 36× botão de metal de 12 mm sem trava
 - [ ] 2× botão de metal de 22 mm com anel de LED (vermelho e branco), de 5 V ou 3 V, e 2× capa transparente para botão de 22 mm
 - [ ] 2× tecla KCD1 (ON)-OFF-(ON) de 21 × 15 mm

@@ -107,7 +107,7 @@ Cada seção do painel é **um painel frontal removível, com o seu módulo para
 
 ### Peças impressas
 
-- Korry switches, em duas cores ([korry/](korry/README.md)), e uma grade por grupo para prender as bases atrás do painel.
+- Korry switches, em duas cores ([korry/](korry/README.md)), e uma grade por grupo (9 grades, 17 parafusos M3) para prender as bases atrás do painel.
 - A capa do korry IVA.
 - A alavanca do acelerador, encaixada na haste do potenciômetro deslizante.
 - Tecla do TEMPO do editor de manobras, se a basculante pronta não funcionar bem deitada: uma tecla impressa sobre dois botões táteis, com uma mola que a traz de volta ao meio.
@@ -263,6 +263,7 @@ A peça tem ficha própria em [korry/](korry/README.md): medidas, desenho, peça
 - **Um tamanho só, 22,5 × 22,5 mm**, em todo o cockpit. Furo de 23 × 23 mm no painel.
 - **Legenda em duas metades**, como o START do A320: em cima só as letras, embaixo as letras numa caixa. Ou uma legenda única, sem a divisória.
 - **Legenda modular em duas cores, encaixada na ponta de um corpo igual para todos:** a legenda é impressa em preto e transparente numa peça só, com as letras vazadas numa camada preta. Só ela muda de korry para korry. Sem laser e sem cola.
+- **Uma grade por grupo:** as bases dos korry de um grupo saem numa peça só, impressa em preto e parafusada atrás do painel com M3 pela frente (furo de 3,2 mm no painel). Os korry ficam a no mínimo 25,5 mm de centro a centro, e os parafusos aparecem nos desenhos dos painéis. Ver [Fixação no painel](korry/README.md#fixação-no-painel).
 - **Chave PSW 8,5 × 8,5 e os LEDs encaixados num suporte impresso**, com um LED por metade e a chave no meio, que o apoio da divisória aperta. Um rabicho de 4 fios com JST-XH: GND, botão, LED de cima e LED de baixo.
 - **LEDs comuns, pelas saídas do 74HC595 do módulo.** A cor é a do LED, fixa por metade.
 
@@ -352,5 +353,4 @@ Ferramenta de CAD: **OpenSCAD**, para as peças impressas. Desenha a peça com c
 - A chave REFERENCIA da navegação: o modo da navball já troca sozinho e pelo toque na tela.
 - EVA: esperar o kRPC 0.7, compilar do GitHub ou um programa no PC do jogo que aperta as teclas da EVA.
 - O furo do joystick JH-D400X-R4, quando ele chegar.
-- Colar as bases dos korry atrás do painel ou fazer uma grade impressa por grupo.
 - MDF pintado ou acrílico nos painéis definitivos, e se as legendas dos painéis serão iluminadas.
