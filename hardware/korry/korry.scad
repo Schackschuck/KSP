@@ -5,10 +5,11 @@ modo_sas = "";
 celulas = [[0, 0]];
 furos = [];
 fonte = "B612:style=Bold";
-folga = 0.2;
+folga = 0.5;
 
 painel = 3;
-frente = 22.5;
+tubo_interno = 22.9;
+frente = tubo_interno - 2 * folga;
 parede = 1.0;
 saliencia = 3;
 tampa = 1.8;
@@ -73,11 +74,10 @@ caixa_larg = min(caixa_l, max(len(texto_baixo), 3) * 0.85 * tamanho(texto_baixo,
 centro_cima = duas_metades ? (lado / 2 + divisoria_y + divisoria_e / 2) / 2 : 0;
 centro_baixo = (-lado / 2 + divisoria_y - divisoria_e / 2) / 2;
 
-tubo_interno = frente + 2 * folga;
 tubo_externo = tubo_interno + 2 * tubo_parede;
 suporte_lado = tubo_interno + suporte_folga;
-trilho_l = ressalto_l + 0.3;
-trilho_largura = ressalto_largura + 0.6;
+trilho_l = frente / 2 + ressalto_l + folga - tubo_interno / 2;
+trilho_largura = ressalto_largura + 2 * folga;
 batente = comprimento - ressalto_c - painel;
 costas = tampa - saliencia;
 

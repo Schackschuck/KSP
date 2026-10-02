@@ -54,7 +54,7 @@ Todos existem e são vendidos em lojas de eletrônica e no AliExpress. As medida
 
 | Peça | Qtd | Onde | Medida |
 |---|---|---|---|
-| [Korry impresso](korry/README.md) | 35 | Voo, ação executiva, editor, peças, rodas e luzes, EVA, câmera, tempo | 22,5 × 22,5 mm, furo de 23 × 23 mm |
+| [Korry impresso](korry/README.md) | 35 | Voo, ação executiva, editor, peças, rodas e luzes, EVA, câmera, tempo | 21,9 × 21,9 mm, furo de 23 × 23 mm |
 | Chave PSW 8,5 × 8,5 sem trava | 35 | Dentro de cada korry | |
 | LED de 3 mm difuso | ~40 | Korry de uma cor | |
 | LED de 3 mm azul e verde, catodo comum | 10 | Modos do SAS | 3 pernas |
@@ -260,7 +260,7 @@ Com uma chave alavanca, a chave pode ficar para cima com o SAS desligado pelo jo
 
 A peça tem ficha própria em [korry/](korry/README.md): medidas, desenho, peças, circuito, brilho e o que cada luz diz. Resumo:
 
-- **Um tamanho só, 22,5 × 22,5 mm**, em todo o cockpit. Furo de 23 × 23 mm no painel.
+- **Um tamanho só, 21,9 × 21,9 mm**, em todo o cockpit. Furo de 23 × 23 mm no painel.
 - **Legenda em duas metades**, como o START do A320: em cima só as letras, embaixo as letras numa caixa. Ou uma legenda única, sem a divisória.
 - **Legenda modular em duas cores, encaixada na ponta de um corpo igual para todos:** a legenda é impressa em preto e transparente numa peça só, com as letras vazadas numa camada preta. Só ela muda de korry para korry. Sem laser e sem cola.
 - **Uma grade por grupo:** as bases dos korry de um grupo saem numa peça só, impressa em preto e parafusada atrás do painel com M3 pela frente (furo de 3,2 mm no painel). Os korry ficam a no mínimo 25,5 mm de centro a centro, e os parafusos aparecem nos desenhos dos painéis. Ver [Fixação no painel](korry/README.md#fixação-no-painel).
