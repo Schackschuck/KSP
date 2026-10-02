@@ -75,6 +75,15 @@ assert(led_y - 1.9 > chave / 2, "LED encosta na chave");
 assert(led_y + 1.9 < lado / 2, "LED encosta na parede");
 
 vidro = [0.85, 0.92, 1];
+escuro = 0.62;
+cortar = peca == "corte";
+
+module pinta(c) {
+    if (cortar) {
+        color([c[0] * escuro, c[1] * escuro, c[2] * escuro, len(c) == 4 ? c[3] : 1]) render() difference() { children(); translate([-0.1, -50, -50]) cube([100, 100, 100]); }
+        color(c) render() intersection() { children(); translate([-0.1, -50, -50]) cube([0.1, 100, 100]); }
+    } else color(c) children();
+}
 
 module bloco(x0, x1, y0, y1, z0, z1) {
     translate([x0, y0, z0]) cube([x1 - x0, y1 - y0, z1 - z0]);
@@ -217,30 +226,30 @@ module suporte() {
 }
 
 module chave_ref() {
-    color("lightgray") bloco(-chave / 2, chave / 2, -chave / 2, chave / 2, chave_z, suporte_z);
-    color("black") bloco(-haste_x / 2, haste_x / 2, -haste_y / 2, haste_y / 2, haste_z + pre_carga, chave_z);
-    color("gold") for (x = [-pino_passo, 0, pino_passo], y = [-pino_fileiras / 2, pino_fileiras / 2])
+    pinta([0.83, 0.83, 0.83]) bloco(-chave / 2, chave / 2, -chave / 2, chave / 2, chave_z, suporte_z);
+    pinta([0, 0, 0]) bloco(-haste_x / 2, haste_x / 2, -haste_y / 2, haste_y / 2, haste_z + pre_carga, chave_z);
+    pinta([1, 0.84, 0]) for (x = [-pino_passo, 0, pino_passo], y = [-pino_fileiras / 2, pino_fileiras / 2])
         bloco(x - 0.25, x + 0.25, y - 0.2, y + 0.2, suporte_z, suporte_z + pino_c);
 }
 
 module leds_ref() {
     for (y = [-led_y, led_y]) translate([0, y, 0]) {
-        color("white") translate([0, 0, suporte_z - 3.8]) { cylinder(d = 3, h = 3.8); sphere(d = 3); }
-        color("gold") for (x = [-led_pernas / 2, led_pernas / 2])
+        pinta([1, 1, 1]) translate([0, 0, suporte_z - 3.8]) { cylinder(d = 3, h = 3.8); sphere(d = 3); }
+        pinta([1, 0.84, 0]) for (x = [-led_pernas / 2, led_pernas / 2])
             bloco(x - 0.25, x + 0.25, -0.25, 0.25, suporte_z, suporte_z + suporte_esp + 3);
     }
 }
 
 module painel_ref() {
-    color([0.19, 0.21, 0.23, 0.55]) difference() {
+    pinta([0.19, 0.21, 0.23, 0.55]) difference() {
         translate([-20, -20, 0]) cube([40, 40, painel]);
         translate([-11.5, -11.5, -1]) cube([23, 23, painel + 2]);
     }
 }
 
 module legenda_cores() {
-    color("dimgray") legenda_preto();
-    color(vidro) legenda_transparente();
+    pinta([0.41, 0.41, 0.41]) legenda_preto();
+    pinta(vidro) legenda_transparente();
 }
 
 module teste_folga() {
@@ -256,34 +265,29 @@ module teste_folga() {
     }
 }
 
-module montagem(corte = true) {
-    difference() {
-        union() {
-            painel_ref();
-            legenda_cores();
-            color("dimgray") corpo();
-            color("gray") translate([0, 0, painel]) base();
-            color("darkslategray") suporte();
-            chave_ref();
-            leds_ref();
-        }
-        if (corte) translate([0, -50, -20]) cube([100, 100, 100]);
-    }
+module montagem() {
+    painel_ref();
+    legenda_cores();
+    pinta([0.41, 0.41, 0.41]) corpo();
+    pinta([0.5, 0.5, 0.5]) translate([0, 0, painel]) base();
+    pinta([0.18, 0.31, 0.31]) suporte();
+    chave_ref();
+    leds_ref();
 }
 
 module explodida() {
     legenda_cores();
-    color("dimgray") translate([0, 0, 12]) corpo();
-    color("gray") translate([0, 0, 40]) base();
+    pinta([0.41, 0.41, 0.41]) translate([0, 0, 12]) corpo();
+    pinta([0.5, 0.5, 0.5]) translate([0, 0, 40]) base();
     translate([0, 0, 70]) {
-        color("darkslategray") suporte();
+        pinta([0.18, 0.31, 0.31]) suporte();
         chave_ref();
         leds_ref();
     }
 }
 
-if (peca == "montagem") montagem(true);
-if (peca == "corte") rotate([0, 90, 0]) montagem(true);
+if (peca == "montagem") montagem();
+if (peca == "corte") rotate([0, 90, 0]) montagem();
 if (peca == "frente") legenda_cores();
 if (peca == "explodida") explodida();
 if (peca == "legenda_preto") translate([0, 0, tampa]) legenda_preto();
