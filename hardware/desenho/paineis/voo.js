@@ -16,11 +16,11 @@ module.exports = function () {
   s += P.encoderArc(182, 64, 20.5) + P.encoder(182, 64, 15);
   s += t(182, 92, "APERTAR: ESCOLHE", 1.9, "middle", apoio) + t(182, 96, "SEGURAR: LIGA", 1.9, "middle", apoio);
   [["HDG", C.green], ["ALT", null], ["V/S", C.green]].forEach(function (m, j) {
-    var y = 44 + j * 10;
-    s += t(229, y + .9, m[0], 2.4, "end") + P.led(234, y, !!m[1], m[1] || C.green);
+    var y = 40 + j * 12;
+    s += t(225, y + .9, m[0], 2.4, "end") + P.led5(232, y, !!m[1], m[1] || C.green);
   });
-  s += '<line x1="218" y1="78" x2="238" y2="78" stroke="' + apoio + '" stroke-width=".25"/>';
-  s += t(229, 85.4, "ESTOL", 2.4, "end", C.red) + P.led(234, 84.5, false, C.red);
+  s += '<line x1="216" y1="73" x2="238" y2="73" stroke="' + apoio + '" stroke-width=".25"/>';
+  s += t(225, 82.9, "ESTOL", 2.4, "end", C.red) + P.led5(232, 82, false, C.red);
   s += t(193, 112, "VALORES NA PAGINA PILOTO DA TELA", 1.9, "middle", apoio);
   return { w: W, h: L, corpo: P.panel(W, L, "VOO", s),
     rotulo: "Voo, 250 por 125 mm: os dez modos do SAS com o PRO aceso, korry SAS, RCS, FBW e TRAVA ALT, e o encoder do piloto automatico com as luzes HDG, ALT, V/S e ESTOL" };

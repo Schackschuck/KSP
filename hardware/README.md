@@ -122,7 +122,7 @@ Assim, não existe tabela de slots no firmware. O Mega avisa a ponte qual módul
 | [Acelerador](construcao.md#acelerador) (alavanca analógica, trem, freios e luzes) | 3 | 3 | pequena, slots 1 a 5 | 5 | 1, 3, 7 |
 | [Recursos e EVA](construcao.md#recursos-e-eva) | 6 | 2 | pequena | 6 | 2, 3, 7 |
 | [Voo](construcao.md#painel-de-sistemas-de-controle) (sistemas de controle: SAS, RCS, FBW e piloto automático) | 17 | 31 | grande | 7 | 1, 2, 3, 7, 8 |
-| [Action groups](construcao.md#action-groups) (1 a 10 e as peças) | 14 | 4 | média | 8 | 4, 8 |
+| [Action groups](construcao.md#action-groups) (1 a 8 e as peças) | 12 | 4 | média | 8 | 4, 8 |
 | [Câmera](construcao.md#câmera) | 5 | 2 | pequena | 9 | 1, 4, 7 |
 | [Navegação](construcao.md#navegação) | 10 | 0 | média | 10 | 2, 4, 8 |
 | [Editor de manobras](construcao.md#painel-do-editor-de-manobras) | 16 | 3 | média | 12 | 3, 4, 8 |

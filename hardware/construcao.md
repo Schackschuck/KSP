@@ -61,17 +61,17 @@ Todos existem e são vendidos em lojas de eletrônica e no AliExpress. As medida
 | Encoder EC11 com botão + knob de alumínio de 30 mm | 3 | Piloto automático, alvo, Δv | Eixo de 6 mm, 20 cliques por volta, furo de 7 mm |
 | Chave rotativa 1P12T com batente + knob de ponteiro | 2 | PASSO, REFERENCIA | Furo de 10 mm, corpo Ø ~26 mm |
 | Tecla KCD1 (ON)-OFF-(ON) | 2 | WARP, TEMPO do editor | 21 × 15 mm, furo de 19 × 13 mm |
-| Botão de metal de 12 mm sem trava | 36 | Action groups, páginas, navegação, editor, tempo, câmera, EVA | Cabeça Ø ~14 mm |
+| Botão de 16 mm sem trava (R16-503 ou R13-507) | 34 | Action groups, páginas, navegação, editor, tempo, câmera, EVA | Anel Ø 20 mm, cabeça Ø 13 mm, rosca M16 × 1, 24,8 mm de altura. Furo em D: Ø 16 mm com um lado reto a 15 mm |
 | Botão de metal de 22 mm com anel de LED | 2 | ABORT (vermelho), STAGE (branco) | Cabeça Ø ~25 mm. LED de 5 V ou de 3 V |
 | Capa transparente para botão de 22 mm | 2 | ABORT, STAGE | 39 × 34 × 17 mm, colada |
-| Capa "missile" para furo de 12 mm | 2 | CARREGAR, REVERTER | 46,6 × 17 × 27,8 mm, já na bancada |
+| Capa impressa para botão de 16 mm | 2 | CARREGAR, REVERTER | 24 × 40 mm, a desenhar |
 | Capa impressa para korry | 1 | IVA | A desenhar |
 | Potenciômetro deslizante Bourns PTA6043, 10 kΩ linear | 1 | Acelerador | 75 × 9 × 6,5 mm, curso de 60 mm |
 | Joystick JH-D400X-R4, 10 kΩ, com botão | 1 | Sidestick | X e Y ±25 a 30°, torção ±45°. Corpo de ~50 mm; furo a medir |
 | Tela Waveshare 7" HDMI LCD (C), toque capacitivo | 1 | Tela multifunção | 164,9 × 107 × 8 mm, imagem de 154,2 × 85,9 mm, 1024 × 600 |
 | Barra de 10 LEDs verde (Kingbright DC-10GWA) | 5 | Recursos e EVA | 25,4 × 10,16 mm |
 | MAX7219 | 1 | Acende as 5 barras (50 LEDs) | Ligado direto no Mega, fora do backplane |
-| LED de 3 mm com anel de metal | 7 | HDG, ALT, V/S, ESTOL, modos do sidestick | Anel Ø 5 mm |
+| LED de 5 mm difuso, no suporte de plástico com porca | 7 | HDG, ALT, V/S, ESTOL, modos do sidestick | Anel Ø 9 mm, furo de 6,5 mm (conferir no suporte); 12 mm entre centros |
 | Alto-falante USB | 1 | Avisos de voz, atrás da grade da tela | |
 
 ## Construção
@@ -158,7 +158,7 @@ Painel duplo, de 250 × 125 mm. O que cada controle faz está no [roteiro da fas
 - **DELTA-V:** três korry escolhem o eixo (PRO, NRM, RAD), e o encoder mexe nele: horário soma, anti-horário tira. A legenda do eixo escolhido acende na cor da alça do nó no KSP: verde-amarelo, magenta e ciano.
 - **PERCURSO:** anda pelo caminho da nave, nos dois sentidos. A tecla do TEMPO, deitada, move o nó pela órbita; ANT e PROX, embaixo dela e no mesmo sentido, trocam de nó.
 - **PASSO:** chave rotativa com a legenda gravada em volta. O ponteiro do knob mostra o passo, sem LED e sem olhar a tela.
-- **NO:** NOVO, APAGAR e CIRC, botões de metal: não têm estado para mostrar.
+- **NO:** NOVO, APAGAR e CIRC, botões de 16 mm: não têm estado para mostrar.
 - **Sem tela:** os números do nó vão para a página do editor na tela multifunção.
 - 16 entradas e 3 LEDs: placa média. O desenho de 150 mm está em [`img/antigos/editor_manobras.svg`](img/antigos/editor_manobras.svg).
 
@@ -187,7 +187,7 @@ Os scripts de voo que pilotam a nave sozinhos, um korry por script, na metade di
 ![Tempo: tecla do WARP, PARAR, korry FISICO e ATE O NO em cima; PAUSA, SALVAR, e CARREGAR e REVERTER com capa embaixo](img/tempo.svg)
 
 - **ACELERAR:** a tecla do WARP, deitada como a do editor: para a esquerda mais devagar, para a direita mais rápido (`rails_warp_factor` e `physics_warp_factor`). Segurando, repete. **PARAR** volta ao tempo normal. **FISICO** escolhe o warp físico e acende em branco com ele ligado (`warp_mode`). **ATE O NO** acelera até o próximo nó de manobra (`warp_to`).
-- **JOGO:** PAUSA (`krpc.paused`), SALVAR (`quicksave`), CARREGAR (`quickload`) e REVERTER (volta ao lançamento, `revert_to_launch`). Os dois últimos perdem o voo atual e ficam debaixo de capas "missile".
+- **JOGO:** PAUSA (`krpc.paused`), SALVAR (`quicksave`), CARREGAR (`quickload`) e REVERTER (volta ao lançamento, `revert_to_launch`). Os dois últimos perdem o voo atual e ficam debaixo de capas impressas.
 - 9 entradas e 1 LED: placa média.
 
 ## Navegação
@@ -201,11 +201,11 @@ Os scripts de voo que pilotam a nave sozinhos, um korry por script, na metade di
 
 ## Action groups
 
-![Action groups: dez botões de metal e os korry PARAQUEDAS, SOLAR, ANTENAS e CARGA](img/action_groups.svg)
+![Action groups: oito botões e os korry PARAQUEDAS, SOLAR, ANTENAS e CARGA](img/action_groups.svg)
 
-- **GRUPOS:** os action groups 1 a 10, botões de metal (`toggle_action_group`). Não têm luz: o que cada grupo faz muda de nave para nave.
+- **GRUPOS:** os action groups 1 a 8, botões de 16 mm em duas fileiras de 4 (`toggle_action_group`). Não têm luz: o que cada grupo faz muda de nave para nave. O 9 e o 10 ficam no teclado: com o anel de 20 mm, 5 botões por fileira não cabem no painel.
 - **PECAS:** PARAQUEDAS, SOLAR, ANTENAS e CARGA (`control.parachutes`, `solar_panels`, `antennas`, `cargo_bays`), em korry verdes que acendem com as peças abertas.
-- 14 entradas e 4 LEDs: placa média.
+- 12 entradas e 4 LEDs: placa média.
 
 ## Câmera
 
@@ -221,7 +221,7 @@ Os scripts de voo que pilotam a nave sozinhos, um korry por script, na metade di
 ![Recursos e EVA: quatro barras de 10 LEDs e os controles do kerbal](img/recursos_eva.svg)
 
 - **RESTANTE:** quatro barras de 10 LEDs, com o que resta no estágio atual de combustível líquido, oxidante, monopropelente e eletricidade. As barras são acesas por um MAX7219 ligado direto no Mega, fora do backplane.
-- **EVA:** o kerbal fora da nave. JATO abre a mochila e LUZ liga a lanterna do capacete; SAIR, EMBARCAR, AGARRAR e SOLTAR (a escada). Andar, virar e voar com a mochila são feitos pelo sidestick, e a barra MONO mostra a mochila.
+- **EVA:** o kerbal fora da nave. JATO abre a mochila e LUZ liga a lanterna do capacete, os dois korry no meio; embaixo, numa fileira, SAIR, EMBARCAR, AGARRAR e SOLTAR (a escada). Andar, virar e voar com a mochila são feitos pelo sidestick, e a barra MONO mostra a mochila.
 - **Precisa do kRPC 0.7:** no 0.6, o kRPC não mexe num kerbal em EVA (`control.rcs` e `lights` só ligam os grupos da nave, e não há como andar, sair ou embarcar). O 0.7 traz tudo isso, mas ainda não foi lançado. Não há comando para pular em nenhuma versão.
 - 6 entradas e 2 LEDs: placa pequena.
 

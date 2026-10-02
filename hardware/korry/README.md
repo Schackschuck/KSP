@@ -70,7 +70,7 @@ Na [versão B do cockpit](../construcao.md#cockpit-versão-b) são 35:
 | Câmera | 2 | MAPA e IVA: uma legenda, branca. O IVA com capa |
 | Tempo | 1 | FISICO: uma legenda, branca |
 
-Os botões que não têm luz para mostrar (os action groups 1 a 10, NOVO, APAGAR, CIRC) viraram botões de metal comuns.
+Os botões que não têm luz para mostrar (os action groups 1 a 8, NOVO, APAGAR, CIRC) viraram botões de 16 mm comuns.
 
 ## Legendas
 
@@ -136,7 +136,7 @@ Os korry de um grupo ficam presos numa **grade**: uma peça preta com as bases d
 - **Parafuso:** M3 autoatarraxante, de 8 mm, **pela frente do painel**, com a cabeça na frente. O painel tem furo de 3,2 mm; a orelha da grade, de 2,5 mm, onde o parafuso abre a rosca no PLA. O painel (3 mm) mais a orelha (5 mm) dão os 8 mm do parafuso.
 - **Orelhas:** 7 mm de largura, do furo até a parede da base mais próxima, com a ponta redonda. Ficam encostadas atrás do painel, no mesmo plano das bases.
 - **Posição dos parafusos:** nas pontas do grupo, onde há espaço. Os que ficam perto da borda do painel ficam a 6 mm dela, alinhados com os parafusos de canto do painel.
-- **Um parafuso só** na grade do FISICO: o korry dentro do furo do painel impede a grade de girar em torno do parafuso.
+- **Um parafuso só** na grade do FISICO, embaixo do korry, porque do lado não sobra lugar para o ATE O NO: o korry dentro do furo do painel impede a grade de girar em torno do parafuso.
 - **Korry afastados** (a `vista`, com passo de 31 mm): o fechamento não une as bases sozinho, e a grade ganha uma barra de 6 mm no plano das orelhas.
 - **Passo mínimo de 25,5 mm** de centro a centro entre korry vizinhos: 25,3 mm do tubo mais 0,2 mm entre vizinhos. A base não muda com a `folga`: quem diminui é o korry. Os ganchos e os ressaltos alternados é que deixam as paredes se encostarem. O `korry.scad` recusa grades com korry mais perto.
 - **Posição:** as coordenadas do `grades.json` são as do desenho do painel (origem no canto de cima à esquerda, `y` para baixo), em mm. Os parafusos aparecem nos desenhos dos painéis.
@@ -147,11 +147,11 @@ Os korry de um grupo ficam presos numa **grade**: uma peça preta com as bases d
 | `voo_sistemas` | Voo | 4 em fila | 26 | (6, 99,25) e (119,75, 99,25) |
 | `scripts` | Ação executiva | 6 (2 × 3) | 25,5 × 26,5 | (119, 35,25) e (119, 88,25) |
 | `rodas` | Acelerador | 3 em coluna | 27 | (76,5, 64,25) e (108,5, 64,25) |
-| `pecas` | Action groups | 4 em fila | 25,5 | (6, 98,25) e (119, 98,25) |
+| `pecas` | Action groups | 4 em fila | 25,5 | (6, 100,25) e (119, 100,25) |
 | `vista` | Câmera | 2 em fila | 31 | (6, 37,25) e (75, 37,25) |
 | `deltav` | Editor de manobras | 3 em coluna | 25,5 | (26,75, 25,25) e (26,75, 108,25) |
-| `eva` | Recursos e EVA | 2 em fila | 25,5 | (6, 92,25) e (65,75, 92,25) |
-| `fisico` | Tempo | 1 | | (88,25, 36) |
+| `eva` | Recursos e EVA | 2 em fila | 25,5 | (33,75, 77,25) e (91,25, 77,25) |
+| `fisico` | Tempo | 1 | | (74,75, 52) |
 
 São 17 parafusos no total. O `voo_sas` tem um parafuso em cima, entre o título e o grupo, e o `scripts` tem os dois à direita do grupo.
 
