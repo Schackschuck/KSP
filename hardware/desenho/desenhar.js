@@ -16,6 +16,18 @@ var pastaPaineis = path.join(__dirname, "paineis");
 var pastaImg = path.join(__dirname, "..", "img");
 var pastaAntigos = path.join(__dirname, "antigos");
 var pastaImgAntigos = path.join(pastaImg, "antigos");
+var grades = require("../korry/grades.json");
+
+grades.forEach(function (g) {
+  var arquivo = require.resolve(path.join(pastaPaineis, g.painel + ".js"));
+  var original = require(arquivo);
+  var parafusos = g.parafusos;
+  require.cache[arquivo].exports = function () {
+    var d = original();
+    parafusos.forEach(function (p) { d.corpo += P.screw(p[0], p[1]); });
+    return d;
+  };
+});
 
 function gerar(arquivo, destino) {
   var d = require(arquivo)();

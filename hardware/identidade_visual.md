@@ -62,7 +62,7 @@ Sempre as mesmas peças, no mesmo tamanho, para os painéis combinarem e as peç
 
 | Peça | Na frente | Furo | Para quê |
 |---|---|---|---|
-| [Korry](korry/README.md) | 22,5 × 22,5 mm | 23 × 23 mm | Tudo que liga, desliga ou escolhe e tem um estado no jogo: a legenda acesa é o estado. Nos modos do SAS, a legenda é o marcador da navball, com a palavra embaixo |
+| [Korry](korry/README.md) | 22,5 × 22,5 mm, passo de 25,5 mm | 23 × 23 mm | Tudo que liga, desliga ou escolhe e tem um estado no jogo: a legenda acesa é o estado. Nos modos do SAS, a legenda é o marcador da navball, com a palavra embaixo |
 | Botão de metal sem trava | Ø 14 mm | Ø 12 mm | Ações sem estado para mostrar: action groups, ANT e PROX, páginas da tela, FOTO |
 | LED de 3 mm com anel de metal | anel Ø 5 mm | Ø 5 mm | Mostrar um estado sem gastar um botão: os modos do piloto automático (verde), o ESTOL (vermelho, piscando), o modo do sidestick (branco) |
 | Barra de 10 LEDs | 25,4 × 10,16 mm | 25,6 × 10,4 mm | Uma quantidade: o que resta de combustível, oxidante, monopropelente e eletricidade, e a mochila da EVA |
@@ -77,6 +77,8 @@ Sempre as mesmas peças, no mesmo tamanho, para os painéis combinarem e as peç
 | Capa impressa para korry | 27,5 × 28,5 mm | colada | IVA |
 
 - **3 mm de borda a borda** entre peças vizinhas, no mínimo.
+- **Korry: 25,5 mm de centro a centro** entre vizinhos, no mínimo (22,5 mm do korry mais 3 mm). É o que cabe nas bases de 25,3 mm da grade impressa, e o `korry.scad` recusa menos que isso.
+- **Parafusos das grades dos korry:** cada grupo de korry é preso atrás do painel por uma grade parafusada, com M3 pela frente num furo de 3,2 mm. Os parafusos ficam nas pontas do grupo, os da beira do painel a 6 mm da borda (alinhados com os parafusos de canto), e entram nos desenhos. Não podem cair em cima de outro controle, de uma legenda nem da linha do grupo. As posições estão em [`korry/grades.json`](korry/grades.json) e a explicação em [korry/README.md](korry/README.md#fixação-no-painel).
 - **Zona de perigo:** faixa zebrada amarela e preta em volta, com capa de proteção. Só o ABORT.
 - **Capa no que não tem volta:** ABORT, STAGE, IVA, CARREGAR e REVERTER.
 - **Sem tela nos módulos:** os números vão para a tela multifunção, no meio do cockpit, que troca para a página do módulo em uso.
