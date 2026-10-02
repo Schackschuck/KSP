@@ -92,7 +92,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **A ponte abre o script num processo próprio** e aborta com o Ctrl+C | O script continua sendo o mesmo da linha de comando, e o Ctrl+C já corta o motor e devolve a nave. O estado volta pelo UDP, como no fly by wire, e o código de saída diz se a nave pousou. |
 | **Um joystick só, no painel** (JH-D400X-R4, um sidestick à direita), com o botão do manche trocando o modo | O cockpit fica como um avião: acelerador na mão esquerda, sidestick na direita. Os 3 eixos cabem nas 3 linhas analógicas de um slot do backplane, e o botão passa pelos modos VOO, CÂMERA e TRANSLAÇÃO, com três luzes. Passando pela ponte, dá para ter zona morta e saber quando o piloto mexe no manche para tirar o controle de um script. O Extreme 3D Pro fica para desenvolver no PC. |
 | **Uma tela no meio para todos os módulos**, a tela multifunção de 7", no lugar de um LCD por módulo | Os olhos vão sempre ao mesmo lugar, os painéis ficam menores e só com botões, e sai um LCD por módulo da lista de compras. A página troca sozinha para o módulo em uso e volta depois, então não é preciso escolher a página na mão. Quem decide a troca é a ponte, que já recebe todos os eventos do painel: a tela continua só desenhando. |
-| **Korry switches** (botões iluminados com legenda, de avião) onde a luz mostra um estado do jogo | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: impressos em duas cores numa peça só, com a legenda transparente, e uma plaquinha de placa perfurada atrás ([hardware/korry/](hardware/korry/README.md)). O que não tem estado para mostrar é botão de metal. |
+| **Korry switches** (botões iluminados com legenda, de avião) onde a luz mostra um estado do jogo | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: a legenda impressa em duas cores encaixa num corpo igual para todos, e a chave e os LEDs vão num suporte impresso atrás, sem placa perfurada ([hardware/korry/](hardware/korry/README.md)). O que não tem estado para mostrar é botão de metal. |
 | **Cockpit em U, de 766 × 391 mm, com painéis de 125 mm** ([versão B](hardware/construcao.md#cockpit-versão-b)) | Um bloco no meio e duas asas, como num avião, sem painel vazio. Os controles foram juntados em 11 painéis para a caixa não passar de 80 cm; o que não cabe em 125 mm ocupa dois quadrados. O que cada botão faz foi conferido no código-fonte do kRPC antes de desenhar. |
 | **Tela de 7" no Pi** no lugar da mikromedia | A tela de 2,8" da mikromedia ficou pequena no meio do cockpit. A de 7" mostra a mesma página que o celular já usa, pelo HDMI, sem firmware novo. O firmware da mikromedia continua no repositório, fora do cockpit. |
 | **Caixa em MDF cortado a laser, com peças impressas em 3D** | A laser do colégio faz as peças planas e grandes (paredes, painéis com legendas); a impressora de casa, as pequenas e complicadas (korry, knobs, suportes). Cada seção é um painel removível com o seu módulo atrás. |
@@ -119,7 +119,7 @@ firmware/mfd/     mikromedia for ARM / LPC2148 (C, compilado com o LLVM pelo com
 hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa; ver hardware/README.md
                   e hardware/construcao.md (o cockpit da versão B, a caixa e os painéis);
                   cada peça própria numa pasta, com ficha e desenhos (hardware/korry/:
-                  modelo no OpenSCAD, STL e a plaquinha em placa perfurada);
+                  modelo no OpenSCAD, STL e o desenho da ligação);
                   identidade visual (hardware/identidade_visual.md) e desenhos dos painéis
                   gerados por código (hardware/desenho/, SVG em hardware/img/)
 docs/             protocolo serial, pinagem, anotações
@@ -190,7 +190,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - Enquanto o primeiro módulo não fica pronto, os controles básicos continuam direto nos pinos do Mega, como em [docs/fase2.md](docs/fase2.md).
 - Próximo passo: o firmware do Mega lendo a fila de módulos pelas etiquetas, e testar o primeiro módulo direto no Mega.
 - **Sidestick e acelerador no painel:** um joystick JH-D400X-R4 de 3 eixos, com o botão do manche trocando entre VOO, CÂMERA e TRANSLAÇÃO, e uma alavanca deslizante de 60 mm, os dois lidos pelo Mega nas linhas analógicas do backplane ([sidestick](hardware/construcao.md#sidestick), [acelerador](hardware/construcao.md#acelerador)). O Extreme 3D Pro fica para desenvolver no PC; mapeamento em [hardware/construcao.md](hardware/construcao.md#joystick-logitech-extreme-3d-pro).
-- **Korry switches:** botões iluminados com legenda, como nos aviões, 35 no cockpit. Impressos em duas cores na FlashForge Inventor, com a plaquinha em placa perfurada. O modelo, os STL de teste e a montagem estão em [hardware/korry/](hardware/korry/README.md); o primeiro passo é o teste de folga e um korry ligado direto no Mega.
+- **Korry switches:** botões iluminados com legenda, como nos aviões, 35 no cockpit. Legenda impressa em duas cores na FlashForge Inventor, encaixada num corpo igual para todos, com a chave e os LEDs num suporte impresso. O modelo, os STL de teste e a ligação estão em [hardware/korry/](hardware/korry/README.md); o primeiro passo é o teste de folga e um korry ligado direto no Mega.
 
 **A fazer na ponte, para a versão B** (o que cada controle faz e o comando do kRPC estão em [hardware/construcao.md](hardware/construcao.md#os-painéis)):
 
@@ -487,7 +487,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [x] Joystick: Logitech Extreme 3D Pro (para desenvolver no PC)
 - [ ] Sidestick: 1× joystick JH-D400X-R4, 10 kΩ, 3 eixos com botão
 - [ ] Acelerador: 1× potenciômetro deslizante Bourns PTA6043, 10 kΩ linear, curso de 60 mm
-- [ ] 35 korry switches ([lista completa](hardware/korry/README.md#lista-de-peças-um-korry)), cada um com 1 botão tátil 6 × 6 × 5 mm, até 2 LEDs difusos de alto brilho de 3 mm, 10 × 10 furos de placa perfurada de dupla face e 1 conector JST-XH de 4 vias; filamento PLA preto e transparente
+- [ ] 35 korry switches ([lista completa](hardware/korry/README.md#lista-de-peças-um-korry)), cada um com 1 chave PSW 8,5 × 8,5 mm sem trava, até 2 LEDs difusos de alto brilho de 3 mm, 4 fios finos e 1 conector JST-XH fêmea de 4 vias com os terminais; filamento PLA preto e transparente
 - [ ] 10× LED azul e verde de 3 mm, difuso, catodo comum (korry dos modos do SAS)
 - [ ] 36× botão de metal de 12 mm sem trava
 - [ ] 2× botão de metal de 22 mm com anel de LED (vermelho e branco), de 5 V ou 3 V, e 2× capa transparente para botão de 22 mm

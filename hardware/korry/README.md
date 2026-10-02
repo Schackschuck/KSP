@@ -2,29 +2,41 @@
 
 O botão iluminado quadrado dos aviões, feito em casa: a legenda fica no próprio botão e acende. É uma peça só, **do mesmo tamanho em todo o cockpit**, usada em vários painéis. Por que usar korry e onde ele entra no painel está em [construcao.md](../construcao.md#korry-switches).
 
-**Status: modelo pronto para o primeiro teste de impressão, nada construído.** O corpo sai da impressora em duas cores, a plaquinha é de placa perfurada e não há peça de laser nem placa fabricada.
+**Status: modelo pronto para o primeiro teste de impressão, nada construído.** São quatro peças impressas e não há placa perfurada, peça de laser nem placa fabricada: a chave e os LEDs encaixam direto num suporte impresso. Só a **legenda**, em duas cores, muda de korry para korry; o **corpo**, a **base** e o **suporte** são pretos e iguais para todos.
 
 | Frente | Corte | Peças |
 |---|---|---|
-| ![Frente do korry de teste: SAS em cima e SEM EC na caixa embaixo](img/frente.png) | ![Corte do korry montado no painel](img/corte.png) | ![Korry explodido: corpo, base e plaquinha](img/explodida.png) |
+| ![Frente do korry de teste: SAS em cima e SEM EC na caixa embaixo](img/frente.png) | ![Corte do korry montado no painel](img/corte.png) | ![Korry explodido: legenda, corpo, base, suporte, chave e LEDs](img/explodida.png) |
 
 ## Arquivos
 
 | Arquivo | O que é |
 |---|---|
 | [`korry.scad`](korry.scad) | O modelo no [OpenSCAD](https://openscad.org/), com as medidas e a legenda nas primeiras linhas. Para as letras saírem certas, instalar a fonte [B612](https://fonts.google.com/specimen/B612) Bold |
-| [`stl/korry_preto.stl`](stl/korry_preto.stl) e [`stl/korry_transparente.stl`](stl/korry_transparente.stl) | O corpo do korry de teste (`SAS` / `SEM EC`), nas mesmas coordenadas, para imprimir junto com os dois bicos |
+| [`stl/legenda_preto.stl`](stl/legenda_preto.stl) e [`stl/legenda_transparente.stl`](stl/legenda_transparente.stl) | A legenda do korry de teste (`SAS` / `SEM EC`), nas mesmas coordenadas, para imprimir junto com os dois bicos |
+| [`stl/korry_corpo.stl`](stl/korry_corpo.stl) | O corpo, igual para todos. Preto, um bico só |
 | [`stl/korry_base.stl`](stl/korry_base.stl) | A base, que fica atrás do painel. Preta, um bico só |
+| [`stl/korry_suporte.stl`](stl/korry_suporte.stl) | O suporte da chave e dos LEDs. Preto, um bico só |
 | [`stl/korry_teste.stl`](stl/korry_teste.stl) | O teste de folga: 5 encaixes de 0,1 a 0,3 mm e um pedaço do corpo |
-| [`placa_perfurada.js`](placa_perfurada.js) | Gera [`placa_perfurada.svg`](placa_perfurada.svg), a montagem da plaquinha: `node hardware/korry/placa_perfurada.js` |
+| [`ligacao.js`](ligacao.js) | Gera [`ligacao.svg`](ligacao.svg), o desenho da ligação da chave e dos LEDs: `node hardware/korry/ligacao.js` |
 | [`korry.svg`](korry.svg) | O desenho da primeira especificação, com a tampa de acrílico: os quatro estados da legenda continuam valendo |
 
-Para gerar um STL com outra legenda: `openscad -D 'peca="preto"' -D 'texto_cima="RCS"' -D 'texto_baixo="SEM MP"' -o korry_preto.stl korry.scad`, e o mesmo com `peca="transparente"`. Com `texto_baixo=""`, a legenda é única.
+Para gerar outra legenda: `openscad -D 'peca="legenda_preto"' -D 'texto_cima="RCS"' -D 'texto_baixo="SEM MP"' -o legenda_preto.stl korry.scad`, e o mesmo com `peca="legenda_transparente"`. Com `texto_baixo=""`, a legenda é única. O corpo, a base e o suporte não mudam.
+
+Para gerar de novo os STL das peças iguais para todos, dentro de `hardware/korry/`: `openscad -D 'peca="corpo"' -o stl/korry_corpo.stl korry.scad`, e o mesmo com `peca="base"` e `peca="suporte"`.
+
+As imagens saem do próprio `korry.scad`, dentro de `hardware/korry/` (no Linux sem tela, com `xvfb-run -a` na frente). O `peca="corte"` mostra a montagem cortada ao meio, com a face cortada nas cores das peças; o `peca="montagem"` é a montagem inteira, sem corte.
+
+```
+openscad -D 'peca="frente"' --imgsize=600,600 --projection=o --viewall --autocenter --camera=0,0,0,0,180,0,100 --colorscheme=Tomorrow -o img/frente.png korry.scad
+openscad -D 'peca="corte"' --imgsize=800,560 --projection=o --viewall --autocenter --camera=0,0,0,0,180,0,100 --colorscheme=Tomorrow -o img/corte.png korry.scad
+openscad -D 'peca="explodida"' --imgsize=800,600 --viewall --autocenter --camera=0,0,0,-25,210,0,200 --colorscheme=Tomorrow -o img/explodida.png korry.scad
+```
 
 ## Referências
 
 - **Aparência:** o botão START do A320, com a legenda em duas metades: em cima `AVAIL`, só as letras; embaixo `ON`, dentro de uma caixa. Cada metade acende sozinha, na sua cor. Apagadas, as legendas continuam legíveis.
-- **Circuito:** uma plaquinha atrás do corpo, com o botão e os LEDs, e um conector de poucos pinos saindo por trás.
+- **Circuito:** uma chave e dois LEDs encaixados num suporte impresso atrás do corpo, ligados por um rabicho de 4 fios com um conector de 4 vias na ponta.
 
 ## Onde vai
 
@@ -49,41 +61,48 @@ Os botões que não têm luz para mostrar (os action groups 1 a 10, NOVO, APAGAR
 |---|---|---|
 | Frente | **22,5 × 22,5 mm** | Igual em todos |
 | Furo no painel | 23 × 23 mm | 0,25 mm de folga por lado. Conferir na plaquinha de teste da laser, que queima um pouco em volta do corte |
-| Saliência na frente do painel | 3 mm | A parte transparente com a legenda |
-| Corpo | 21 mm de fundo | Da frente até os ressaltos de trás |
+| Saliência na frente do painel | 3 mm | A legenda. O corpo anda ~2,2 mm até a chave chegar ao fim (curso de 2,5 mm menos 0,3 mm de pré-carga) e a legenda ainda sai ~0,8 mm do painel |
+| Corpo | 16 mm de fundo | Da frente até os ressaltos de trás |
 | Base | 25,3 × 25,3 mm, 16 mm de fundo | Cabe no passo de 25,5 mm entre korry vizinhos |
-| Atrás do painel | ~20 mm | Até os ganchos atrás da plaquinha. Somar o conector e o cabo |
+| Suporte | 25,3 × 25,3 × 1,6 mm | Preso pelos ganchos da base |
+| Atrás do painel | ~22 mm | Até as pernas da chave, que saem atrás do suporte. Somar os fios |
 | Distância entre korry vizinhos | 3 mm | De borda a borda |
+| Legenda | 22,5 × 22,5 × 3 mm | Encaixa por pressão na ponta do corpo, com duas abas |
 | Legenda de cima | letras de 3 mm | B612 Bold |
 | Legenda de baixo | letras de 2,4 mm, numa caixa de 15 × 5,6 mm | Como o `ON` do A320 |
 | Legenda única | letras de 3 mm, centradas | Sem a divisória |
-| Plaquinha | 25,4 × 25,4 mm | 10 × 10 furos de placa perfurada |
+| Chave | PSW 8,5 × 8,5 mm, 8 mm de altura | O êmbolo sai 5,5 mm e tem 2 × 3 mm |
+| Curso da chave | ~2,5 mm | Conferir na chave real |
+| Divisória | No centro do korry | A do corpo começa 4 mm atrás da legenda. Na legenda única, a luz das duas metades se mistura nesse vão; na de duas metades, uma aleta preta da legenda fecha o vão |
 
 ## Peças
 
-- **Corpo**, impresso em duas cores numa peça só, de frente para baixo na mesa:
-  - **Preto:** as paredes de 1 mm, uma camada de 0,6 mm na frente com a legenda vazada, a divisória que separa a luz das duas metades e o pino que aperta o botão tátil. Dois ressaltos nos lados correm nos trilhos da base e seguram o corpo.
-  - **Transparente:** as letras da legenda, nos furos da camada preta, e 2,4 mm atrás dela, divididos em dois pela divisória. Apagada, a legenda aparece clara; acesa, na cor do LED.
-- **Base:** um tubo preto atrás do painel, com os trilhos por onde o corpo desliza e dois ganchos que prendem a plaquinha. Fica colada atrás do painel, ou presa numa grade impressa para o grupo todo (os 10 modos do SAS numa peça), parafusada no painel. Não leva os parafusos M2 da primeira especificação: com 3 mm entre korry, as abas não cabem.
-- **Plaquinha:** placa perfurada, com o botão tátil e os LEDs (abaixo).
-- **Botão tátil:** 6 × 6 × 5 mm. A mola dele devolve o corpo. O curso é curto, como no botão do avião.
+- **Legenda**, impressa em duas cores numa peça só, de frente para baixo na mesa. É a única peça que muda de korry para korry:
+  - **Preto:** a borda de 1 mm, uma camada de 0,6 mm na frente com a legenda vazada e a divisória que separa a luz das duas metades. Atrás dela saem duas abas com dente, uma em cima e outra embaixo, que travam o corpo.
+  - **Transparente:** as letras da legenda, nos furos da camada preta, e o bloco de 2,4 mm atrás dela, dividido em dois pela divisória. Apagada, a legenda aparece clara; acesa, na cor do LED.
+- **Corpo:** um tubo preto de 16 mm de fundo, igual para todos, em que a legenda encaixa por pressão (as abas entram nas janelas das paredes de cima e de baixo). Na ponta de trás, dois ressaltos nos lados correm nos trilhos da base e seguram o corpo. Por dentro tem uma divisória, que continua a da legenda, com um apoio que empurra o êmbolo da chave e asas que separam a luz dos lados da chave.
+- **Base:** um tubo preto atrás do painel, com os trilhos por onde o corpo desliza e dois ganchos que prendem o suporte. Fica colada atrás do painel, ou presa numa grade impressa para o grupo todo (os 10 modos do SAS numa peça), parafusada no painel. Não leva os parafusos M2 da primeira especificação: com 3 mm entre korry, as abas não cabem.
+- **Suporte:** uma plaquinha preta de 1,6 mm, com 6 furos para as pernas da chave, 4 para as pernas dos LEDs, uma nervura de cada lado da chave, logo acima da divisória, para a luz não passar por baixo das asas e a palavra `CIMA` gravada atrás. É igual para todos.
+- **Chave PSW 8,5 × 8,5 mm, sem trava**, de 6 pinos. Usa um polo só: o comum e o contato que fecha apertado. A mola da chave devolve o corpo. O curso é curto, como no botão do avião.
 
-## A plaquinha em placa perfurada
+## Montagem do suporte
 
-Placa perfurada verde de dupla face, com ilhas isoladas e furos de 2,54 mm. Um pedaço de 10 × 10 furos para cada korry. O modelo foi ajustado para essa grade: o pino cai no centro do botão, e os LEDs, no centro de cada metade.
+A chave e os LEDs entram pela frente do suporte e as pernas saem atrás. Os 4 fios são soldados direto nelas e terminam num conector JST-XH fêmea de 4 vias, um rabicho de uns 10 cm.
 
-![Plaquinha em placa perfurada: na frente o botão tátil no meio e um LED acima e outro abaixo; no verso o conector de 4 vias na borda e os fios](placa_perfurada.svg)
+![Suporte: na frente a chave no meio e um LED acima e outro abaixo; no verso as pernas, os 4 fios e o conector JST-XH visto pelo lado dos fios](ligacao.svg)
 
-1. **Cortar** um quadrado de 10 × 10 furos, riscando com estilete na linha de furos de fora e quebrando. Lixar as bordas.
-2. **Botão tátil** no meio, ocupando 4 colunas por 3 linhas de furos: as pernas entram na grade como numa protoboard.
-3. **LEDs de 3 mm**, um acima e outro abaixo do botão, a 2 linhas de distância. O catodo (perna curta, lado chato) vai para a direita, olhando a frente.
-4. **Conector JST-XH de 4 vias** no verso, de pé, na coluna da borda. Ou 4 fios soldados direto.
-5. **Fios no verso**, com fio fino encapado (wire-wrap) de ilha em ilha, como no desenho.
+1. **Chave** pela frente, com as pernas nos 6 furos e o êmbolo para a frente.
+2. **LEDs de 3 mm**, um acima e outro abaixo da chave, pela frente. O catodo (perna curta, lado chato) vai para a esquerda, olhando a frente, como no desenho.
+3. **Multímetro:** descobrir qual perna da fileira de cima fecha com a perna do meio só com a chave apertada. É a que vai para o BTN. O desenho mostra a ponta; se for a outra, trocar.
+4. **Soldar os fios no verso**, como no desenho. O GND emenda o catodo do LED de cima, a perna do meio da chave (o comum) e o catodo do LED de baixo. O LC vai no anodo do LED de cima, o LB no anodo do de baixo e o BTN na perna que fecha.
+5. **Isolar** cada solda com espaguete termo-retrátil.
+6. **Crimpar o JST-XH fêmea de 4 vias** na ponta dos fios, na ordem 1 GND, 2 BTN, 3 LC, 4 LB. O desenho mostra o conector visto pelo lado dos fios, com os pinos 4 3 2 1 da esquerda para a direita.
+7. **Prender o suporte** nos ganchos da base, com a palavra `CIMA` para cima.
 
-- **Botão:** ligar duas pernas em diagonal. Assim funciona em qualquer botão 6 × 6, seja qual for o par ligado por dentro.
-- **Modos do SAS:** o LED azul e verde (3 pernas) vai na posição do LED de cima: azul no LC, verde no LB, catodo no GND. A ordem das pernas muda de fabricante para fabricante: testar antes de soldar.
-- **Korry sem luz:** só o botão e 2 fios.
-- **Bordas:** com 0,1 mm entre plaquinhas vizinhas, as meias-ilhas da borda não podem ter solda nem fio.
+- **Modos do SAS:** o LED azul e verde (3 pernas) vai no lugar do LED de cima: azul no LC, verde no LB, catodo no GND. A ordem das pernas muda de fabricante para fabricante: testar antes de soldar. Os furos do LED de baixo ficam vazios.
+- **Korry sem luz:** só a chave e 2 fios (GND e BTN). Os furos dos LEDs ficam vazios.
+- **Trocar a legenda:** soltar o suporte dos ganchos, puxar o corpo para trás, para fora da base, e apertar os dois dentes pelas janelas com uma chave de fenda pequena. A legenda nova entra empurrando, até os dentes estalarem nas janelas.
+- **Montou errado?** Girado 90°, os LEDs batem nas asas da divisória e o suporte não encaixa. Girado 180° monta, mas troca cima e baixo: por isso o `CIMA` gravado.
 
 ## Circuito
 
@@ -91,14 +110,14 @@ Placa perfurada verde de dupla face, com ilhas isoladas e furos de 2,54 mm. Um p
   módulo                               korry
   ──────                               ─────
   INn   ─────────────── 2 BTN ────┐
-                                  └─[ tátil ]──┐
+                                  └─[ chave ]──┐
   LEDn  ──[1 kΩ]─────── 3 LC ───►|─ LED de cima ─┤
   LEDm  ──[1 kΩ]─────── 4 LB ───►|─ LED de baixo ┤
   GND   ─────────────── 1 GND ─────────────────┘
 ```
 
-- **Não tem CI nem resistor no korry.** O pull-up da entrada e os resistores dos LEDs já estão no módulo (ver o [README do hardware](../README.md#no-módulo)). O korry é só botão, LEDs e fios.
-- **Conector de 4 pinos:** 1 GND, 2 BTN, 3 LC (LED de cima), 4 LB (LED de baixo). JST-XH de 4 vias (passo de 2,5 mm) no verso da plaquinha, ou 4 fios soldados direto. O [módulo médio](../README.md#pcb-do-módulo-médio) já tem 12 jacks JST-XH nessa ordem: o korry do jack Kk usa a entrada IN(k−1) e as saídas LED(2k−2) e LED(2k−1).
+- **Não tem CI nem resistor no korry.** O pull-up da entrada e os resistores dos LEDs já estão no módulo (ver o [README do hardware](../README.md#no-módulo)). O korry é só chave, LEDs e fios.
+- **Conector de 4 pinos:** 1 GND, 2 BTN, 3 LC (LED de cima), 4 LB (LED de baixo). JST-XH fêmea de 4 vias (passo de 2,5 mm) na ponta do rabicho, que liga direto no jack do módulo. O [módulo médio](../README.md#pcb-do-módulo-médio) já tem 12 jacks JST-XH nessa ordem: o korry do jack Kk usa a entrada IN(k−1) e as saídas LED(2k−2) e LED(2k−1).
 - **Apertado lê 0**, como qualquer botão dos módulos.
 - **Cada korry gasta 1 entrada e 0, 1 ou 2 saídas de LED:**
   - duas metades: 2 saídas;
@@ -109,7 +128,7 @@ Placa perfurada verde de dupla face, com ilhas isoladas e furos de 2,54 mm. Um p
 
 ### Brilho
 
-Com o resistor de 1 kΩ do módulo, cada LED recebe uns 3 mA (uns 2 mA os brancos). Atrás de 3 mm de acrílico leitoso pode ser pouco. O módulo médio usa 220 Ω, uns 13 mA por LED: bem mais forte, mas passa do limite do 74HC595 com os 8 LEDs dele acesos juntos.
+Com o resistor de 1 kΩ do módulo, cada LED recebe uns 3 mA (uns 2 mA os brancos). Atrás de 2,4 mm de PLA transparente pode ser pouco. O módulo médio usa 220 Ω, uns 13 mA por LED: bem mais forte, mas passa do limite do 74HC595 com os 8 LEDs dele acesos juntos.
 
 1. Testar primeiro com 1 kΩ, no escuro e de dia.
 2. Se ficar fraco, trocar o resistor daquela saída no módulo por 470 Ω: uns 6 mA por LED.
@@ -131,34 +150,40 @@ Como em todo o painel, **a luz mostra o estado do jogo, nunca o toque**. O korry
 
 Na FlashForge Inventor, que tem dois bicos, com o FlashPrint:
 
-1. **Teste de folga** ([`korry_teste.stl`](stl/korry_teste.stl)), só em preto. A folga em que o pedaço de corpo desliza sem balançar vai para a variável `folga` do `korry.scad`, e a base é gerada de novo.
-2. **Um korry de teste:** abrir [`korry_preto.stl`](stl/korry_preto.stl) e [`korry_transparente.stl`](stl/korry_transparente.stl) juntos e aceitar quando o FlashPrint perguntar se é um modelo de duas cores, para as partes ficarem no lugar. PLA preto num bico, transparente no outro.
+1. **Teste de folga** ([`korry_teste.stl`](stl/korry_teste.stl)), só em preto. A folga em que o pedaço de corpo desliza sem balançar vai para a variável `folga` do `korry.scad`, e o corpo e a base são gerados de novo.
+2. **Uma legenda de teste:** abrir [`legenda_preto.stl`](stl/legenda_preto.stl) e [`legenda_transparente.stl`](stl/legenda_transparente.stl) juntos e aceitar quando o FlashPrint perguntar se é um modelo de duas cores, para as partes ficarem no lugar. PLA preto num bico, transparente no outro. Já estão de frente para baixo.
 3. **Torre de limpeza** (*wipe wall*) ligada, para o transparente não sair sujo de preto.
-4. Camada de 0,12 mm, 3 perímetros, sem suporte. O corpo já está de frente para baixo. A base, em preto, também sem suporte.
+4. **Corpo, base e suporte**, só em preto, um bico só. Já estão na posição certa (o corpo e o suporte de trás para baixo): não precisam de suporte de impressão.
+5. Camada de 0,12 mm, 3 perímetros, sem suporte.
 
 **O que pode dar errado no teste:**
 
 - **Letras finas sumindo:** o `SEM EC` tem 2,4 mm, e os traços ficam perto da largura do bico. Se falhar, `letra_baixo = 2.8`, ou ligar a opção de paredes finas no FlashPrint.
 - **Luz vazando de uma metade para a outra:** a divisória tem 1 mm. Se vazar, `divisoria_e = 1.6`.
-- **Toque duro ou curto:** o botão tátil anda só 0,25 mm. Se não agradar, trocar por um microswitch de alavanca.
+- **Aba da legenda dura demais ou quebrando:** `dente = 0.4` ou `aba_e = 0.7`.
+- **Luz vazando em cima da chave:** é o vão do curso, onde o corpo anda sobre a chave. Apagado não aparece; com uma metade acesa, a outra pode ganhar um brilho fraco. Se incomodar, passar tinta preta fosca ou fita isolante nas laterais de cima da chave.
+- **Sombra da divisória na legenda única:** a divisória do corpo continua lá, atrás da legenda. Se a sombra dela aparecer, aumentar o `recuo`.
+- **Furos das pernas apertados:** `furo_pino` (chave) e `furo_led` (LEDs).
+- **Chave diferente do desenho:** conferir `pino_fileiras`, `curso` e `haste_h` com a chave real.
 
 ## Lista de peças (um korry)
 
-- Corpo impresso em PLA preto e transparente, e base em PLA preto.
-- 1 botão tátil 6 × 6 × 5 mm.
+- Legenda em PLA preto e transparente; corpo, base e suporte em PLA preto.
+- 1 chave PSW 8,5 × 8,5 mm, sem trava, de 6 pinos.
 - 0 a 2 LEDs de 3 mm, difusos, de alto brilho, na cor da legenda. Nos modos do SAS, 1 LED azul e verde de 3 mm, difuso, de catodo comum.
-- 1 pedaço de 10 × 10 furos de placa perfurada de dupla face.
-- 1 conector JST-XH de 4 vias (ou 4 fios) e fio fino encapado para as ligações.
+- 4 fios finos (~10 cm) e 1 conector JST-XH fêmea de 4 vias, com os terminais.
+- Espaguete termo-retrátil para isolar as soldas.
 
 ## Ordem para fazer
 
 1. **Teste de folga** e ajuste da `folga` no modelo.
-2. **Um korry de teste**, ligado direto num pino do Mega como na [fase 2](../../docs/fase2.md): a legenda, o clique, a folga do corpo na base e o brilho, com 1 kΩ e com 470 Ω.
+2. **Um korry de teste**, ligado direto num pino do Mega como na [fase 2](../../docs/fase2.md): a legenda, o clique, a folga do corpo na base, a força do encaixe da legenda e o brilho, com 1 kΩ e com 470 Ω.
 3. **Os 35**, cada um com a sua legenda, inclusive os ícones dos modos do SAS, depois que o teste der certo.
 
 ## A decidir
 
 - A folga, depois do teste.
-- Se o curso do botão tátil agrada, ou se vale um microswitch.
+- O curso e as medidas reais da chave PSW (`curso`, `haste_h`, `pino_fileiras`).
+- A força do encaixe da legenda: se as abas seguram sem quebrar nem soltar.
 - Colar a base atrás do painel ou fazer uma grade impressa por grupo.
 - Os ícones dos modos do SAS no modelo (hoje o `korry.scad` só faz letras).

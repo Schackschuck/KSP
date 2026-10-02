@@ -55,7 +55,7 @@ Todos existem e são vendidos em lojas de eletrônica e no AliExpress. As medida
 | Peça | Qtd | Onde | Medida |
 |---|---|---|---|
 | [Korry impresso](korry/README.md) | 35 | Voo, ação executiva, editor, peças, rodas e luzes, EVA, câmera, tempo | 22,5 × 22,5 mm, furo de 23 × 23 mm |
-| Botão tátil 6 × 6 × 5 mm | 35 | Dentro de cada korry | |
+| Chave PSW 8,5 × 8,5 sem trava | 35 | Dentro de cada korry | |
 | LED de 3 mm difuso | ~40 | Korry de uma cor | |
 | LED de 3 mm azul e verde, catodo comum | 10 | Modos do SAS | 3 pernas |
 | Encoder EC11 com botão + knob de alumínio de 30 mm | 3 | Piloto automático, alvo, Δv | Eixo de 6 mm, 20 cliques por volta, furo de 7 mm |
@@ -262,8 +262,8 @@ A peça tem ficha própria em [korry/](korry/README.md): medidas, desenho, peça
 
 - **Um tamanho só, 22,5 × 22,5 mm**, em todo o cockpit. Furo de 23 × 23 mm no painel.
 - **Legenda em duas metades**, como o START do A320: em cima só as letras, embaixo as letras numa caixa. Ou uma legenda única, sem a divisória.
-- **Impresso em duas cores numa peça só:** o corpo preto e a frente transparente, com a legenda vazada numa camada preta. Sem laser e sem cola.
-- **Plaquinha de placa perfurada atrás**, com um LED por metade e um botão tátil de 6 × 6 mm no meio, que o pino da divisória aperta. Conector de 4 pinos: GND, botão, LED de cima e LED de baixo.
+- **Legenda modular em duas cores, encaixada na ponta de um corpo igual para todos:** a legenda é impressa em preto e transparente numa peça só, com as letras vazadas numa camada preta. Só ela muda de korry para korry. Sem laser e sem cola.
+- **Chave PSW 8,5 × 8,5 e os LEDs encaixados num suporte impresso**, com um LED por metade e a chave no meio, que o apoio da divisória aperta. Um rabicho de 4 fios com JST-XH: GND, botão, LED de cima e LED de baixo.
 - **LEDs comuns, pelas saídas do 74HC595 do módulo.** A cor é a do LED, fixa por metade.
 
 **Alternativa pronta:** botões quadrados iluminados de 16 mm, vendidos no AliExpress. São mais fáceis, mas têm uma luz só, de uma cor, e a legenda fica por conta própria.
@@ -333,7 +333,7 @@ Para desenvolver no PC, o Extreme 3D Pro fica solto na mesa. No cockpit, o sides
 ## Arquivos
 
 - **Desenhos dos painéis:** em código, em [`desenho/`](desenho/README.md), com os SVG em [`img/`](img/).
-- **Korry:** o modelo no OpenSCAD, os STL e a plaquinha em [`korry/`](korry/README.md).
+- **Korry:** o modelo no OpenSCAD, os STL e o desenho da ligação em [`korry/`](korry/README.md).
 - **Caixa (a fazer):** em `hardware/caixa/`, o arquivo-fonte de cada peça, paramétrico, e os SVG ou DXF para a laser e os STL para a impressora, gerados a partir do fonte.
 
 Ferramenta de CAD: **OpenSCAD**, para as peças impressas. Desenha a peça com código, em texto, e o histórico fica legível no git, como o resto do projeto.
