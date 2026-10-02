@@ -92,7 +92,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **A ponte abre o script num processo próprio** e aborta com o Ctrl+C | O script continua sendo o mesmo da linha de comando, e o Ctrl+C já corta o motor e devolve a nave. O estado volta pelo UDP, como no fly by wire, e o código de saída diz se a nave pousou. |
 | **Um joystick só, no painel** (JH-D400X-R4, um sidestick à direita), com o botão do manche trocando o modo | O cockpit fica como um avião: acelerador na mão esquerda, sidestick na direita. Os 3 eixos cabem nas 3 linhas analógicas de um slot do backplane, e o botão passa pelos modos VOO, CÂMERA e TRANSLAÇÃO, com três luzes. Passando pela ponte, dá para ter zona morta e saber quando o piloto mexe no manche para tirar o controle de um script. O Extreme 3D Pro fica para desenvolver no PC. |
 | **Uma tela no meio para todos os módulos**, a tela multifunção de 7", no lugar de um LCD por módulo | Os olhos vão sempre ao mesmo lugar, os painéis ficam menores e só com botões, e sai um LCD por módulo da lista de compras. A página troca sozinha para o módulo em uso e volta depois, então não é preciso escolher a página na mão. Quem decide a troca é a ponte, que já recebe todos os eventos do painel: a tela continua só desenhando. |
-| **Korry switches** (botões iluminados com legenda, de avião) onde a luz mostra um estado do jogo | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: a legenda impressa em duas cores encaixa num corpo igual para todos, e a chave e os LEDs vão num suporte impresso atrás, sem placa perfurada ([hardware/korry/](hardware/korry/README.md)). O que não tem estado para mostrar é botão de metal. |
+| **Korry switches** (botões iluminados com legenda, de avião) onde a luz mostra um estado do jogo | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: a legenda impressa em duas cores encaixa num corpo igual para todos, e a chave e os LEDs vão num suporte impresso atrás, sem placa perfurada ([hardware/korry/](hardware/korry/README.md)). O que não tem estado para mostrar é um botão de 16 mm sem luz. |
 | **Cockpit em U, de 766 × 391 mm, com painéis de 125 mm** ([versão B](hardware/construcao.md#cockpit-versão-b)) | Um bloco no meio e duas asas, como num avião, sem painel vazio. Os controles foram juntados em 11 painéis para a caixa não passar de 80 cm; o que não cabe em 125 mm ocupa dois quadrados. O que cada botão faz foi conferido no código-fonte do kRPC antes de desenhar. |
 | **Tela de 7" no Pi** no lugar da mikromedia | A tela de 2,8" da mikromedia ficou pequena no meio do cockpit. A de 7" mostra a mesma página que o celular já usa, pelo HDMI, sem firmware novo. O firmware da mikromedia continua no repositório, fora do cockpit. |
 | **Caixa em MDF cortado a laser, com peças impressas em 3D** | A laser do colégio faz as peças planas e grandes (paredes, painéis com legendas); a impressora de casa, as pequenas e complicadas (korry, knobs, suportes). Cada seção é um painel removível com o seu módulo atrás. |
@@ -197,7 +197,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - [ ] Definir no [protocolo](docs/protocolo.md) as mensagens dos painéis novos: tempo, navegação, action groups e peças, câmera, recursos e EVA, acelerador, sidestick e os botões de página da tela.
 - [ ] Tempo: WARP, PARAR, FISICO, ATE O NO, PAUSA, SALVAR, CARREGAR e REVERTER.
 - [ ] Navegação: escolher e limpar o alvo pelo encoder, com a página ALVO na tela; REFERENCIA; trocar de nave.
-- [ ] Action groups 1 a 10 e os korry das peças (paraquedas, painéis solares, antenas, compartimento de carga), com a luz do estado.
+- [ ] Action groups 1 a 8 e os korry das peças (paraquedas, painéis solares, antenas, compartimento de carga), com a luz do estado.
 - [ ] Câmera: MAPA, IVA, MODO CAM, FOTO e ESCONDER.
 - [ ] Acelerador pela alavanca; TREM, FREIOS e LUZES em korry.
 - [ ] Sidestick: os 3 eixos pelo Mega, e o botão trocando o modo, com as luzes.
@@ -490,11 +490,12 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [ ] 35 korry switches ([lista completa](hardware/korry/README.md#lista-de-peças-um-korry)), cada um com 1 chave PSW 8,5 × 8,5 mm sem trava, até 2 LEDs difusos de alto brilho de 3 mm, 4 fios finos e 1 conector JST-XH fêmea de 4 vias com os terminais; filamento PLA preto e transparente
 - [ ] 10× LED azul e verde de 3 mm, difuso, catodo comum (korry dos modos do SAS)
 - [ ] 17× parafuso M3 autoatarraxante de 8 mm, para as 9 grades dos korry ([fixação no painel](hardware/korry/README.md#fixação-no-painel))
-- [ ] 36× botão de metal de 12 mm sem trava
+- [ ] 34× botão de 16 mm sem trava, com anel de 20 mm (R16-503 ou R13-507), e 2 capas impressas para o CARREGAR e o REVERTER
 - [ ] 2× botão de metal de 22 mm com anel de LED (vermelho e branco), de 5 V ou 3 V, e 2× capa transparente para botão de 22 mm
 - [ ] 2× tecla KCD1 (ON)-OFF-(ON) de 21 × 15 mm
 - [ ] 5× barra de 10 LEDs verde (Kingbright DC-10GWA) e 1× MAX7219, para os recursos e a EVA
-- [ ] 7× LED de 3 mm com anel de metal (4 verdes e 1 vermelho do piloto, 3 brancos do sidestick)
+- [ ] 7× LED de 5 mm difuso (3 verdes e 1 vermelho do piloto, 3 brancos do sidestick)
+- [x] 7× suporte de plástico com porca para LED de 5 mm
 - [ ] Placas perfuradas de dupla face + barras de pinos (headers) e fio fino encapado (wire-wrap)
 
 ### Fase 3 — Tela de telemetria

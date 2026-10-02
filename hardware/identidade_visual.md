@@ -63,8 +63,8 @@ Sempre as mesmas peças, no mesmo tamanho, para os painéis combinarem e as peç
 | Peça | Na frente | Furo | Para quê |
 |---|---|---|---|
 | [Korry](korry/README.md) | 21,9 × 21,9 mm, passo de 25,5 mm | 23 × 23 mm | Tudo que liga, desliga ou escolhe e tem um estado no jogo: a legenda acesa é o estado. Nos modos do SAS, a legenda é o marcador da navball, com a palavra embaixo |
-| Botão de metal sem trava | Ø 14 mm | Ø 12 mm | Ações sem estado para mostrar: action groups, ANT e PROX, páginas da tela, FOTO |
-| LED de 3 mm com anel de metal | anel Ø 5 mm | Ø 5 mm | Mostrar um estado sem gastar um botão: os modos do piloto automático (verde), o ESTOL (vermelho, piscando), o modo do sidestick (branco) |
+| Botão de 16 mm sem trava (R16-503) | anel Ø 20 mm, cabeça Ø 13 mm | Ø 16 mm, com um lado reto a 15 mm (furo em D) | Ações sem estado para mostrar: action groups, ANT e PROX, páginas da tela, FOTO |
+| LED de 5 mm no suporte de plástico com porca | anel Ø 9 mm | Ø 6,5 mm | Mostrar um estado sem gastar um botão: os modos do piloto automático (verde), o ESTOL (vermelho, piscando), o modo do sidestick (branco) |
 | Barra de 10 LEDs | 25,4 × 10,16 mm | 25,6 × 10,4 mm | Uma quantidade: o que resta de combustível, oxidante, monopropelente e eletricidade, e a mochila da EVA |
 | Encoder EC11 com knob de alumínio | knob Ø 30 mm | Ø 7 mm | Ajustar um valor. Horário soma, anti-horário tira, com um arco `-` / `+` gravado em volta |
 | Chave rotativa, 12 posições com batente | knob de ponteiro Ø 22 mm | Ø 10 mm | Escolher entre poucas opções fixas, com a legenda gravada em volta |
@@ -73,10 +73,11 @@ Sempre as mesmas peças, no mesmo tamanho, para os painéis combinarem e as peç
 | Joystick de 3 eixos com botão | flange de ~50 mm | a medir | O sidestick |
 | Botão de 22 mm com anel de LED | Ø 25 mm | Ø 22 mm | STAGE e ABORT, debaixo de capa transparente |
 | Capa transparente para botão de 22 mm | 39 × 34 mm | colada | STAGE e ABORT |
-| Capa "missile" | 17 × 46,6 mm | no furo de 12 mm | CARREGAR e REVERTER, que perdem o voo atual |
+| Capa impressa para o botão de 16 mm | 24 × 40 mm | a desenhar | CARREGAR e REVERTER, que perdem o voo atual |
 | Capa impressa para korry | 27,5 × 28,5 mm | colada | IVA |
 
 - **3 mm de borda a borda** entre peças vizinhas, no mínimo.
+- **Botão de 16 mm: 23 mm de centro a centro** entre vizinhos, no mínimo (o anel de 20 mm mais 3 mm). Por isso o painel de action groups tem 8 botões, em duas fileiras de 4: 5 por fileira não cabem em 125 mm.
 - **Korry: 25,5 mm de centro a centro** entre vizinhos, no mínimo (as bases de 25,3 mm da grade mais 0,2 mm). O `korry.scad` recusa menos que isso.
 - **Parafusos das grades dos korry:** cada grupo de korry é preso atrás do painel por uma grade parafusada, com M3 pela frente num furo de 3,2 mm. Os parafusos ficam nas pontas do grupo, os da beira do painel a 6 mm da borda (alinhados com os parafusos de canto), e entram nos desenhos. Não podem cair em cima de outro controle, de uma legenda nem da linha do grupo. As posições estão em [`korry/grades.json`](korry/grades.json) e a explicação em [korry/README.md](korry/README.md#fixação-no-painel).
 - **Zona de perigo:** faixa zebrada amarela e preta em volta, com capa de proteção. Só o ABORT.
@@ -87,7 +88,7 @@ Sempre as mesmas peças, no mesmo tamanho, para os painéis combinarem e as peç
 
 As regras que saíram dos desenhos:
 
-1. **Korry só onde a luz diz alguma coisa.** O que não tem estado no jogo para mostrar (os action groups, NOVO, APAGAR) é botão de metal.
+1. **Korry só onde a luz diz alguma coisa.** O que não tem estado no jogo para mostrar (os action groups, NOVO, APAGAR) é botão de 16 mm.
 2. **Um controle por coisa que se mexe junto.** O Δv nunca é mexido nos três eixos ao mesmo tempo, então é um encoder só, com korry para escolher o eixo.
 3. **O controle se mexe como a coisa no jogo.** A tecla do TEMPO fica deitada: para a esquerda o nó volta na órbita, para a direita avança. ANT e PROX, embaixo, no mesmo sentido.
 4. **Mostrar o estado sem olhar a tela** quando der de graça: a posição do knob da chave rotativa mostra o passo.

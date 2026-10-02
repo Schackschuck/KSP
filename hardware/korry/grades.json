@@ -3,9 +3,9 @@
   {"nome": "voo_sistemas", "painel": "voo", "korry": [[25.75, 99.25], [51.75, 99.25], [77.75, 99.25], [103.75, 99.25]], "parafusos": [[6, 99.25], [119.75, 99.25]]},
   {"nome": "scripts", "painel": "acao_executiva", "korry": [[76.75, 35.25], [76.75, 61.75], [76.75, 88.25], [102.25, 35.25], [102.25, 61.75], [102.25, 88.25]], "parafusos": [[119, 35.25], [119, 88.25]]},
   {"nome": "rodas", "painel": "acelerador", "korry": [[92.5, 37.25], [92.5, 64.25], [92.5, 91.25]], "parafusos": [[76.5, 64.25], [108.5, 64.25]]},
-  {"nome": "pecas", "painel": "action_groups", "korry": [[24.25, 98.25], [49.75, 98.25], [75.25, 98.25], [100.75, 98.25]], "parafusos": [[6, 98.25], [119, 98.25]]},
+  {"nome": "pecas", "painel": "action_groups", "korry": [[24.25, 100.25], [49.75, 100.25], [75.25, 100.25], [100.75, 100.25]], "parafusos": [[6, 100.25], [119, 100.25]]},
   {"nome": "vista", "painel": "camera", "korry": [[25.25, 37.25], [56.25, 37.25]], "parafusos": [[6, 37.25], [75, 37.25]]},
   {"nome": "deltav", "painel": "editor_manobras", "korry": [[26.75, 41.25], [26.75, 66.75], [26.75, 92.25]], "parafusos": [[26.75, 25.25], [26.75, 108.25]]},
-  {"nome": "eva", "painel": "recursos_eva", "korry": [[24.25, 92.25], [49.75, 92.25]], "parafusos": [[6, 92.25], [65.75, 92.25]]},
-  {"nome": "fisico", "painel": "tempo", "korry": [[72.25, 36]], "parafusos": [[88.25, 36]]}
+  {"nome": "eva", "painel": "recursos_eva", "korry": [[49.75, 77.25], [75.25, 77.25]], "parafusos": [[33.75, 77.25], [91.25, 77.25]]},
+  {"nome": "fisico", "painel": "tempo", "korry": [[74.75, 36]], "parafusos": [[74.75, 52]]}
 ]

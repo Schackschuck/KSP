@@ -7,11 +7,13 @@
 //   encoder(x, y, 15) + encoderArc(x, y, 20.5)             encoder com knob de 30 mm
 //   rotaryReal(x, y, legendas, posicao)                    chave rotativa, knob de 22 mm
 //   rockerReal(x, y)                                       tecla basculante deitada, 21 x 15 mm
-//   metalButton(x, y, legenda, seta)                       botão de metal de 12 mm
+//   botao(x, y, legenda, seta)                             botão de 16 mm, anel de 20 mm
+//   led5(x, y, aceso, cor)                                 LED de 5 mm no suporte de plástico, Ø 9 mm
 //   korrySas(x, y, modo, cor)                              korry de 22,5 mm com o ícone de um modo do SAS
 //   guardedToggle(x, y, legenda)                           chave com capa de proteção
 // Moldura: panel(w, h, titulo, corpo), group(x, y, w, h, rotulo), t(x, y, texto, ...).
-// rocker(), button(), rotary() e led() são as versões simplificadas da primeira rodada.
+// rocker(), button(), rotary() e led() são as versões simplificadas da primeira rodada;
+// metalButton() é o botão de 12 mm dos desenhos antigos.
 
 "use strict";
 var C = {
@@ -347,10 +349,25 @@ function botaoGrande(x, y, r, cor) {
 }
 
 function capaMissil(x, y0) {
-  var s = '<rect x="' + (x - 8.5) + '" y="' + y0 + '" width="17" height="46.6" rx="3" fill="' + C.red + '" opacity=".22"/>';
-  s += '<rect x="' + (x - 8.5) + '" y="' + y0 + '" width="17" height="46.6" rx="3" fill="none" stroke="' + C.red + '" stroke-width=".6"/>';
-  s += '<rect x="' + (x - 9.5) + '" y="' + (y0 - 1.5) + '" width="19" height="4" rx="1" fill="#24282c" stroke="#5b6168" stroke-width=".3"/>';
+  var s = '<rect x="' + (x - 12) + '" y="' + y0 + '" width="24" height="40" rx="3" fill="' + C.red + '" opacity=".22"/>';
+  s += '<rect x="' + (x - 12) + '" y="' + y0 + '" width="24" height="40" rx="3" fill="none" stroke="' + C.red + '" stroke-width=".6"/>';
+  s += '<rect x="' + (x - 13) + '" y="' + (y0 - 1.5) + '" width="26" height="4" rx="1" fill="#24282c" stroke="#5b6168" stroke-width=".3"/>';
   return s;
+}
+
+function botao(x, y, label, dir) {
+  var s = '<circle cx="' + x + '" cy="' + y + '" r="10" fill="url(#nut)" stroke="#2a2e32" stroke-width=".3"/>';
+  s += '<circle cx="' + x + '" cy="' + y + '" r="7.1" fill="#07080a"/>';
+  s += '<circle cx="' + x + '" cy="' + y + '" r="6.5" fill="url(#knob)" stroke="#9aa1a8" stroke-width=".3"/>';
+  if (dir) s += tri(x, y, dir, "#c9ced3", 1.8);
+  if (label) s += t(x, y + 14.6, label, 2.7);
+  return s;
+}
+
+function led5(x, y, on, color) {
+  var s = '<circle cx="' + x + '" cy="' + y + '" r="4.5" fill="#0d0f11" stroke="#3a4046" stroke-width=".3"/>';
+  if (on) s += '<circle cx="' + x + '" cy="' + y + '" r="4.2" fill="' + color + '" opacity=".25"/>';
+  return s + '<circle cx="' + x + '" cy="' + y + '" r="2.5" fill="' + (on ? color : "#262a2e") + '" stroke="#0a0c0d" stroke-width=".35"/>';
 }
 
 function korryComCapa(x, y, legenda, cor) {
@@ -405,4 +422,4 @@ function vago(x, y, nome) {
   return korry(x, y, 22.5, 22.5, " ", null, C.unlit) + t(x + 11.25, y + 12.25, nome, 2.1, "middle", "#3d444b");
 }
 
-module.exports = { SAS, sasIcon, korrySas, C, KSP, esc, t, screw, panel, group, hexNut, tri, arrow, rocker, cap, korry, button, led, rotary, guardedToggle, dims, svg, encoder, encoderArc, rotaryReal, rockerReal, metalButton, capa, botaoGrande, capaMissil, korryComCapa, barra, alavanca, grade, manche, vago };
+module.exports = { SAS, sasIcon, korrySas, C, KSP, esc, t, screw, panel, group, hexNut, tri, arrow, rocker, cap, korry, button, led, rotary, guardedToggle, dims, svg, encoder, encoderArc, rotaryReal, rockerReal, metalButton, botao, led5, capa, botaoGrande, capaMissil, korryComCapa, barra, alavanca, grade, manche, vago };
