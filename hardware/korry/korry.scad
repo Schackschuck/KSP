@@ -388,7 +388,7 @@ module legenda_cores() {
 }
 
 module teste_folga() {
-    folgas = [0.1, 0.15, 0.2, 0.25, 0.3];
+    folgas = [0.35, 0.4, 0.45, 0.5, 0.6];
     for (i = [0 : 4]) translate([i * 30, 0, 0]) difference() {
         translate([-13, -13, 0]) cube([26, 26, 6]);
         translate([-(frente / 2 + folgas[i]), -(frente / 2 + folgas[i]), -1]) cube([frente + 2 * folgas[i], frente + 2 * folgas[i], 8]);
