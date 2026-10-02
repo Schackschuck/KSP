@@ -4,7 +4,7 @@ var P = require("../pecas");
 module.exports = function () {
   var C = P.C, t = P.t, K = 22.5, L = 125, W = 2 * L, s = "", apoio = "#b9bfc5";
   s += P.group(10, 17, 86, 102, "DELTA-V");
-  s += P.korry(15.5, 30, K, K, "PRO", null, C.pro) + P.korry(15.5, 54.5, K, K, "NRM", null, null) + P.korry(15.5, 79, K, K, "RAD", null, null);
+  s += P.korry(15.5, 30, K, K, "PRO", null, C.pro) + P.korry(15.5, 55.5, K, K, "NRM", null, null) + P.korry(15.5, 81, K, K, "RAD", null, null);
   s += P.encoderArc(70, 64, 20.5) + P.encoder(70, 64, 15) + t(70, 96, "AJUSTE", 2.8);
   s += P.group(102, 17, 38, 102, "PERCURSO");
   s += t(115.5, 38, "ANTES", 2.4) + t(126.5, 38, "DEPOIS", 2.4);
