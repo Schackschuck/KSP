@@ -20,7 +20,7 @@ O botão iluminado quadrado dos aviões, feito em casa: a legenda fica no própr
 | [`stl/grades/`](stl/grades/) | As 9 grades de fixação, uma por grupo de korry: `grade_<nome>.stl`. Pretas, um bico só. Ver [Fixação no painel](#fixação-no-painel) |
 | [`grades.json`](grades.json) | Onde ficam os korry e os parafusos de cada grade, nas coordenadas do desenho do painel. Lido pelo `gerar.py` e pelo `desenhar.js` |
 | [`gerar.py`](gerar.py) | Gera os STL (legendas, peças iguais e grades) e as imagens: `python hardware/korry/gerar.py` |
-| [`stl/korry_teste.stl`](stl/korry_teste.stl) | O teste de folga: 5 encaixes de 0,1 a 0,3 mm e um pedaço do corpo |
+| [`stl/korry_teste.stl`](stl/korry_teste.stl) | O teste de folga: 5 encaixes de 0,35 a 0,6 mm e um pedaço do corpo (o primeiro teste, de 0,1 a 0,3 mm, ficou apertado em todos) |
 | [`ligacao.js`](ligacao.js) | Gera [`ligacao.svg`](ligacao.svg), o desenho da ligação da chave e dos LEDs: `node hardware/korry/ligacao.js` |
 | [`korry.svg`](korry.svg) | O desenho da primeira especificação, com a tampa de acrílico: os quatro estados da legenda continuam valendo |
 
