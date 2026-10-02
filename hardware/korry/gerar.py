@@ -158,7 +158,7 @@ def pontos_svg(caminho):
 def conferir_legenda(nome, params, em_branco, duas_metades):
     if em_branco:
         return
-    lado = parametro("frente") - 2 * parametro("parede")
+    lado = parametro("tubo_interno") - 2 * parametro("folga") - 2 * parametro("parede")
     meia_div = parametro("divisoria_e") / 2
     centro_div = parametro("divisoria_y")
     limite = lado / 2 - 0.5

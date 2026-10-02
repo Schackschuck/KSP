@@ -20,7 +20,7 @@ O botão iluminado quadrado dos aviões, feito em casa: a legenda fica no própr
 | [`stl/grades/`](stl/grades/) | As 9 grades de fixação, uma por grupo de korry: `grade_<nome>.stl`. Pretas, um bico só. Ver [Fixação no painel](#fixação-no-painel) |
 | [`grades.json`](grades.json) | Onde ficam os korry e os parafusos de cada grade, nas coordenadas do desenho do painel. Lido pelo `gerar.py` e pelo `desenhar.js` |
 | [`gerar.py`](gerar.py) | Gera os STL (legendas, peças iguais e grades) e as imagens: `python hardware/korry/gerar.py` |
-| [`stl/korry_teste.stl`](stl/korry_teste.stl) | O teste de folga: 5 encaixes de 0,35 a 0,6 mm e um pedaço do corpo (o primeiro teste, de 0,1 a 0,3 mm, ficou apertado em todos) |
+| [`stl/korry_teste.stl`](stl/korry_teste.stl) | O teste de folga: 5 encaixes de 0,35 a 0,6 mm e um pedaço do corpo (o primeiro teste, de 0,1 a 0,3 mm, ficou apertado em todos; o segundo deu 0,5 mm) |
 | [`ligacao.js`](ligacao.js) | Gera [`ligacao.svg`](ligacao.svg), o desenho da ligação da chave e dos LEDs: `node hardware/korry/ligacao.js` |
 | [`korry.svg`](korry.svg) | O desenho da primeira especificação, com a tampa de acrílico: os quatro estados da legenda continuam valendo |
 
@@ -98,8 +98,8 @@ São 31 legendas diferentes para os 35 korry: os cinco scripts vagos usam a mesm
 
 | O quê | Medida | Observação |
 |---|---|---|
-| Frente | **22,5 × 22,5 mm** | Igual em todos |
-| Furo no painel | 23 × 23 mm | 0,25 mm de folga por lado. Conferir na plaquinha de teste da laser, que queima um pouco em volta do corte |
+| Frente | **21,9 × 21,9 mm** | Igual em todos. É o vão da base (22,9 mm) menos a `folga` de 0,5 mm de cada lado, medida no teste de folga |
+| Furo no painel | 23 × 23 mm | 0,55 mm de folga por lado. Conferir na plaquinha de teste da laser, que queima um pouco em volta do corte |
 | Saliência na frente do painel | 3 mm | A legenda (1,8 mm) e 1,2 mm da frente do corpo. O corpo anda ~2,2 mm até a chave chegar ao fim (curso de 2,5 mm menos 0,3 mm de pré-carga) e a frente ainda sai ~0,8 mm do painel apertado |
 | Corpo | 17,2 mm de comprimento | 16 mm atrás do painel, até os ressaltos de trás, mais 1,2 mm na frente do painel, onde a legenda encaixa |
 | Base | 25,3 mm de lado, 16 mm de fundo | Mais os ganchos, que chegam a 18,8 mm. O tubo de 25,3 mm cabe no passo mínimo de 25,5 mm |
@@ -107,7 +107,7 @@ São 31 legendas diferentes para os 35 korry: os cinco scripts vagos usam a mesm
 | Suporte | 24,1 × 24,1 × 1,6 mm | Preso pelos ganchos da base, por fora do tubo |
 | Atrás do painel | ~22 mm | Até as pernas da chave, que saem atrás do suporte. Somar os fios |
 | Distância entre korry vizinhos | 3 mm | De borda a borda, ou **25,5 mm de centro a centro**: é o passo mínimo. O `korry.scad` recusa uma grade com korry mais perto |
-| Legenda | 22,5 × 22,5 × 1,8 mm | Encaixa por pressão na ponta do corpo, com duas abas. Máscara preta de 0,6 mm na frente e 1,2 mm de transparente atrás |
+| Legenda | 21,9 × 21,9 × 1,8 mm | Encaixa por pressão na ponta do corpo, com duas abas. Máscara preta de 0,6 mm na frente e 1,2 mm de transparente atrás |
 | Legenda de cima | letras de até 3 mm | B612 Bold. O tamanho se ajusta ao texto (fator de largura 0,85): TRAVA ALT e as palavras longas ficam menores |
 | Legenda de baixo | letras de até 2,4 mm, numa caixa de até 15 × 5,6 mm | Como o `ON` do A320. A caixa acompanha o texto |
 | Legenda única | letras de até 3 mm, centradas | Sem a divisória. As mais apertadas, PARAQUEDAS e RAD DENTRO, ficam com ~2,1 mm |
@@ -138,7 +138,7 @@ Os korry de um grupo ficam presos numa **grade**: uma peça preta com as bases d
 - **Posição dos parafusos:** nas pontas do grupo, onde há espaço. Os que ficam perto da borda do painel ficam a 6 mm dela, alinhados com os parafusos de canto do painel.
 - **Um parafuso só** na grade do FISICO: o korry dentro do furo do painel impede a grade de girar em torno do parafuso.
 - **Korry afastados** (a `vista`, com passo de 31 mm): o fechamento não une as bases sozinho, e a grade ganha uma barra de 6 mm no plano das orelhas.
-- **Passo mínimo de 25,5 mm** de centro a centro entre korry vizinhos: 25,3 mm do tubo mais 0,2 mm de folga. Os ganchos e os ressaltos alternados é que deixam as paredes se encostarem. O `korry.scad` recusa grades com korry mais perto.
+- **Passo mínimo de 25,5 mm** de centro a centro entre korry vizinhos: 25,3 mm do tubo mais 0,2 mm entre vizinhos. A base não muda com a `folga`: quem diminui é o korry. Os ganchos e os ressaltos alternados é que deixam as paredes se encostarem. O `korry.scad` recusa grades com korry mais perto.
 - **Posição:** as coordenadas do `grades.json` são as do desenho do painel (origem no canto de cima à esquerda, `y` para baixo), em mm. Os parafusos aparecem nos desenhos dos painéis.
 
 | Grade | Painel | Korry | Passo (mm) | Parafusos (x, y) |
@@ -228,7 +228,7 @@ Como em todo o painel, **a luz mostra o estado do jogo, nunca o toque**. O korry
 
 Na FlashForge Inventor, que tem dois bicos, com o FlashPrint:
 
-1. **Teste de folga** ([`korry_teste.stl`](stl/korry_teste.stl)), só em preto. A folga em que o pedaço de corpo desliza sem balançar vai para a variável `folga` do `korry.scad`, e o corpo, a base e as grades são gerados de novo (`python hardware/korry/gerar.py`).
+1. **Teste de folga** ([`korry_teste.stl`](stl/korry_teste.stl)), só em preto. A folga em que o pedaço de corpo desliza sem balançar vai para a variável `folga` do `korry.scad` (hoje 0,5 mm) e tudo é gerado de novo (`python hardware/korry/gerar.py`). A base e as grades não mudam de tamanho: o corpo e a legenda é que ficam menores, `22,9 − 2 × folga`.
 2. **Uma legenda de teste:** abrir [`sas_preto.stl`](stl/legendas/sas_preto.stl) e [`sas_transparente.stl`](stl/legendas/sas_transparente.stl) juntos e aceitar quando o FlashPrint perguntar se é um modelo de duas cores, para as partes ficarem no lugar. PLA preto num bico, transparente no outro. Já estão de frente para baixo.
 3. **Torre de limpeza** (*wipe wall*) ligada, para o transparente não sair sujo de preto.
 4. **Corpo e suporte**, só em preto, um bico só. Já estão na posição certa (o corpo e o suporte de trás para baixo): não precisam de suporte de impressão. Para o teste, a **base solta** ([`korry_base.stl`](stl/korry_base.stl)); no cockpit, a **grade** de cada grupo ([`stl/grades/`](stl/grades/)), também em preto e um bico só, no lugar das bases. A maior, a do `voo_sas`, tem uns 136 × 65 × 19 mm e cabe na mesa de 230 × 150 mm.
@@ -259,14 +259,13 @@ Por grupo de korry: a grade impressa em preto e 2 parafusos M3 autoatarraxantes 
 
 ## Ordem para fazer
 
-1. **Teste de folga** e ajuste da `folga` no modelo.
+1. **Teste de folga** e ajuste da `folga` no modelo. Feito: 0,5 mm.
 2. **Um korry de teste**, ligado direto num pino do Mega como na [fase 2](../../docs/fase2.md): a legenda, o clique, a folga do corpo na base, a força do encaixe da legenda e o brilho, com 1 kΩ e com 470 Ω.
 3. **Uma grade pequena**, a do FISICO ou a da `vista`, parafusada num painel de teste: o furo, o parafuso, o encaixe dos korry e a distância entre vizinhos.
 4. **Os 35**, cada um com a sua legenda, inclusive os ícones dos modos do SAS, depois que os testes derem certo, e uma grade por grupo.
 
 ## A decidir
 
-- A folga, depois do teste.
 - O curso e as medidas reais da chave PSW (`curso`, `haste_h`, `pino_fileiras`).
 - A força do encaixe da legenda: se as abas seguram sem quebrar nem soltar, agora que ela tem 1,8 mm.
 - Se as letras de ~2,1 mm (`PARAQUEDAS`, `RAD DENTRO`) e o ícone de 0,7 mm saem bem na impressora.
