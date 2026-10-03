@@ -7,6 +7,9 @@ Uso, de qualquer pasta:
     python hardware/korry/gerar.py --pecas      so corpo, base, suporte e teste
     python hardware/korry/gerar.py --grades     so as grades do grades.json
     python hardware/korry/gerar.py --imagens    so as imagens
+    python hardware/korry/gerar.py --3mf rcs    a legenda rcs num 3MF de duas cores
+
+O --3mf le os dois STL da legenda ja gerados e nao precisa do OpenSCAD.
 
 Precisa do OpenSCAD no PATH e da fonte B612 Bold instalada. As imagens usam
 xvfb-run quando nao ha tela.
@@ -21,6 +24,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -29,6 +33,9 @@ SCAD = PASTA / "korry.scad"
 GRADES = PASTA / "grades.json"
 STL = PASTA / "stl"
 IMG = PASTA / "img"
+TRES_MF = PASTA / "3mf"
+
+CORES_3MF = [("preto", "#1A1A1AFF"), ("transparente", "#E8F0F8FF")]
 
 SAS = [
     ("sas_estab", "ESTAB"),
@@ -221,6 +228,90 @@ def gerar_grade(g):
     return arquivo.name
 
 
+def ler_stl(caminho):
+    dados = Path(caminho).read_bytes()
+    if dados.startswith(b"solid") and b"facet" in dados[:2000]:
+        raise Erro(f"{Path(caminho).name} esta em texto: gerar de novo com o gerar.py")
+    (n,) = struct.unpack_from("<I", dados, 80)
+    if len(dados) != 84 + 50 * n:
+        raise Erro(f"STL malformado: {Path(caminho).name}")
+    indices = {}
+    vertices = []
+    triangulos = []
+    for i in range(n):
+        v = struct.unpack_from("<9f", dados, 84 + 50 * i + 12)
+        tri = []
+        for k in range(3):
+            p = v[3 * k : 3 * k + 3]
+            if p not in indices:
+                indices[p] = len(vertices)
+                vertices.append(p)
+            tri.append(indices[p])
+        if len(set(tri)) == 3:
+            triangulos.append(tri)
+    return vertices, triangulos
+
+
+def malha_3mf(id_objeto, nome, indice_cor, vertices, triangulos):
+    linhas = [f'  <object id="{id_objeto}" name="{nome}" type="model" pid="1" pindex="{indice_cor}">', "   <mesh>", "    <vertices>"]
+    linhas += [f'     <vertex x="{x:.6g}" y="{y:.6g}" z="{z:.6g}"/>' for x, y, z in vertices]
+    linhas += ["    </vertices>", "    <triangles>"]
+    linhas += [f'     <triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in triangulos]
+    linhas += ["    </triangles>", "   </mesh>", "  </object>"]
+    return linhas
+
+
+def modelo_3mf(nome, partes):
+    linhas = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<model unit="millimeter" xml:lang="pt-BR" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">',
+        f' <metadata name="Title">korry {nome}</metadata>',
+        " <resources>",
+        '  <basematerials id="1">',
+    ]
+    linhas += [f'   <base name="{cor}" displaycolor="{rgba}"/>' for cor, rgba in CORES_3MF]
+    linhas.append("  </basematerials>")
+    for i, (cor, vertices, triangulos) in enumerate(partes):
+        linhas += malha_3mf(i + 2, f"{nome}_{cor}", i, vertices, triangulos)
+    conjunto = len(partes) + 2
+    linhas.append(f'  <object id="{conjunto}" name="legenda_{nome}" type="model">')
+    linhas.append("   <components>")
+    linhas += [f'    <component objectid="{i + 2}"/>' for i in range(len(partes))]
+    linhas += ["   </components>", "  </object>", " </resources>", " <build>"]
+    linhas += [f'  <item objectid="{conjunto}"/>', " </build>", "</model>"]
+    return "\n".join(linhas) + "\n"
+
+
+def gerar_3mf(nome):
+    partes = []
+    for cor, _ in CORES_3MF:
+        stl = STL / "legendas" / f"{nome}_{cor}.stl"
+        if not stl.exists():
+            raise Erro(f"falta {stl.name}: gerar as legendas antes")
+        partes.append((cor, *ler_stl(stl)))
+    saida = TRES_MF / f"legenda_{nome}.3mf"
+    TRES_MF.mkdir(exist_ok=True)
+    tipos = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>'
+        "</Types>\n"
+    )
+    relacoes = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Target="/3D/3dmodel.model" Id="rel0" '
+        'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
+        "</Relationships>\n"
+    )
+    with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", tipos)
+        z.writestr("_rels/.rels", relacoes)
+        z.writestr("3D/3dmodel.model", modelo_3mf(nome, partes))
+    return saida.name
+
+
 def em_paralelo(funcao, itens, rotulo):
     with ThreadPoolExecutor(max_workers=os.cpu_count() or 2) as ex:
         for nome in ex.map(funcao, itens):
@@ -299,7 +390,19 @@ def main():
     ap.add_argument("--pecas", action="store_true", help="so corpo, base, suporte e teste")
     ap.add_argument("--grades", action="store_true", help="so as grades do grades.json")
     ap.add_argument("--imagens", action="store_true", help="so as imagens")
+    ap.add_argument("--3mf", dest="tres_mf", nargs="+", metavar="NOME", help="legendas num 3MF de duas cores, pelos STL ja gerados")
     a = ap.parse_args()
+    if a.tres_mf:
+        nomes = {n for n, _, _, _ in LEGENDAS}
+        try:
+            for nome in a.tres_mf:
+                if nome not in nomes:
+                    raise Erro(f"legenda desconhecida: {nome}")
+                print(f"  3mf: {gerar_3mf(nome)}")
+        except Erro as e:
+            print(f"ERRO: {e}", file=sys.stderr)
+            return 1
+        return 0
     tudo = not (a.legendas or a.pecas or a.grades or a.imagens)
     if not shutil.which("openscad"):
         print("openscad nao encontrado no PATH", file=sys.stderr)

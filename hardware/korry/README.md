@@ -14,6 +14,7 @@ O botão iluminado quadrado dos aviões, feito em casa: a legenda fica no própr
 |---|---|
 | [`korry.scad`](korry.scad) | O modelo no [OpenSCAD](https://openscad.org/), com as medidas e a legenda nas primeiras linhas. Para as letras saírem certas, instalar a fonte [B612](https://fonts.google.com/specimen/B612) Bold |
 | [`stl/legendas/`](stl/legendas/) | As 31 legendas, cada uma em dois arquivos, `<nome>_preto.stl` e `<nome>_transparente.stl`, nas mesmas coordenadas, para imprimir junto com os dois bicos. A lista está em [Legendas](#legendas). A de teste é `sas_preto.stl` e `sas_transparente.stl` (`SAS` / `SEM EC`) |
+| [`3mf/legenda_rcs.3mf`](3mf/legenda_rcs.3mf) | A legenda do RCS (`RCS` / `SEM MP`) num arquivo só, de teste: as duas partes já montadas numa peça, a preta e a transparente, cada uma com a sua cor. Ver [Como imprimir](#como-imprimir) |
 | [`stl/korry_corpo.stl`](stl/korry_corpo.stl) | O corpo, igual para todos. Preto, um bico só |
 | [`stl/korry_base.stl`](stl/korry_base.stl) | A base solta, de um korry só, para o teste. Preta, um bico só |
 | [`stl/korry_suporte.stl`](stl/korry_suporte.stl) | O suporte da chave e dos LEDs. Preto, um bico só |
@@ -34,7 +35,10 @@ python hardware/korry/gerar.py --legendas   as 31 legendas
 python hardware/korry/gerar.py --pecas      corpo, base, suporte e teste
 python hardware/korry/gerar.py --grades     as grades do grades.json
 python hardware/korry/gerar.py --imagens    frente, corte, explodida, legendas e grade
+python hardware/korry/gerar.py --3mf rcs    a legenda rcs num 3MF de duas cores
 ```
+
+O `--3mf` junta os dois STL de uma legenda, já gerados, num 3MF em `3mf/legenda_<nome>.3mf`: um objeto com duas partes, `<nome>_preto` e `<nome>_transparente`, com as cores preto e transparente. Não precisa do OpenSCAD e aceita vários nomes (`--3mf rcs sas fbw`). Por enquanto só o do RCS está no repositório, para testar.
 
 Ao gerar as legendas, o script confere o tamanho de cada uma: nada passa de 9,75 mm do centro em `x` (0,5 mm de folga da borda interna da legenda), e nas de duas metades o texto de cima fica acima da divisória e o de baixo abaixo. Se falhar, para com a mensagem.
 
@@ -229,7 +233,7 @@ Como em todo o painel, **a luz mostra o estado do jogo, nunca o toque**. O korry
 Na FlashForge Inventor, que tem dois bicos, com o FlashPrint:
 
 1. **Teste de folga** ([`korry_teste.stl`](stl/korry_teste.stl)), só em preto. A folga em que o pedaço de corpo desliza sem balançar vai para a variável `folga` do `korry.scad` (hoje 0,5 mm) e tudo é gerado de novo (`python hardware/korry/gerar.py`). A base e as grades não mudam de tamanho: o corpo e a legenda é que ficam menores, `22,9 − 2 × folga`.
-2. **Uma legenda de teste:** abrir [`sas_preto.stl`](stl/legendas/sas_preto.stl) e [`sas_transparente.stl`](stl/legendas/sas_transparente.stl) juntos e aceitar quando o FlashPrint perguntar se é um modelo de duas cores, para as partes ficarem no lugar. PLA preto num bico, transparente no outro. Já estão de frente para baixo.
+2. **Uma legenda de teste:** a mais simples é abrir [`legenda_rcs.3mf`](3mf/legenda_rcs.3mf), que já traz as duas partes no lugar, numa peça só. Se o fatiador mostrar duas partes sem bico, pôr a `rcs_preto` no bico do PLA preto e a `rcs_transparente` no do transparente. Se o FlashPrint não abrir o 3MF com as duas cores, usar o par de STL: abrir [`sas_preto.stl`](stl/legendas/sas_preto.stl) e [`sas_transparente.stl`](stl/legendas/sas_transparente.stl) juntos e aceitar quando o FlashPrint perguntar se é um modelo de duas cores, para as partes ficarem no lugar. PLA preto num bico, transparente no outro. Já estão de frente para baixo.
 3. **Torre de limpeza** (*wipe wall*) ligada, para o transparente não sair sujo de preto.
 4. **Corpo e suporte**, só em preto, um bico só. Já estão na posição certa (o corpo e o suporte de trás para baixo): não precisam de suporte de impressão. Para o teste, a **base solta** ([`korry_base.stl`](stl/korry_base.stl)); no cockpit, a **grade** de cada grupo ([`stl/grades/`](stl/grades/)), também em preto e um bico só, no lugar das bases. A maior, a do `voo_sas`, tem uns 136 × 65 × 19 mm e cabe na mesa de 230 × 150 mm.
 5. **As legendas de cada painel**, em duas cores como a de teste, uma de cada vez: a tabela de [Legendas](#legendas) diz quais ficam em cada painel. Conferir uma de cada tipo antes de imprimir as outras: uma de modo do SAS (com o ícone), uma de duas metades e a de letras menores (`paraquedas`).
