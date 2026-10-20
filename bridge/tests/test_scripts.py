@@ -5,9 +5,11 @@ Uso, a partir da raiz do repositório:
     python bridge/tests/test_scripts.py -v
 """
 
+import json
 import os
 import socket
 import sys
+import tempfile
 import time
 import unittest
 
@@ -16,13 +18,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 import painel_scripts
 import sistemas
-from mfd import Scripts
-from painel_scripts import MOSTRA_FIM, SEGURAR, PainelScripts, Processo
-from sistemas import Sistemas
+from mfd import CAMPOS_SUBIDA, Scripts
+from painel_scripts import MOSTRA_FIM, SEGURAR, MenuSubida, PainelScripts, Processo
+from sistemas import RAPIDO, Sistemas
 
-# O pouso fica em scripts/, ao lado de bridge/.
+# O pouso e a subida ficam em scripts/, ao lado de bridge/.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts"))
 import pouso  # noqa: E402
+import subida  # noqa: E402
 
 
 class ProcessoFalso:
@@ -138,6 +141,262 @@ class TestPainelScripts(unittest.TestCase):
         self.assertEqual(s.pagina, "NAV")
 
 
+class TestMenuSubida(unittest.TestCase):
+    def setUp(self):
+        self.menu = MenuSubida()
+
+    def escolher(self, linha):
+        self.menu.cursor = ("ALT", "INC", "PLANO").index(linha)
+        self.menu.apertar(0.0)
+        self.menu.soltar()
+        self.assertTrue(self.menu.editando)
+
+    def test_valores_iniciais(self):
+        self.assertEqual(self.menu.valores, {"ALT": 80, "INC": 0, "PLANO": 0})
+        self.assertEqual(self.menu.cursor, 0)
+        self.assertFalse(self.menu.editando)
+        self.assertEqual(self.menu.linha, "ALT")
+
+    def test_cursor_anda_e_para_nas_pontas(self):
+        self.menu.girar(1, 10.0)
+        self.assertEqual(self.menu.linha, "INC")
+        self.menu.girar(1, 20.0)
+        self.assertEqual(self.menu.linha, "PLANO")
+        self.menu.girar(1, 30.0)
+        self.assertEqual(self.menu.linha, "PLANO")
+        self.menu.girar(-5, 40.0)
+        self.assertEqual(self.menu.linha, "ALT")
+        self.assertEqual(self.menu.valores, {"ALT": 80, "INC": 0, "PLANO": 0})
+
+    def test_apertar_e_soltar_escolhe_e_sai(self):
+        self.menu.apertar(0.0)
+        self.assertFalse(self.menu.editando)
+        self.menu.soltar()
+        self.assertTrue(self.menu.editando)
+        self.menu.apertar(5.0)
+        self.menu.soltar()
+        self.assertFalse(self.menu.editando)
+
+    def test_soltar_sem_apertar_nao_faz_nada(self):
+        self.menu.soltar()
+        self.assertFalse(self.menu.editando)
+
+    def test_altitude_devagar_e_rapido(self):
+        self.escolher("ALT")
+        self.menu.girar(1, 10.0)
+        self.assertEqual(self.menu.valores["ALT"], 81)
+        self.menu.girar(-1, 11.0)
+        self.assertEqual(self.menu.valores["ALT"], 80)
+        self.menu.girar(1, 11.0 + RAPIDO / 2)
+        self.assertEqual(self.menu.valores["ALT"], 90)
+        self.menu.girar(2, 20.0)
+        self.assertEqual(self.menu.valores["ALT"], 110)
+        self.menu.girar(-1, 30.0)
+        self.assertEqual(self.menu.valores["ALT"], 109)
+
+    def test_inclinacao_devagar_e_rapido(self):
+        self.escolher("INC")
+        self.menu.girar(1, 10.0)
+        self.assertEqual(self.menu.valores["INC"], 1)
+        self.menu.girar(3, 20.0)
+        self.assertEqual(self.menu.valores["INC"], 31)
+
+    def test_limites(self):
+        self.escolher("ALT")
+        self.menu.girar(-1000, 10.0)
+        self.assertEqual(self.menu.valores["ALT"], 10)
+        self.menu.girar(-1, 20.0)
+        self.assertEqual(self.menu.valores["ALT"], 10)
+        self.menu.girar(1000, 30.0)
+        self.assertEqual(self.menu.valores["ALT"], 5000)
+        self.menu.sair()
+        self.escolher("INC")
+        self.menu.girar(-1, 40.0)
+        self.assertEqual(self.menu.valores["INC"], 0)
+        self.menu.girar(1000, 50.0)
+        self.assertEqual(self.menu.valores["INC"], 180)
+
+    def test_plano_troca_a_cada_linha_de_giro(self):
+        self.escolher("PLANO")
+        self.menu.girar(1, 10.0)
+        self.assertEqual(self.menu.valores["PLANO"], 1)
+        self.menu.girar(1, 20.0)
+        self.assertEqual(self.menu.valores["PLANO"], 0)
+        self.menu.girar(-3, 30.0)
+        self.assertEqual(self.menu.valores["PLANO"], 1)
+        self.menu.girar(-1, 30.01)
+        self.assertEqual(self.menu.valores["PLANO"], 0)
+
+    def test_sair(self):
+        self.escolher("INC")
+        self.menu.apertar(1.0)
+        self.menu.sair()
+        self.menu.soltar()
+        self.assertFalse(self.menu.editando)
+        self.assertEqual(self.menu.linha, "INC")
+
+    def test_linhas(self):
+        self.assertEqual(
+            self.menu.linhas(),
+            {"SBV ALT": "SBV ALT 80", "SBV INC": "SBV INC 0", "SBV PLANO": "SBV PLANO 0", "SBC": "SBC ALT 0"},
+        )
+        self.escolher("PLANO")
+        self.menu.girar(1, 10.0)
+        self.assertEqual(self.menu.linhas()["SBV PLANO"], "SBV PLANO 1")
+        self.assertEqual(self.menu.linhas()["SBC"], "SBC PLANO 1")
+        for linha in self.menu.linhas().values():
+            self.assertLessEqual(len(linha), 31)
+            self.assertTrue(linha.isascii())
+
+    def test_argumentos(self):
+        self.assertEqual(self.menu.argumentos(), ["--altitude", "80000", "--inclinacao", "0"])
+        self.menu.valores.update({"ALT": 250, "INC": 98, "PLANO": 1})
+        self.assertEqual(self.menu.argumentos(), ["--altitude", "250000", "--inclinacao", "98", "--plano-do-alvo"])
+
+
+class TestPainelComMenu(unittest.TestCase):
+    def setUp(self):
+        self.pouso = ProcessoFalso()
+        self.lancar = ProcessoFalso()
+        self.menu = MenuSubida()
+        self.painel = PainelScripts({"POUSO": self.pouso, "LANCAR": self.lancar}, self.menu)
+
+    def test_encoder_com_a_tela_noutra_pagina_so_pede_a_subida(self):
+        for pagina in ("NAV", "SAS", "AP", "POUSO"):
+            self.assertEqual(self.painel.tratar("ENC SUB 1", 0.0, pagina), "SUBIDA")
+            self.assertEqual(self.painel.tratar("BTN SUB 1", 0.1, pagina), "SUBIDA")
+            self.assertEqual(self.painel.tratar("BTN SUB 0", 0.2, pagina), "SUBIDA")
+        self.assertEqual(self.painel.tratar("ENC SUB 1", 0.0), "SUBIDA")
+        self.assertEqual(self.menu.cursor, 0)
+        self.assertFalse(self.menu.editando)
+        self.assertEqual(self.menu.valores, {"ALT": 80, "INC": 0, "PLANO": 0})
+
+    def test_aperto_que_abriu_a_pagina_nao_escolhe_a_linha(self):
+        self.assertEqual(self.painel.tratar("BTN SUB 1", 0.0, "NAV"), "SUBIDA")
+        self.assertEqual(self.painel.tratar("BTN SUB 0", 0.1, "SUBIDA"), "SUBIDA")
+        self.assertFalse(self.menu.editando)
+
+    def test_encoder_com_a_tela_na_subida_mexe_no_menu(self):
+        self.assertEqual(self.painel.tratar("ENC SUB 1", 0.0, "SUBIDA"), "SUBIDA")
+        self.assertEqual(self.menu.linha, "INC")
+        self.assertEqual(self.painel.tratar("BTN SUB 1", 1.0, "SUBIDA"), "SUBIDA")
+        self.assertEqual(self.painel.tratar("BTN SUB 0", 1.1, "SUBIDA"), "SUBIDA")
+        self.assertTrue(self.menu.editando)
+        self.assertEqual(self.painel.tratar("ENC SUB 1", 2.0, "SUBIDA"), "SUBIDA")
+        self.assertEqual(self.menu.valores["INC"], 1)
+        self.painel.tratar("BTN SUB 1", 3.0, "SUBIDA")
+        self.painel.tratar("BTN SUB 0", 3.1, "SUBIDA")
+        self.assertFalse(self.menu.editando)
+
+    def test_korry_pede_a_pagina_do_script(self):
+        self.assertEqual(self.painel.tratar("BTN LANCAR 1", 0.0), "SUBIDA")
+        self.assertEqual(self.painel.tratar("BTN LANCAR 0", 0.1), "")
+        self.assertEqual(self.painel.tratar("BTN POUSO 1", 1.0), "POUSO")
+        self.assertEqual(self.painel.tratar("BTN POUSO 0", 1.1), "")
+        self.assertEqual(self.painel.estado("POUSO", 2.0), "OFF")
+
+    def test_linhas_de_outros_paineis_devolvem_none(self):
+        for linha in ("BTN SAS 1", "BTN FBW 1", "BTN AP 1", "ENC AP 1", "BTN POUSO", "ENC POUSO 1", "ENC SUB",
+                      "ENC SUB x", "ENC SUB 1.5", "BTN SUB 2", "BTN SUB", "BTN EXEC 1", "SCR POUSO OFF"):
+            self.assertIsNone(self.painel.tratar(linha, 0.0, "SUBIDA"), linha)
+        self.assertEqual(self.menu.valores, {"ALT": 80, "INC": 0, "PLANO": 0})
+        self.assertEqual(self.menu.cursor, 0)
+
+    def test_sem_menu_as_linhas_da_subida_nao_sao_do_painel(self):
+        painel = PainelScripts({"POUSO": self.pouso})
+        self.assertIsNone(painel.tratar("ENC SUB 1", 0.0, "SUBIDA"))
+        self.assertIsNone(painel.tratar("BTN SUB 1", 0.0, "SUBIDA"))
+        self.assertEqual(painel.tela(), {})
+        painel.sair_do_menu()
+
+    def test_pagina_em_uso(self):
+        self.assertIsNone(self.painel.pagina_em_uso(0.0))
+        self.painel.tratar("BTN LANCAR 1", 0.0)
+        self.assertEqual(self.painel.pagina_em_uso(1.0), "SUBIDA")
+        self.painel.atualizar(SEGURAR)
+        self.painel.tratar("BTN LANCAR 0", SEGURAR)
+        self.assertEqual(self.painel.estado("LANCAR", SEGURAR), "ATIVO")
+        self.assertEqual(self.painel.pagina_em_uso(SEGURAR), "SUBIDA")
+        self.assertEqual(self.painel.luzes(SEGURAR)["SCR LANCAR"], "SCR LANCAR ATIVO")
+        self.painel.tratar("BTN LANCAR 1", 20.0)
+        self.painel.atualizar(20.0 + SEGURAR)
+        self.painel.tratar("BTN LANCAR 0", 20.0 + SEGURAR)
+        self.painel.atualizar(20.0 + SEGURAR)
+        self.assertEqual(self.painel.estado("LANCAR", 20.0 + SEGURAR), "ABORT")
+        self.assertEqual(self.painel.pagina_em_uso(20.0 + SEGURAR), "SUBIDA")
+        self.assertIsNone(self.painel.pagina_em_uso(20.0 + SEGURAR + MOSTRA_FIM))
+
+    def test_pagina_em_uso_do_pouso(self):
+        self.painel.tratar("BTN POUSO 1", 0.0)
+        self.painel.atualizar(SEGURAR)
+        self.painel.tratar("BTN POUSO 0", SEGURAR)
+        self.assertEqual(self.painel.pagina_em_uso(SEGURAR), "POUSO")
+
+    def test_sair_do_menu_e_tela(self):
+        self.painel.tratar("ENC SUB 1", 0.0, "SUBIDA")
+        self.painel.tratar("BTN SUB 1", 1.0, "SUBIDA")
+        self.painel.tratar("BTN SUB 0", 1.1, "SUBIDA")
+        self.assertEqual(self.painel.tela()["SBC"], "SBC INC 1")
+        self.painel.sair_do_menu()
+        self.assertEqual(self.painel.tela()["SBC"], "SBC INC 0")
+        self.assertEqual(self.painel.tela(), self.menu.linhas())
+
+    def test_um_script_por_vez_com_os_dois_korry(self):
+        self.painel.tratar("BTN LANCAR 1", 0.0)
+        self.painel.atualizar(SEGURAR)
+        self.painel.tratar("BTN POUSO 1", 1.0)
+        self.painel.atualizar(1.0 + SEGURAR)
+        self.assertEqual(self.pouso.iniciado, 0)
+        self.assertEqual(self.painel.ativo(), "LANCAR")
+
+    def test_os_dois_scripts_tem_luzes(self):
+        self.assertEqual(self.painel.luzes(0.0), {"SCR POUSO": "SCR POUSO OFF", "SCR LANCAR": "SCR LANCAR OFF"})
+
+
+class TestProcessoComArgumentos(unittest.TestCase):
+    """Os argumentos podem ser uma função, chamada na hora de abrir o script."""
+
+    def esperar_sair(self, processo):
+        fim = time.monotonic() + 10
+        while processo.rodando() and time.monotonic() < fim:
+            time.sleep(0.02)
+        self.assertFalse(processo.rodando())
+
+    def test_valores_do_menu_na_hora_de_iniciar(self):
+        menu = MenuSubida()
+        with tempfile.TemporaryDirectory() as pasta:
+            saida = os.path.join(pasta, "argumentos.json")
+            script = os.path.join(pasta, "ecoar.py")
+            with open(script, "w", encoding="utf-8") as f:
+                f.write("import json, sys\nwith open(sys.argv[1], 'w') as f:\n    json.dump(sys.argv[2:], f)\n")
+            processo = Processo("LANCAR", lambda: [script, saida] + menu.argumentos())
+
+            menu.valores.update({"ALT": 120, "INC": 45})
+            processo.iniciar()
+            self.esperar_sair(processo)
+            with open(saida, encoding="utf-8") as f:
+                self.assertEqual(json.load(f), ["--altitude", "120000", "--inclinacao", "45"])
+
+            menu.valores.update({"ALT": 80, "INC": 98, "PLANO": 1})
+            processo.iniciar()
+            self.esperar_sair(processo)
+            with open(saida, encoding="utf-8") as f:
+                self.assertEqual(json.load(f), ["--altitude", "80000", "--inclinacao", "98", "--plano-do-alvo"])
+            self.assertEqual(processo.codigo, 0)
+
+    def test_lista_continua_valendo(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            saida = os.path.join(pasta, "argumentos.json")
+            script = os.path.join(pasta, "ecoar.py")
+            with open(script, "w", encoding="utf-8") as f:
+                f.write("import json, sys\nwith open(sys.argv[1], 'w') as f:\n    json.dump(sys.argv[2:], f)\n")
+            processo = Processo("POUSO", [script, saida, "--demo"])
+            processo.iniciar()
+            self.esperar_sair(processo)
+            with open(saida, encoding="utf-8") as f:
+                self.assertEqual(json.load(f), ["--demo"])
+
+
 class TestLinhasDoPouso(unittest.TestCase):
     """O pouso.py manda as linhas POU; a ponte confere e repassa para a tela."""
 
@@ -184,6 +443,108 @@ class TestLinhasDoPouso(unittest.TestCase):
         self.assertIsNone(self.ponte._endereco)
 
 
+class TestLinhasDaSubida(unittest.TestCase):
+    """O subida.py manda as linhas SUB; a ponte confere e repassa para a tela."""
+
+    def setUp(self):
+        self.ponte = Scripts(porta=0)
+        self.porta = self.ponte._socket.getsockname()[1]
+        self.enviar = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    def tearDown(self):
+        self.ponte.fechar()
+        self.enviar.close()
+
+    def esperar(self, condicao, tempo=2.0):
+        fim = time.monotonic() + tempo
+        while time.monotonic() < fim:
+            if condicao():
+                return True
+            time.sleep(0.02)
+        return False
+
+    def linhas_da_nave(self):
+        nave = subida.NaveSimulada.kerbin()
+        guiagem = subida.Guiagem(subida.KERBIN, 80_000.0, 0.0, ler_estagios=nave.estagios)
+        l = nave.leitura()
+        guiagem.passo(l)
+        return subida.linhas_de_estado(l, guiagem, subida.KERBIN)
+
+    def test_linhas_cabem_e_passam(self):
+        linhas = self.linhas_da_nave()
+        for linha in linhas:
+            self.assertLessEqual(len(linha), 31, linha)
+            self.assertTrue(linha.isascii(), linha)
+        self.assertEqual(self.ponte.estado_subida(), {"SUB": "SUB OFF"})
+        self.enviar.sendto("\n".join(linhas).encode("ascii"), ("127.0.0.1", self.porta))
+        self.assertTrue(self.esperar(lambda: "SUB FASE" in self.ponte.estado_subida()))
+        estado = self.ponte.estado_subida()
+        self.assertEqual(sorted(estado.values()), sorted(linhas))
+        self.assertEqual(estado["SUB FASE"], "SUB FASE DECOLAGEM")
+        self.assertEqual(estado["SUB ALVO"], "SUB ALVO 80000")
+        self.assertEqual(estado["SUB AVISO"], "SUB AVISO OFF")
+
+    def test_as_fases_e_os_avisos_do_script_passam(self):
+        fases = [getattr(subida, nome) for nome in (
+            "JANELA", "DECOLAGEM", "GIRO", "CURVA", "VACUO", "COSTA", "CIRCULARIZA", "PLANO", "ORBITA", "FALHA")]
+        avisos = [getattr(subida, nome) for nome in (
+            "AVISO_EMPUXO", "AVISO_ALTITUDE", "AVISO_INCLINACAO", "AVISO_ALVO", "AVISO_COMBUSTIVEL")]
+        self.assertEqual(sorted(CAMPOS_SUBIDA["FASE"]), sorted(fases))
+        self.assertEqual(sorted(CAMPOS_SUBIDA["AVISO"]), sorted(avisos + ["OFF"]))
+        pacote = [f"SUB FASE {fase}" for fase in fases] + [f"SUB AVISO {aviso}" for aviso in avisos]
+        self.enviar.sendto("\n".join(pacote).encode("ascii"), ("127.0.0.1", self.porta))
+        self.assertTrue(self.esperar(lambda: "SUB AVISO" in self.ponte.estado_subida()))
+        self.assertEqual(self.ponte.estado_subida()["SUB AVISO"], f"SUB AVISO {avisos[-1]}")
+
+    def test_valores_off_passam(self):
+        pacote = ["SUB AP OFF", "SUB PE OFF", "SUB JAN OFF", "SUB GIRO OFF", "SUB PE -123456"]
+        self.enviar.sendto("\n".join(pacote).encode("ascii"), ("127.0.0.1", self.porta))
+        self.assertTrue(self.esperar(lambda: "SUB GIRO" in self.ponte.estado_subida()))
+        estado = self.ponte.estado_subida()
+        self.assertEqual(estado["SUB AP"], "SUB AP OFF")
+        self.assertEqual(estado["SUB PE"], "SUB PE -123456")
+
+    def test_linha_errada_e_descartada(self):
+        pacote = [
+            "SUB FASE VOANDO", "SUB ALT muito", "SUB OFF", "SUB ALT", "SUB ALT 1 2", "SUB XIS 1",
+            "SUB MOTOR OFF", "SUB AVISO NADA", "SUB AP 1.5",
+        ]
+        self.enviar.sendto("\n".join(pacote).encode("ascii"), ("127.0.0.1", self.porta))
+        time.sleep(0.1)
+        self.assertEqual(self.ponte.estado_subida(), {"SUB": "SUB OFF"})
+
+    def test_sem_noticia_volta_a_off(self):
+        self.enviar.sendto(b"SUB FASE GIRO", ("127.0.0.1", self.porta))
+        self.assertTrue(self.esperar(lambda: "SUB FASE" in self.ponte.estado_subida()))
+        self.ponte._quando_subida -= 2.0
+        self.assertEqual(self.ponte.estado_subida(), {"SUB": "SUB OFF"})
+        self.assertEqual(self.ponte.estado_subida(), {"SUB": "SUB OFF"})
+
+    def test_a_subida_nao_recebe_os_comandos_do_fbw(self):
+        self.enviar.sendto(b"SUB FASE GIRO", ("127.0.0.1", self.porta))
+        self.assertTrue(self.esperar(lambda: "SUB FASE" in self.ponte.estado_subida()))
+        self.assertIsNone(self.ponte._endereco)
+
+    def test_o_endereco_do_fbw_nao_muda(self):
+        fbw = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        fbw.bind(("127.0.0.1", 0))
+        try:
+            fbw.sendto(b"FBW OFF", ("127.0.0.1", self.porta))
+
+            def endereco_do_fbw():
+                self.ponte.estado_fbw()
+                return self.ponte._endereco
+
+            self.assertTrue(self.esperar(lambda: endereco_do_fbw() is not None))
+            endereco = self.ponte._endereco
+            self.assertEqual(endereco, fbw.getsockname())
+            self.enviar.sendto(b"SUB FASE GIRO", ("127.0.0.1", self.porta))
+            self.assertTrue(self.esperar(lambda: "SUB FASE" in self.ponte.estado_subida()))
+            self.assertEqual(self.ponte._endereco, endereco)
+        finally:
+            fbw.close()
+
+
 class TestProcessoDeVerdade(unittest.TestCase):
     """O pouso.py --demo aberto pela ponte, mandando por UDP, e abortado pelo korry."""
 
@@ -210,6 +571,37 @@ class TestProcessoDeVerdade(unittest.TestCase):
             painel.atualizar(106.0)
             self.assertEqual(painel.estado("POUSO", 106.0), "ABORT")
             self.assertEqual(processo.codigo, pouso.INTERROMPIDO)
+        finally:
+            processo.fechar()
+            ponte.fechar()
+
+    def test_subida_abrir_e_abortar(self):
+        ponte = Scripts(porta=0)
+        porta = ponte._socket.getsockname()[1]
+        menu = MenuSubida()
+        menu.valores.update({"ALT": 100, "INC": 0})
+        processo = painel_scripts.processo_subida("127.0.0.1", menu, demo=True, tela=f"127.0.0.1:{porta}")
+        painel = PainelScripts({"LANCAR": processo}, menu)
+        try:
+            painel.tratar("BTN LANCAR 1", 0.0)
+            painel.atualizar(SEGURAR)
+            painel.tratar("BTN LANCAR 0", SEGURAR)
+            self.assertEqual(painel.estado("LANCAR", SEGURAR), "ATIVO")
+            fim = time.monotonic() + 20
+            while "SUB FASE" not in ponte.estado_subida() and time.monotonic() < fim:
+                time.sleep(0.05)
+            estado = ponte.estado_subida()
+            self.assertIn(estado["SUB FASE"], ("SUB FASE DECOLAGEM", "SUB FASE GIRO", "SUB FASE CURVA"))
+            self.assertEqual(estado["SUB ALVO"], "SUB ALVO 100000")
+
+            painel.tratar("BTN LANCAR 1", 100.0)
+            painel.atualizar(100.0 + SEGURAR)
+            fim = time.monotonic() + 10
+            while processo.rodando() and time.monotonic() < fim:
+                time.sleep(0.05)
+            painel.atualizar(106.0)
+            self.assertEqual(painel.estado("LANCAR", 106.0), "ABORT")
+            self.assertEqual(processo.codigo, subida.INTERROMPIDO)
         finally:
             processo.fechar()
             ponte.fechar()

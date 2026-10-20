@@ -164,6 +164,10 @@ FINS_POUSO = {"FIM": ("POUSADA", VERDE), "ABORT": ("ABORTADO", AVISO), "FALHA": 
 AVISOS_POUSO = {"EMPUXO": "EMPUXO INSUFICIENTE", "MOTOR": "SEM MOTOR ATIVO", "NARIZ": "NARIZ LONGE DA VERTICAL"}
 CAMPOS_POUSO = ("FASE", "ALT", "VV", "MOTOR", "TWR", "FREADA", "IGN", "SAS", "INCL", "AVISO")
 CAMPOS_POUSO_TEXTO = ("FASE", "SAS", "AVISO")
+CAMPOS_SUBIDA = ("FASE", "ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR", "AVISO")
+CAMPOS_SUBIDA_TEXTO = ("FASE", "AVISO")
+LINHAS_MENU_SUBIDA = ("ALT", "INC", "PLANO")
+SCRIPTS = ("POUSO", "LANCAR")
 
 CARDEAIS = {0: "N", 90: "L", 180: "S", 270: "O"}
 NUMEROS_RUMO = tuple((CARDEAIS.get(h, str(h)), 4, h) for h in range(0, 360, 30))
@@ -185,6 +189,21 @@ def _inteiro(texto):
     if corpo.isascii() and corpo.isdigit():
         return int(texto)
     return None
+
+
+def _linha_da_subida(nome, partes, numeros):
+    """Confere uma linha SUB, SBV ou SBC da página SUBIDA, que só a mikromedia desenha."""
+    if nome == "SUB":
+        if partes == ["OFF"]:
+            return True
+        if len(partes) != 2:
+            return False
+        if partes[0] in CAMPOS_SUBIDA_TEXTO:
+            return True
+        return partes[0] in CAMPOS_SUBIDA and (numeros[1] is not None or partes[1] == "OFF")
+    if nome == "SBV":
+        return len(partes) == 2 and partes[0] in LINHAS_MENU_SUBIDA and numeros[1] is not None
+    return nome == "SBC" and len(partes) == 2 and partes[0] in LINHAS_MENU_SUBIDA and partes[1] in ("0", "1")
 
 
 def formatar_distancia(metros):
@@ -345,8 +364,8 @@ class Simulador:
             self._numeros[nome] = numeros[0]
         elif nome in ("SAS", "RCS") and partes in (["0"], ["1"]):
             self._estados[nome] = partes[0] == "1"
-        elif nome == "PAG" and partes in (["NAV"], ["SAS"], ["AP"], ["POUSO"]):
-            self._pagina = partes[0]
+        elif nome == "PAG" and partes in (["NAV"], ["SAS"], ["AP"], ["POUSO"], ["SUBIDA"]):
+            self._pagina = "NAV" if partes[0] == "SUBIDA" else partes[0]
         elif nome == "SASM" and partes == ["OFF"]:
             self._sas["modo"] = self._sas["cor"] = None
         elif nome == "SASM" and len(partes) == 2 and partes[1] in ("A", "V"):
@@ -359,10 +378,14 @@ class Simulador:
             self._ap[partes[0]][1] = numeros[1]
         elif nome == "APC" and len(partes) == 2 and partes[0] in self._ap and partes[1] in ("0", "1"):
             self._cursor = (partes[0], partes[1] == "1")
-        elif nome == "SCR" and len(partes) == 2 and partes[0] == "POUSO" and partes[1] in ("OFF", "ATIVO", "FIM", "ABORT", "FALHA"):
-            self._scr = (partes[1], None)
-        elif nome == "SCR" and len(partes) == 3 and partes[0] == "POUSO" and partes[1] in ("LIGA", "DESL") and numeros[2] is not None:
-            self._scr = (partes[1], numeros[2])
+        elif nome == "SCR" and len(partes) == 2 and partes[0] in SCRIPTS and partes[1] in ("OFF", "ATIVO", "FIM", "ABORT", "FALHA"):
+            if partes[0] == "POUSO":
+                self._scr = (partes[1], None)
+        elif nome == "SCR" and len(partes) == 3 and partes[0] in SCRIPTS and partes[1] in ("LIGA", "DESL") and numeros[2] is not None:
+            if partes[0] == "POUSO":
+                self._scr = (partes[1], numeros[2])
+        elif _linha_da_subida(nome, partes, numeros):
+            pass
         elif nome == "POU" and partes == ["OFF"]:
             self._pouso = dict.fromkeys(CAMPOS_POUSO)
         elif nome == "POU" and len(partes) == 2 and partes[0] in CAMPOS_POUSO_TEXTO:

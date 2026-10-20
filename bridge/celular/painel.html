@@ -64,7 +64,7 @@
   .korry.unica { font-size: calc(var(--k) * 0.16); text-align: center; line-height: 1.1; }
 
   /* Encoder: arraste em volta para girar; o centro aperta (segurar 1 s liga o modo). */
-  .piloto .corpo { display: flex; align-items: center; justify-content: space-around; gap: 6px; }
+  .piloto .corpo, .configurar .corpo { display: flex; align-items: center; justify-content: space-around; gap: 6px; }
   .encoder { position: relative; width: calc(var(--k) * 1.45); height: calc(var(--k) * 1.45); touch-action: none; }
   .anel {
     position: absolute; inset: 0; border-radius: 50%;
@@ -144,16 +144,16 @@
       </div>
     </div>
 
-    <div class="grupo piloto">
+    <div class="grupo piloto" data-encoder="AP">
       <span class="nome">PILOTO AUTO</span>
       <div class="corpo">
         <div class="setas">
-          <button class="seta" id="mais">+</button>
-          <button class="seta" id="menos">&minus;</button>
+          <button class="seta mais">+</button>
+          <button class="seta menos">&minus;</button>
         </div>
-        <div class="encoder" id="encoder">
-          <div class="anel" id="anel"><div class="marca"></div></div>
-          <div class="miolo" id="miolo">APERTAR</div>
+        <div class="encoder">
+          <div class="anel"><div class="marca"></div></div>
+          <div class="miolo">APERTAR</div>
         </div>
         <div class="luzes">
           <span class="luz" id="APL-HDG">HDG <i></i></span>
@@ -170,18 +170,21 @@
 </div>
 
 <!--
-  Painel de scripts (hardware/construcao.md#painel-de-scripts): o korry POUSO
-  manda BTN POUSO 1 ao apertar e BTN POUSO 0 ao soltar, e a ponte mede o tempo:
-  5 s abre o scripts/pouso.py, e 5 s de novo aborta. A cor vem da linha
-  SCR POUSO que a ponte manda. Os outros korry são lugares vagos.
+  Painel de scripts (hardware/construcao.md#painel-de-scripts): os korry POUSO
+  e LANCAR mandam BTN <nome> 1 ao apertar e BTN <nome> 0 ao soltar, e a ponte
+  mede o tempo: 5 s abre o scripts/pouso.py (ou o scripts/subida.py, com os
+  valores do menu da subida), e 5 s de novo aborta. A cor vem da linha
+  SCR <nome> que a ponte manda. O encoder da subida (CONFIGURAR SUBIDA) manda
+  ENC SUB <cliques>, BTN SUB 1 e BTN SUB 0 e mexe no menu da página SUBIDA
+  da tela. Os outros korry são lugares vagos.
 -->
 <div class="painel" id="painel-scripts">
   <h1>SCRIPTS</h1>
   <div class="grupo faixa">
     <span class="nome">SUBIDA</span>
     <div class="corpo">
-      <div class="korry vago">LANCAR</div><div class="korry vago"></div>
-      <div class="oque">DO CHAO ATE A ORBITA</div>
+      <button class="korry script" id="script-LANCAR" data-segurar="LANCAR">LANCAR</button><div class="korry vago"></div>
+      <div class="oque">DO CHAO ATE A ORBITA<br>SEGURAR 5 S: LIGA<br>DE NOVO: ABORTA</div>
     </div>
   </div>
   <div class="grupo faixa">
@@ -197,6 +200,20 @@
       <button class="korry script" id="script-POUSO" data-segurar="POUSO">POUSO</button><div class="korry vago">PRECISAO</div>
       <div class="oque">DA ORBITA ATE O CHAO<br>SEGURAR 5 S: LIGA<br>DE NOVO: ABORTA</div>
     </div>
+  </div>
+  <div class="grupo configurar" data-encoder="SUB">
+    <span class="nome">CONFIGURAR SUBIDA</span>
+    <div class="corpo">
+      <div class="setas">
+        <button class="seta mais">+</button>
+        <button class="seta menos">&minus;</button>
+      </div>
+      <div class="encoder">
+        <div class="anel"><div class="marca"></div></div>
+        <div class="miolo">APERTAR</div>
+      </div>
+    </div>
+    <div class="apoio">GIRAR: LINHA OU VALOR &middot; APERTAR: ESCOLHE &middot; NA TELA, PAGINA SUBIDA</div>
   </div>
 </div>
 
@@ -348,64 +365,68 @@ for (const korry of document.querySelectorAll("[data-segurar]")) {
 
 // Arrastar o dedo em volta do anel gira o encoder: um clique a cada 18°.
 // Os cliques de um mesmo instante vão numa linha só (ENC AP 2).
-const encoder = document.getElementById("encoder");
-const anel = document.getElementById("anel");
-const miolo = document.getElementById("miolo");
-let giro = null, angulo = 0, pendentes = 0;
+function montarEncoder(grupo, nome) {
+  const encoder = grupo.querySelector(".encoder");
+  const anel = grupo.querySelector(".anel");
+  const miolo = grupo.querySelector(".miolo");
+  let giro = null, angulo = 0, pendentes = 0;
 
-function anguloDoToque(e) {
-  const r = encoder.getBoundingClientRect();
-  return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180 / Math.PI;
-}
-
-function girar(cliques) {
-  angulo += cliques * 360 / CLIQUES_POR_VOLTA;
-  anel.style.transform = `rotate(${angulo}deg)`;
-  pendentes += cliques;
-}
-
-setInterval(() => {
-  if (pendentes !== 0) { mandar(`ENC AP ${pendentes}`); pendentes = 0; }
-}, 40);
-
-anel.addEventListener("pointerdown", (e) => {
-  anel.setPointerCapture(e.pointerId);
-  giro = anguloDoToque(e);
-});
-anel.addEventListener("pointermove", (e) => {
-  if (giro === null) return;
-  const agora = anguloDoToque(e);
-  let delta = agora - giro;
-  if (delta > 180) delta -= 360;
-  if (delta < -180) delta += 360;
-  const cliques = Math.trunc(delta / (360 / CLIQUES_POR_VOLTA));
-  if (cliques !== 0) {
-    girar(cliques);
-    giro += cliques * 360 / CLIQUES_POR_VOLTA;
+  function anguloDoToque(e) {
+    const r = encoder.getBoundingClientRect();
+    return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180 / Math.PI;
   }
-});
-for (const fim of ["pointerup", "pointercancel"]) anel.addEventListener(fim, () => { giro = null; });
 
-document.getElementById("mais").addEventListener("click", () => girar(1));
-document.getElementById("menos").addEventListener("click", () => girar(-1));
+  function girar(cliques) {
+    angulo += cliques * 360 / CLIQUES_POR_VOLTA;
+    anel.style.transform = `rotate(${angulo}deg)`;
+    pendentes += cliques;
+  }
 
-// O centro é o botão do encoder: manda o aperto e a soltura, e a ponte mede o tempo.
-let apertado = false;
-miolo.addEventListener("pointerdown", (e) => {
-  e.stopPropagation();
-  miolo.setPointerCapture(e.pointerId);
-  apertado = true;
-  miolo.classList.add("apertado");
-  mandar("BTN AP 1");
-});
-for (const fim of ["pointerup", "pointercancel"]) {
-  miolo.addEventListener(fim, () => {
-    if (!apertado) return;
-    apertado = false;
-    miolo.classList.remove("apertado");
-    mandar("BTN AP 0");
+  setInterval(() => {
+    if (pendentes !== 0) { mandar(`ENC ${nome} ${pendentes}`); pendentes = 0; }
+  }, 40);
+
+  anel.addEventListener("pointerdown", (e) => {
+    anel.setPointerCapture(e.pointerId);
+    giro = anguloDoToque(e);
   });
+  anel.addEventListener("pointermove", (e) => {
+    if (giro === null) return;
+    const agora = anguloDoToque(e);
+    let delta = agora - giro;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    const cliques = Math.trunc(delta / (360 / CLIQUES_POR_VOLTA));
+    if (cliques !== 0) {
+      girar(cliques);
+      giro += cliques * 360 / CLIQUES_POR_VOLTA;
+    }
+  });
+  for (const fim of ["pointerup", "pointercancel"]) anel.addEventListener(fim, () => { giro = null; });
+
+  grupo.querySelector(".seta.mais").addEventListener("click", () => girar(1));
+  grupo.querySelector(".seta.menos").addEventListener("click", () => girar(-1));
+
+  // O centro é o botão do encoder: manda o aperto e a soltura, e a ponte mede o tempo.
+  let apertado = false;
+  miolo.addEventListener("pointerdown", (e) => {
+    e.stopPropagation();
+    miolo.setPointerCapture(e.pointerId);
+    apertado = true;
+    miolo.classList.add("apertado");
+    mandar(`BTN ${nome} 1`);
+  });
+  for (const fim of ["pointerup", "pointercancel"]) {
+    miolo.addEventListener(fim, () => {
+      if (!apertado) return;
+      apertado = false;
+      miolo.classList.remove("apertado");
+      mandar(`BTN ${nome} 0`);
+    });
+  }
 }
+
+for (const grupo of document.querySelectorAll("[data-encoder]")) montarEncoder(grupo, grupo.dataset.encoder);
 </script>
 </body>
 </html>

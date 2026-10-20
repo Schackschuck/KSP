@@ -96,6 +96,10 @@ const FINS_POUSO = { FIM: ["POUSADA", "verde"], ABORT: ["ABORTADO", "aviso"], FA
 const AVISOS_POUSO = { EMPUXO: "EMPUXO INSUFICIENTE", MOTOR: "SEM MOTOR ATIVO", NARIZ: "NARIZ LONGE DA VERTICAL" };
 const CAMPOS_POUSO = ["FASE", "ALT", "VV", "MOTOR", "TWR", "FREADA", "IGN", "SAS", "INCL", "AVISO"];
 const CAMPOS_POUSO_TEXTO = ["FASE", "SAS", "AVISO"];
+const CAMPOS_SUBIDA = ["FASE", "ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR", "AVISO"];
+const CAMPOS_SUBIDA_TEXTO = ["FASE", "AVISO"];
+const LINHAS_MENU_SUBIDA = ["ALT", "INC", "PLANO"];
+const SCRIPTS = ["POUSO", "LANCAR"];
 const pousoVazio = () => Object.fromEntries(CAMPOS_POUSO.map((c) => [c, null]));
 
 // Navball: os mesmos valores de bridge/navball.py.
@@ -144,6 +148,17 @@ function inteiro(texto) {
   return /^[+-]?[0-9]+$/.test(texto) ? parseInt(texto, 10) : null;
 }
 
+function linhaDaSubida(nome, partes, numeros) {
+  if (nome === "SUB") {
+    if (partes.length === 1) return partes[0] === "OFF";
+    if (partes.length !== 2) return false;
+    if (CAMPOS_SUBIDA_TEXTO.includes(partes[0])) return true;
+    return CAMPOS_SUBIDA.includes(partes[0]) && (numeros[1] !== null || partes[1] === "OFF");
+  }
+  if (nome === "SBV") return partes.length === 2 && LINHAS_MENU_SUBIDA.includes(partes[0]) && numeros[1] !== null;
+  return nome === "SBC" && partes.length === 2 && LINHAS_MENU_SUBIDA.includes(partes[0]) && ["0", "1"].includes(partes[1]);
+}
+
 function interpretar(mensagem) {
   const espaco = mensagem.indexOf(" ");
   const nome = espaco < 0 ? mensagem : mensagem.slice(0, espaco);
@@ -167,8 +182,8 @@ function interpretar(mensagem) {
     n[nome] = numeros[0];
   } else if ((nome === "SAS" || nome === "RCS") && partes.length === 1 && (partes[0] === "0" || partes[0] === "1")) {
     estado.estados[nome] = partes[0] === "1";
-  } else if (nome === "PAG" && partes.length === 1 && ["NAV", "SAS", "AP", "POUSO"].includes(partes[0])) {
-    estado.pagina = partes[0];
+  } else if (nome === "PAG" && partes.length === 1 && ["NAV", "SAS", "AP", "POUSO", "SUBIDA"].includes(partes[0])) {
+    estado.pagina = partes[0] === "SUBIDA" ? "NAV" : partes[0];
   } else if (nome === "SASM" && off) {
     estado.sas.modo = estado.sas.cor = null;
   } else if (nome === "SASM" && partes.length === 2 && ["A", "V"].includes(partes[1])) {
@@ -181,10 +196,12 @@ function interpretar(mensagem) {
     estado.ap[partes[0]][1] = numeros[1];
   } else if (nome === "APC" && partes.length === 2 && partes[0] in estado.ap && ["0", "1"].includes(partes[1])) {
     estado.cursor = [partes[0], partes[1] === "1"];
-  } else if (nome === "SCR" && partes.length === 2 && partes[0] === "POUSO" && ["OFF", "ATIVO", "FIM", "ABORT", "FALHA"].includes(partes[1])) {
-    estado.scr = [partes[1], null];
-  } else if (nome === "SCR" && partes.length === 3 && partes[0] === "POUSO" && ["LIGA", "DESL"].includes(partes[1]) && numeros[2] !== null) {
-    estado.scr = [partes[1], numeros[2]];
+  } else if (nome === "SCR" && partes.length === 2 && SCRIPTS.includes(partes[0]) && ["OFF", "ATIVO", "FIM", "ABORT", "FALHA"].includes(partes[1])) {
+    if (partes[0] === "POUSO") estado.scr = [partes[1], null];
+  } else if (nome === "SCR" && partes.length === 3 && SCRIPTS.includes(partes[0]) && ["LIGA", "DESL"].includes(partes[1]) && numeros[2] !== null) {
+    if (partes[0] === "POUSO") estado.scr = [partes[1], numeros[2]];
+  } else if (linhaDaSubida(nome, partes, numeros)) {
+    return true;
   } else if (nome === "POU" && off) {
     estado.pouso = pousoVazio();
   } else if (nome === "POU" && partes.length === 2 && CAMPOS_POUSO_TEXTO.includes(partes[0])) {
