@@ -2,7 +2,7 @@
 
 O [`scripts/subida.py`](../scripts/subida.py) leva a nave da plataforma até uma órbita circular. O piloto escolhe a altitude e a inclinação, ou pede o plano de um alvo. O script decola, faz a curva de gravidade com o giro escolhido por simulação, corta o motor quando o apoastro chega na altitude pedida, circulariza e, se for o caso, iguala o plano do alvo. Funciona em qualquer planeta, com ar ou sem.
 
-**Status: escrito e testado numa nave simulada; falta testar no jogo.** Os testes sem o KSP estão em [`scripts/tests/test_subida.py`](../scripts/tests/test_subida.py), e o roteiro para o jogo está [abaixo](#testar-no-jogo).
+**Status: voou no jogo em 20/10/2026 e chegou em órbita sozinho, com um foguete de 552 t; o giro ainda está em ajuste.** Os testes sem o KSP estão em [`scripts/tests/test_subida.py`](../scripts/tests/test_subida.py), e o roteiro para o jogo está [abaixo](#testar-no-jogo).
 
 ## Como usar
 
@@ -97,6 +97,8 @@ Os estágios da simulação vêm do jogo: os motores e o combustível que cada s
 - **A circularização:** `Δv = √(μ/ra) − v_ap`, com a duração pela equação do foguete. Ela começa metade da duração antes do apoastro, com o time warp parando 30 s antes. A queima é em malha fechada: a cada passo, mira a diferença entre a velocidade circular ali, no plano, e a velocidade de agora. O motor só vai a toda com o nariz a menos de 5° dessa direção e vai baixando no fim, para terminar em uns 3 s. Termina com menos de 0,3 m/s de diferença.
 - **A virada para a queima:** fora da direção, o motor nunca apaga. Um foguete grande, com rodas de reação fracas, só vira pelo gimbal, e o gimbal só funciona com empuxo. No primeiro voo no jogo, com o motor em 0% nessa hora, um foguete de 265 t ficou 42° fora da direção até o apoastro e caiu de volta. O acelerador máximo vai pelo erro do nariz: 100% até 5°, 10% de 45° para cima e, no meio, uma curva no logaritmo do erro. A 15° ele fica em 55%; a 10°, em 72%; a 30°, em 27%. Perto da direção ele sobe depressa, porque ali quase todo o empuxo já ajuda: a 10° de erro, perde 1,5%.
 - **O RCS:** liga junto com o piloto automático e fica ligado depois do fim, para ajudar a virar a nave quando o gimbal tem pouco empuxo. Na subida, gasta um pouco do monopropelente da nave.
+- **O rolamento fica solto:** o piloto automático liga com o `target_roll` em NaN, sem controle de rolamento. No servidor do kRPC do jogo, o `target_roll` vem em 0, e o controle de rolamento empurra para o lado errado. Conferido em órbita: pedindo 15° a menos, a nave rolou 45° a mais em 12 s, sem parar. Na plataforma, isso fazia o foguete girar em torno do próprio eixo na subida, e o nariz não acompanhava a curva. Como o foguete é simétrico, o rolamento não importa para a subida.
+- **No terminal,** a linha de cada segundo mostra o `pitch` pedido e o `nariz`, o pitch de verdade, para ver se a nave acompanha a curva. A linha da fase GIRO traz o giro escolhido.
 
 ### O limite de pressão dinâmica
 
