@@ -722,7 +722,7 @@ def main():
     from mfd_celular import endereco_local
     from ponte import conectar_krpc
 
-    conn = conectar_krpc(args.address)
+    conn = conectar_krpc(args.address, esperar=False)
     try:
         servidor = Servidor(args.porta)
     except OSError as e:

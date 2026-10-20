@@ -47,13 +47,17 @@ funções de acelerador (acel_q, acel_corte) da guiagem.
 
 Rumo e plano
 ------------
-O plano da órbita é fixo no espaço. A cada instante o rumo vem da velocidade
-horizontal inercial que ainda falta para ter a velocidade circular no plano
-(rumo_do_plano): isso já desconta a rotação do planeta. A conta leva a
-velocidade ao plano, mas a posição sai um pouco dele durante a subida (a
-velocidade da rotação do planeta aponta para fora do plano de uma órbita
-inclinada), de modo que a inclinação final pode ficar cerca de 1° fora da
-pedida. Com o plano de um alvo, a fase PLANO corrige o que sobrou.
+A cada instante o rumo vem da velocidade horizontal inercial que ainda falta
+para ter a velocidade circular no plano (rumo_do_plano): isso já desconta a
+rotação do planeta.
+
+Com o plano de um alvo, o plano é fixo no espaço, e o erro de posição que sobra
+da subida é corrigido pela fase PLANO. Sem alvo, o plano é refeito a cada passo,
+da decolagem até o fim da circularização: é o plano que passa pela posição de
+agora com a inclinação pedida (plano_pela_posicao), com o ramo para o norte ou
+para o sul escolhido pela velocidade. A rotação do planeta empurra a nave para
+fora do plano da decolagem, e assim ela não precisa voltar a ele: a inclinação
+final sai a menos de 0,1° da pedida.
 
 Sem a janela (inclinação pedida, sem alvo), o plano é o do lançamento para a
 inclinação pedida, a partir da latitude da base. Inclinação menor que a
@@ -806,9 +810,16 @@ class Guiagem:
             self.fase = JANELA
 
     def _refazer_plano(self, l):
-        """Sem alvo, o plano passa pela posição de agora; só o primeiro cálculo dá aviso e inclinacao_alvo."""
+        """Sem alvo, o plano passa pela posição de agora; só o primeiro cálculo dá aviso e inclinacao_alvo.
+
+        Depois do primeiro cálculo vale a inclinação possível dele: com a
+        pedida menor que a latitude, refazer o plano com a pedida faria o
+        limite andar junto com a latitude e a nave brigaria com a própria
+        órbita.
+        """
         primeiro = self.n is None
-        self.n, usada = plano_pela_posicao(l, self.corpo, self.inclinacao)
+        inclinacao = self.inclinacao if primeiro else self.inclinacao_alvo
+        self.n, usada = plano_pela_posicao(l, self.corpo, inclinacao)
         if primeiro:
             self.inclinacao_alvo = usada
             if abs(usada - self.inclinacao) > TOL_INCLINACAO:

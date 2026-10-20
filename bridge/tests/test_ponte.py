@@ -117,6 +117,21 @@ class TestPonte(unittest.TestCase):
         self.assertIn("No route to host", texto)
         self.assertEqual(texto.count("Conectado ao kRPC."), 1)
 
+    def test_sem_esperar_a_primeira_falha_encerra(self):
+        conector = self.trocar_connect([ConnectionRefusedError()])
+        with contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(SystemExit) as erro:
+                ponte.conectar_krpc("192.168.50.1", esperar=False)
+        self.assertIn("recusou a conexão", str(erro.exception))
+        self.assertEqual(conector.chamadas, 1)
+
+    def test_sem_esperar_conecta_normalmente_se_o_jogo_esta_aberto(self):
+        conector = self.trocar_connect()
+        with contextlib.redirect_stdout(io.StringIO()):
+            conn = ponte.conectar_krpc("192.168.50.1", esperar=False)
+        self.assertIs(conn, conector.conexoes[0])
+        self.assertEqual(conector.chamadas, 1)
+
     def test_manter_krpc_reconecta_quando_o_jogo_fecha(self):
         conector = self.trocar_connect()
         chamadas = []
