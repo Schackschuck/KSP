@@ -403,11 +403,11 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
 
 ### Subida até a órbita
 
-**Status: script escrito e testado numa nave simulada; falta testar no jogo.** [`scripts/subida.py`](scripts/subida.py) leva a nave da plataforma até uma órbita circular, em qualquer planeta, com ar ou sem. Como funciona, as contas e o roteiro de teste no jogo estão em [docs/subida.md](docs/subida.md).
+**Status: voou no jogo em 20/10/2026 e chegou em órbita sozinho, com um foguete de 552 t, a 80 e a 100 km; o giro está em ajuste.** [`scripts/subida.py`](scripts/subida.py) leva a nave da plataforma até uma órbita circular, em qualquer planeta, com ar ou sem. Como funciona, as contas e o roteiro de teste no jogo estão em [docs/subida.md](docs/subida.md).
 
 - **O piloto escolhe** a altitude, a inclinação e, se quiser, o plano do alvo escolhido no jogo, na página SUBIDA da tela multifunção, por um encoder. Segura o korry LANCAR 5 s, e o script voa.
 - **O rumo** desconta a rotação do planeta e é refeito a cada passo, pela velocidade que ainda falta. A inclinação final sai a menos de 0,1° da pedida.
-- **O giro** da curva de gravidade é escolhido por simulação: antes de inclinar, o script simula a subida inteira com 12 giros e fica com o de menor Δv, somando a subida e a circularização.
+- **O giro** da curva de gravidade é escolhido por simulação: antes de inclinar, o script simula a subida inteira com 16 giros e fica com o de menor Δv, somando a subida e a circularização. Depois, a cada 5 s, ele simula de novo o resto da subida e corrige o nariz em até 4°, em malha fechada.
 - **Com o plano de um alvo**, o script espera a janela de lançamento, com time warp, e no fim iguala o plano numa queima na linha dos nós.
 - **Os estágios** saem sozinhos; o corte é no apoastro pedido, e a circularização, em malha fechada, centrada no apoastro. O próprio script queima: o EXEC ainda não existe.
 - Junto com o pouso, fecha o ciclo: do chão até a órbita e de volta.

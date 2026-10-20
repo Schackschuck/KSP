@@ -57,7 +57,7 @@ No ar denso, o rumo fica a no máximo 3° do rumo do movimento, para o ângulo d
 
 ### O plano
 
-- **Sem alvo**, o plano é refeito a cada passo, da decolagem até o fim da circularização. É o plano que passa pela posição de agora com a inclinação pedida, com o ramo para o norte ou para o sul escolhido pela velocidade de agora. A rotação do planeta empurra a nave para fora do plano da decolagem; refazendo o plano, ela não precisa voltar a ele, e a inclinação final sai a menos de 0,1° da pedida. É o que o MechJeb faz, refazendo o rumo pela latitude de agora.
+- **Sem alvo**, o plano é refeito a cada passo, da decolagem até o começo da circularização. É o plano que passa pela posição de agora com a inclinação pedida, com o ramo para o norte ou para o sul escolhido pela velocidade de agora. A rotação do planeta empurra a nave para fora do plano da decolagem; refazendo o plano, ela não precisa voltar a ele, e a inclinação final sai a menos de 0,1° da pedida. É o que o MechJeb faz, refazendo o rumo pela latitude de agora. Na circularização o plano fica parado: refeito perto da latitude máxima da órbita, ele mudava a cada passo, e a queima ficava empurrando para o lado sem nunca zerar a diferença (achado num voo simulado na Mun a 30°, que queimou o combustível todo assim).
 - **Com o plano de um alvo**, o plano é fixo no espaço: o normal da órbita do alvo. O que sobra de erro de posição depois da subida (uns décimos de grau) é tirado pela fase `PLANO`, com uma queima na linha dos nós, onde os dois planos se cruzam.
 - **Uma inclinação menor que a latitude da base não existe.** O script lança na menor possível, com o aviso `INCLINACAO`. Do KSC, que fica a −0,1°, qualquer inclinação serve.
 
@@ -77,7 +77,7 @@ A Mun tem inclinação 0, e qualquer lançamento para leste do KSC já cai no pl
 - **arrasto:** curvar cedo deixa a nave rápida no ar denso, e ele pede para curvar tarde;
 - **direção:** apontar fora do movimento gasta empuxo de lado e põe força de ar na nave.
 
-Na curva de gravidade, o único parâmetro do perfil é o **giro**: o quanto o nariz inclina no começo. Depois, o nariz só segue o movimento, e a gravidade curva a trajetória sozinha.
+Na curva de gravidade, o parâmetro do perfil é o **giro**: o quanto o nariz inclina no começo. Depois, o nariz segue o movimento, e a gravidade curva a trajetória, com o **desvio** replanejado em voo corrigindo o caminho ([abaixo](#a-curva-em-malha-fechada)).
 
 No fim da decolagem, o script simula a subida inteira, em 2D, no plano da órbita. A simulação conta:
 
@@ -85,9 +85,17 @@ No fim da decolagem, o script simula a subida inteira, em 2D, no plano da órbit
 - o empuxo e o Isp de cada estágio, que mudam com a pressão;
 - o arrasto, com a área medida na decolagem;
 - a troca de estágios e o limite de pressão dinâmica;
-- o corte no apoastro, a costa no ar e a circularização.
+- o corte no apoastro, a costa no ar e a circularização, como uma queima de verdade: a nave costeia até faltar metade da queima para o apoastro e queima mirando a velocidade circular, como a guiagem. Uma circularização longa perde altura e gasta empuxo segurando, e a conta impulsiva (`√(μ/ra) − v_ap`) escondia isso: no primeiro voo no jogo, ela previa ~3 260 m/s para uma subida em pé que gastou 3 942.
 
-Ela testa 12 giros na faixa (de 0,5° a 30° com ar; de 5° a 85° sem) e refina o melhor por seção áurea. Leva uns 20 ms. Em Kerbin, com o foguete de teste, o giro escolhido é de uns 7,5° e o voo gasta uns 3 300 m/s até 80 km.
+Ela testa 16 giros na faixa (de 0,5° a 30° com ar; de 5° a 85° sem), em progressão geométrica, e refina o melhor por seção áurea. A progressão deixa as amostras mais juntas nos giros pequenos: com empuxo/peso perto de 1, só uma janela estreita chega em órbita (no foguete de 552 t, de ~0,8° a ~1,5°), e uma grade igual, de 2,7° em 2,7°, pulava a janela inteira. Leva menos de 0,5 s no Pi. Em Kerbin, com o foguete de teste, o giro escolhido é de uns 7,5° e o voo gasta uns 3 300 m/s até 80 km.
+
+### A curva em malha fechada
+
+Com empuxo/peso perto de 1, a curva passiva é sensível demais. O giro é escolhido com a nave virando na hora; no jogo, a nave de 552 t levou 14 s para virar 2,9°, e a curva começou com ~90 m/s em vez de ~55 m/s. A curva de gravidade dobra a trajetória no ritmo `g·cos γ / v`, então começar mais rápido deixa toda a subida mais em pé: o voo a 100 km cortou o motor a 44 km com o periastro em −573 km e gastou 3 868 m/s.
+
+Por isso, na CURVA e no VACUO, a cada 5 s, o script simula de novo o resto da subida a partir do estado de agora e escolhe o desvio do nariz em relação ao movimento, de −4° a 4°, que gasta menos Δv. Positivo deita a subida; negativo deixa em pé. Os estágios são os lidos no giro, descontando a massa já gasta, para não reler as peças pelo kRPC. No Pi, cada replanejamento leva uns 0,2 s.
+
+Numa nave simulada que vira a 1°/s (no lugar de 15°/s), o voo até 80 km gasta 3 313 m/s com o replanejamento e 3 477 sem.
 
 Os estágios da simulação vêm do jogo: os motores e o combustível que cada separação larga. A conta vale bem para foguetes em série. Com boosters laterais ou asparagus, a previsão erra um pouco, e o resto do voo, que é em malha fechada, corrige.
 
@@ -98,7 +106,7 @@ Os estágios da simulação vêm do jogo: os motores e o combustível que cada s
 - **A virada para a queima:** fora da direção, o motor nunca apaga. Um foguete grande, com rodas de reação fracas, só vira pelo gimbal, e o gimbal só funciona com empuxo. No primeiro voo no jogo, com o motor em 0% nessa hora, um foguete de 265 t ficou 42° fora da direção até o apoastro e caiu de volta. O acelerador máximo vai pelo erro do nariz: 100% até 5°, 10% de 45° para cima e, no meio, uma curva no logaritmo do erro. A 15° ele fica em 55%; a 10°, em 72%; a 30°, em 27%. Perto da direção ele sobe depressa, porque ali quase todo o empuxo já ajuda: a 10° de erro, perde 1,5%.
 - **O RCS:** liga junto com o piloto automático e fica ligado depois do fim, para ajudar a virar a nave quando o gimbal tem pouco empuxo. Na subida, gasta um pouco do monopropelente da nave.
 - **O rolamento fica solto:** o piloto automático liga com o `target_roll` em NaN, sem controle de rolamento. No servidor do kRPC do jogo, o `target_roll` vem em 0, e o controle de rolamento empurra para o lado errado. Conferido em órbita: pedindo 15° a menos, a nave rolou 45° a mais em 12 s, sem parar. Na plataforma, isso fazia o foguete girar em torno do próprio eixo na subida, e o nariz não acompanhava a curva. Como o foguete é simétrico, o rolamento não importa para a subida.
-- **No terminal,** a linha de cada segundo mostra o `pitch` pedido e o `nariz`, o pitch de verdade, para ver se a nave acompanha a curva. A linha da fase GIRO traz o giro escolhido.
+- **No terminal,** a linha de cada segundo mostra o `pitch` pedido, o `nariz` (o pitch de verdade, para ver se a nave acompanha a curva) e o `desvio` replanejado. A linha da fase GIRO traz o giro escolhido.
 
 ### O limite de pressão dinâmica
 
