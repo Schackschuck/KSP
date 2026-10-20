@@ -1609,7 +1609,7 @@ class NaveKrpc:
         if not self._piloto_ligado:
             controle.sas = False
             piloto.reference_frame = self._sup
-            piloto.engage()
+            piloto.engaged = True
             self._piloto_ligado = True
         controle.throttle = comando.acelerador
         piloto.target_pitch_and_heading(comando.pitch, comando.rumo)
@@ -1639,7 +1639,7 @@ class NaveKrpc:
         controle = self._nave.control
         for acao in (
             lambda: setattr(controle, "throttle", 0.0),
-            lambda: self._nave.auto_pilot.disengage(),
+            lambda: setattr(self._nave.auto_pilot, "engaged", False),
             lambda: setattr(controle, "sas", True),
             self._remover_streams,
         ):
