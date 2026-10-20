@@ -26,7 +26,7 @@ A nave tem que estar parada no chão, com o primeiro estágio ainda por acender.
 4. Segure o LANCAR 5 s. O korry pisca âmbar contando, fica verde com o script voando, e a página passa a mostrar o voo. Segurar de novo 5 s aborta.
 5. No fim, a página mostra `EM ORBITA`, `ABORTADO` ou `FALHOU` por 10 s.
 
-**A página SUBIDA só aparece na mikromedia.** O simulador e o celular aceitam as linhas dela, mas mostram a navball. Depois de mudar o firmware, é preciso gravar o `mfd.hex` de novo pelo Flash Magic ([docs/mikromedia.md](mikromedia.md)).
+**A página SUBIDA só aparece na mikromedia.** O simulador e o celular aceitam as linhas dela, mas mostram a navball. Depois de mudar o firmware, é preciso gravar o `mfd.hex` de novo, pelo Flash Magic ou pelo Pi ([docs/mikromedia.md](mikromedia.md#gravar-pelo-pi-sem-tirar-o-cabo)).
 
 ## As fases
 
@@ -137,6 +137,7 @@ Se algo der errado, anote a fase, o que o terminal imprimiu e o foguete. O prime
 ## Limites
 
 - **Foguetes em série.** Com boosters laterais, a simulação do giro erra um pouco, e a guiagem em voo corrige.
+- **As versões do kRPC.** O Pi tem o cliente 0.6.0, e o jogo, o servidor 0.5.4. Quase tudo bate, menos o piloto automático: o cliente liga e desliga pela propriedade `engaged`, que o servidor 0.5.4 não tem. Quando o servidor recusa, o script chama direto os procedimentos dele, `AutoPilot_Engage` e `AutoPilot_Disengage`. Com o mod do kRPC atualizado, a propriedade passa a funcionar sozinha.
 - **A carenagem e os painéis** ficam com o piloto, num action group.
 - **O time warp:** abortar durante um `warp_to` corta o motor, mas o warp pode continuar no jogo até o fim.
 - **A guiagem do vácuo** segue o pró-grado orbital. A guiagem dos ônibus espaciais (PEG), que é a forma ótima no vácuo, fica para depois.

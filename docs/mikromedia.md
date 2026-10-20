@@ -4,7 +4,7 @@ O firmware da mikromedia for ARM (MIKROE-780) está em [`firmware/mfd/`](../firm
 
 A página **SUBIDA** ([subida até a órbita](subida.md)) é a exceção: existe só na placa, sem cópia no simulador nem no celular. Ela tem a configuração da subida (altitude, inclinação e o plano do alvo, num menu como o do piloto automático) e o acompanhamento do voo (os números, as barras do apoastro e do periastro e a fase). Quem já tinha gravado a placa precisa gravar o `mfd.hex` novo, pelo [passo 4](#4-gravar-o-mfdhex), para ter a página.
 
-O **`mfd.hex` já vem compilado** no repositório. Para gravar, só é preciso o Flash Magic; o compilador só entra se o código mudar ([abaixo](#compilar-de-novo)).
+O **`mfd.hex` já vem compilado** no repositório. Para gravar, só é preciso o Flash Magic no Windows, ou o `lpc21isp` no Pi ([gravar pelo Pi](#gravar-pelo-pi-sem-tirar-o-cabo)); o compilador só entra se o código mudar ([abaixo](#compilar-de-novo)).
 
 **Onde estamos:** **o firmware roda na placa, com o jogo.** Ligada no Pi pela PROG, com a ponte da tela aberta pelo serviço ([docs/setup-pi.md](setup-pi.md#9-a-ponte-da-tela-abrindo-sozinha)), a placa mostra a navball ao vivo, lisa, e o toque em SAS, RCS e MODO funciona no jogo. O controlador é o `0047`, o HX8347-D ([conferido na placa](#conferido-na-placa)).
 
@@ -47,6 +47,22 @@ Clique em **Start**. O Flash Magic põe a placa no modo de gravação sozinho, p
 - Se o Flash Magic não conectar, veja [Problemas](#problemas).
 
 Depois de gravar, **feche o Flash Magic** (ele prende a porta COM) e aperte o **RESET** da placa.
+
+### Gravar pelo Pi, sem tirar o cabo
+
+No cockpit, a PROG fica na USB do Pi. Lá, o `lpc21isp` faz o que o Flash Magic faz no Windows: entra na gravação pelo DTR e pelo RTS e apaga só os setores que o hex usa. O ajuste da tela, no setor 26, fica guardado.
+
+```bash
+sudo apt install -y lpc21isp
+sudo systemctl stop ksp-tela@USUARIO
+lpc21isp -control -verify ~/cockpit/firmware/mfd/mfd.hex /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A800FBZD-if00-port0 19200 12000
+sudo systemctl start ksp-tela@USUARIO
+```
+
+- O `apt install` é só da primeira vez. A ponte para antes porque ela segura a porta.
+- Leva uns 80 s e termina com `Download Finished and Verified correct`. A placa já sai rodando, sem precisar do RESET. No log da ponte (`journalctl -u ksp-tela@USUARIO`), o `Tela pronta.` confirma que o ajuste continua lá.
+- Para testar a conexão sem gravar, use `-detectonly` no lugar do `-verify`: tem que aparecer `LPC2148, 512 kiB FLASH`.
+- **Não use o `-wipe`:** ele apaga a flash inteira, junto com o ajuste da tela.
 
 ### 5. Primeira vez ligada: o ajuste da tela
 
@@ -147,5 +163,6 @@ O que só dava para confirmar na placa, conferido com ela ligada no Pi pela PROG
 - **A orientação e o toque** ficaram certos pelo ajuste na tela, e o **limiar do toque** serve: SAS, RCS e a caixa da velocidade (MODO) respondem no jogo.
 - **A velocidade:** a navball anda lisa. A conta dava de 10 a 20 quadros por segundo; não foi medido.
 - **O divisor fracionário da serial** (115200 baud a partir de 60 MHz) está certo: a ponte recebe o `READY` e o `ID` sem lixo.
+- **A gravação pelo Pi:** o `lpc21isp` 1.97, com o `-control`, entra na gravação pela PROG (bootloader 2.13) e grava o `mfd.hex` com verificação, sem apagar o ajuste da tela.
 
 Fica para depois: o **alarme de estol**, que o simulador toca e a placa ainda não, porque precisa do chip de áudio (VS1053); e os sons de alarme do roteiro, no microSD.
