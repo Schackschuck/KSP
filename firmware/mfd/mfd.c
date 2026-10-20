@@ -129,7 +129,7 @@ static struct {
     int scr_lancar, lancar_faltam;
     char fase[12], sas_pouso[12], aviso[12];
     Numero pouso[CAMPOS_POUSO];
-    char fase_subida[12], aviso_subida[12];
+    char fase_subida[16], aviso_subida[16];
     Numero subida[CAMPOS_SUBIDA];
     Numero config[CAMPOS_CONFIG];
     int cursor_subida, escolhida_subida;
@@ -269,7 +269,7 @@ static int interpretar(char *linha)
         e.escolhida = partes[1][0] == '1';
     } else if (script >= 0 && n == 2 && indice_de(partes[1], nomes_scr, 5) >= 0) {
         *(script == SCRIPT_POUSO ? &e.scr : &e.scr_lancar) = indice_de(partes[1], nomes_scr, 5);
-    } else if (script >= 0 && n == 3 && (igual(partes[1], "LIGA") || igual(partes[1], "DESL")) && ok[2]) {
+    } else if (script >= 0 && n == 3 && (igual(partes[1], "LIGA") || igual(partes[1], "DESL")) && ok[2] && numeros[2] >= 0 && numeros[2] <= 99) {
         *(script == SCRIPT_POUSO ? &e.scr : &e.scr_lancar) = indice_de(partes[1], nomes_scr, 7);
         *(script == SCRIPT_POUSO ? &e.scr_faltam : &e.lancar_faltam) = numeros[2];
     } else if (igual(nome, "SBV") && n == 2 && config >= 0 && ok[1] && (config != C_PLANO || numeros[1] == 0 || numeros[1] == 1)) {
@@ -884,7 +884,7 @@ static void caixa_segurar(int estado, int faltam, const char *para_abrir)
 {
     if (estado != SCR_LIGA && estado != SCR_DESL)
         return;
-    char buf[16];
+    char buf[24];
     retangulo(90, 80, 140, 56, FUNDO, 0, 6);
     retangulo(90, 80, 140, 56, AMBAR, 2, 6);
     char *q = escrever_texto(buf, "SEGURE ");
@@ -1120,7 +1120,7 @@ static int posicao_barra(int32_t valor, int32_t alvo, int largura)
     return valor * largura / maximo;
 }
 
-static void barra_orbita(const char *rotulo, int y, const Numero *valor)
+static void barra_orbita(const char *rotulo, int y, const Numero *valor, int escape)
 {
     const Numero *alvo = &e.subida[S_ALVO];
     int pedido = alvo->valido && alvo->valor > 0;
@@ -1129,6 +1129,8 @@ static void barra_orbita(const char *rotulo, int y, const Numero *valor)
     if (pedido && valor->valido) {
         uint16_t cor = valor->valor >= alvo->valor - alvo->valor / 50 ? VERDE : AZUL;
         preencher(16, y + 14, posicao_barra(valor->valor, alvo->valor, 288), 10, cor);
+    } else if (escape) {
+        preencher(16, y + 14, 288, 10, AVISO);
     }
     retangulo(16, y + 14, 288, 10, BORDA, 1, 0);
     if (pedido) {
@@ -1184,8 +1186,8 @@ static void desenhar_voo_subida(void)
     if (aviso >= 0 && (agora_quadro / 500u) % 2u == 0)
         texto(textos_avisos_subida[aviso], AVISO, &fonte_pequena, CENTRO, 160, 68);
 
-    barra_orbita("APOASTRO", 100, &s[S_AP]);
-    barra_orbita("PERIASTRO", 148, &s[S_PE]);
+    barra_orbita("APOASTRO", 100, &s[S_AP], !s[S_AP].valido && s[S_PE].valido);
+    barra_orbita("PERIASTRO", 148, &s[S_PE], 0);
 
     int f = indice_de(e.fase_subida, nomes_fases_subida, FASES_SUBIDA);
     const char *fase;
