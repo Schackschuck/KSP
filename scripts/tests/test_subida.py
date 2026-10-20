@@ -1054,6 +1054,7 @@ class PilotoFalso:
         self.engajado = False
         self.quebrado = False
         self.servidor_antigo = False
+        self.target_roll = 0.0
         self.pitch = 90.0
         self.heading = 90.0
 
@@ -1409,6 +1410,7 @@ class TestNaveKrpc(unittest.TestCase):
         fonte.executar(Comando(acelerador=0.7, pitch=80.0, rumo=45.0))
         self.assertFalse(nave.control.sas)
         self.assertTrue(nave.control.rcs)
+        self.assertTrue(math.isnan(nave.auto_pilot.target_roll))
         self.assertTrue(nave.auto_pilot.engajado)
         self.assertEqual(nave.auto_pilot.reference_frame, SUP)
         self.assertEqual(nave.control.throttle, 0.7)
@@ -1755,6 +1757,8 @@ class TestMain(unittest.TestCase):
         self.assertEqual(codigo, subida.EM_ORBITA)
         self.assertIn("Em órbita", texto)
         self.assertIn("--> COSTA", texto)
+        self.assertRegex(texto, r"--> GIRO a .*, giro de [0-9.]+°")
+        self.assertRegex(texto, r"pitch +[-0-9.]+  nariz +[-0-9.]+  rumo")
 
     def test_demo_com_plano_do_alvo_passa_pela_janela_e_iguala_o_plano(self):
         codigo, texto = self.rodar("--demo", "--plano-do-alvo")

@@ -1634,6 +1634,7 @@ class NaveKrpc:
             controle.sas = False
             controle.rcs = True
             piloto.reference_frame = self._sup
+            piloto.target_roll = math.nan
             self._ligar_piloto(True)
             self._piloto_ligado = True
         controle.throttle = comando.acelerador
@@ -1851,7 +1852,7 @@ def status(l, guiagem, corpo, comando):
     return (
         f"{guiagem.fase:11} alt {(norma(l.r) - corpo.raio) / 1000:7.1f} km  ap {ap} km  pe {pe} km  "
         f"q {l.q:6.0f} Pa  inc {inclinacao_de(corpo, l.r, l.v):6.1f}  motor {guiagem.acelerador * 100:3.0f}%  "
-        f"pitch {comando.pitch:5.1f}  rumo {comando.rumo:5.1f}"
+        f"pitch {comando.pitch:5.1f}  nariz {pitch_de(l.nariz, unit(l.r)):5.1f}  rumo {comando.rumo:5.1f}"
     )
 
 
@@ -1894,7 +1895,8 @@ def conduzir(fonte, guiagem, corpo, tela, repeticoes=1):
             comando = guiagem.passo(l)
             if guiagem.fase != fase:
                 fase = guiagem.fase
-                print(f"--> {fase} a {(norma(l.r) - corpo.raio) / 1000:.1f} km de altitude (t = {l.t:.0f} s)")
+                giro = f", giro de {guiagem.giro:.1f}°" if fase == GIRO else ""
+                print(f"--> {fase} a {(norma(l.r) - corpo.raio) / 1000:.1f} km de altitude (t = {l.t:.0f} s){giro}")
             if guiagem.aviso != aviso:
                 aviso = guiagem.aviso
                 if aviso:
