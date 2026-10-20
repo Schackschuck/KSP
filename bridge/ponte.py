@@ -130,8 +130,10 @@ def conectar_krpc(address, *dispositivos, esperar=True):
     descartado.
 
     Com esperar=False não há nova tentativa: o primeiro motivo de falha
-    encerra o programa com sys.exit(motivo). É o caso dos scripts abertos pela
-    ponte da tela, que têm de falhar, e não esperar para sempre.
+    encerra o programa com sys.exit(motivo), como era antes de as pontes
+    esperarem o jogo. É o caso dos scripts de voo, que a ponte da tela abre e
+    que têm de falhar, e não esperar para sempre, e do editor de manobras e do
+    fly by wire, que se abrem na mão, com o jogo já aberto.
     """
     print(f"Conectando ao kRPC em {address}... (se demorar, aceite a conexão no jogo)")
     ultimo = None

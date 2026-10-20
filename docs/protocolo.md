@@ -108,7 +108,7 @@ Distâncias e tempos são inteiros de 32 bits. Acima de 2,1 milhões de km, o qu
 
 ### Scripts → ponte da tela
 
-Um script de voo pode mandar coisas para a tela sem depender da ponte. O fly by wire põe um marcador na navball e manda no mesmo pacote o estado do painel de sistemas ([abaixo](#ponte-da-tela--fly-by-wire)); o pouso manda o estado dele para a página POUSO ([abaixo](#pouso--ponte-da-tela)).
+Um script de voo pode mandar coisas para a tela sem depender da ponte. O fly by wire põe um marcador na navball e manda no mesmo pacote o estado do painel de sistemas ([abaixo](#ponte-da-tela--fly-by-wire)); o pouso manda o estado dele para a página POUSO ([abaixo](#pouso--ponte-da-tela)), e a subida, para a página SUBIDA ([abaixo](#subida--ponte-da-tela)).
 
 - O script manda a **própria linha do protocolo da tela** (`FBW 52 2700` ou `FBW OFF`), num pacote **UDP** para a porta **50100** do computador da ponte, 10 vezes por segundo. Sem a ponte aberta, o pacote se perde e o script segue voando.
 - A ponte (`bridge/mfd.py`) escuta em todas as redes (o script pode rodar noutro computador), confere a linha e a repassa para a tela na vez dos marcadores. Linhas que não entende, ela mostra no terminal e descarta.
@@ -226,7 +226,7 @@ Linhas do painel de scripts ([desenho](../hardware/construcao.md#painel-de-scrip
 
 ### Ponte → painel e tela
 
-Vai quando muda e também 1 vez por segundo, calculada 20 vezes por segundo, para o painel e para a tela. A tabela mostra o `SCR POUSO`; o `SCR LANCAR` tem os mesmos estados, com `SUBIDA` no lugar de `POUSO` na tela (`PARA LANCAR`, e `EM ORBITA` no `FIM`).
+Vai quando muda e também 1 vez por segundo, calculada 20 vezes por segundo, para o painel e para a tela. A tabela mostra o `SCR POUSO`; o `SCR LANCAR` tem os mesmos estados, na página SUBIDA, com três diferenças no que a tela escreve: `PRONTO` no `OFF`, `PARA LANCAR` segurando para abrir, e `EM ORBITA` no `FIM`.
 
 | Mensagem | Significado | No korry | Na tela |
 |---|---|---|---|
@@ -239,6 +239,10 @@ Vai quando muda e também 1 vez por segundo, calculada 20 vezes por segundo, par
 | `SCR POUSO FALHA` | O script parou sem pousar (sem nave, nave perdida, erro). Por 10 s | Vermelho | `FALHOU` |
 
 - **A página POUSO** abre na tela no primeiro aperto do korry, fica aberta enquanto o script voa e até 10 s depois do fim. Um toque no painel de sistemas no meio do pouso abre a página dele, que volta para a do pouso 10 s depois, e não para a navball. A página SUBIDA funciona igual com o LANCAR, e também abre ao mexer no encoder da subida.
+- **O script roda num processo próprio**, o mesmo da linha de comando (`python scripts/pouso.py <IP do KSP> --tela 127.0.0.1`). Abortar manda o Ctrl+C (no Windows, o `CTRL_BREAK`, que o script transforma em Ctrl+C): o script corta o motor e devolve a nave antes de sair. Se ele não sair em 5 s, a ponte encerra o processo. Fechar a ponte aborta o script.
+- **O código de saída do script** diz o fim: `0` pousou (`FIM`), `130` interrompido, e qualquer outro, `FALHA`. O que o script escreve aparece no terminal da ponte, com `[pouso]` na frente.
+- **A subida** roda do mesmo jeito (`python scripts/subida.py <IP do KSP> --tela 127.0.0.1 --altitude <m> --inclinacao <graus>`, mais `--plano-do-alvo` com o plano ligado), com os valores da configuração na hora em que o LANCAR completa os 5 s. O código `0` é a nave em órbita (`FIM`, `EM ORBITA` na tela), o `130` é interrompido, e qualquer outro é `FALHA`. No terminal, as linhas dela vêm com `[lancar]` na frente.
+- **Com a subida voando, o encoder da subida não mexe no menu:** só mantém a página SUBIDA aberta. Os valores da subida em voo são os da linha de comando.
 
 **A configuração da subida**, só para a tela, quando muda e 1 vez por segundo:
 
@@ -250,8 +254,6 @@ Vai quando muda e também 1 vez por segundo, calculada 20 vezes por segundo, par
 | `SBC <ALT\|INC\|PLANO> <0\|1>` | A linha do cursor, e `1` se ela está escolhida (girar muda o valor) | A seta, ou a caixa âmbar no valor |
 
 O simulador e o celular aceitam e ignoram estas linhas, as `SUB` e o `SCR LANCAR`, sem responder `ERR`.
-- **O script roda num processo próprio**, o mesmo da linha de comando (`python scripts/pouso.py <IP do KSP> --tela 127.0.0.1`). Abortar manda o Ctrl+C (no Windows, o `CTRL_BREAK`, que o script transforma em Ctrl+C): o script corta o motor e devolve a nave antes de sair. Se ele não sair em 5 s, a ponte encerra o processo. Fechar a ponte aborta o script.
-- **O código de saída do script** diz o fim: `0` pousou (`FIM`), `130` interrompido, e qualquer outro, `FALHA`. O que o script escreve aparece no terminal da ponte, com `[pouso]` na frente.
 
 ### Pouso → ponte da tela
 
