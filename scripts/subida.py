@@ -57,11 +57,8 @@ da decolagem até o fim da circularização: é o plano que passa pela posição
 agora com a inclinação pedida (plano_pela_posicao), com o ramo para o norte ou
 para o sul escolhido pela velocidade. A rotação do planeta empurra a nave para
 fora do plano da decolagem, e assim ela não precisa voltar a ele: a inclinação
-final sai a menos de 0,1° da pedida.
-
-Sem a janela (inclinação pedida, sem alvo), o plano é o do lançamento para a
-inclinação pedida, a partir da latitude da base. Inclinação menor que a
-latitude não existe: sai na menor possível, com o aviso INCLINACAO.
+final sai a menos de 0,1° da pedida. Inclinação menor que a latitude da base
+não existe: sai na menor possível, com o aviso INCLINACAO.
 
 No cockpit, quem abre o script é a ponte da tela (bridge/mfd.py), quando o
 korry LANCAR fica apertado 5 s, com os valores escolhidos na página SUBIDA; o
