@@ -5,6 +5,9 @@ KSP, e o estado do KSP (SAS, RCS, trem, luzes, freios, altitude) vira mensagem
 para o painel. O painel não sabe que o KSP existe; toda a "inteligência" fica
 aqui.
 
+A ponte espera o KSP abrir e reconecta sozinha quando o jogo fecha e abre de
+novo.
+
 Uso:
     python ponte.py                                 # KSP neste computador, painel detectado sozinho
     python ponte.py 192.168.1.10                    # KSP em outro computador (ex.: rodando no Pi)
@@ -26,6 +29,7 @@ REENVIO_ESTADOS = 1.0     # s: reenvia os estados mesmo sem mudança, por segura
 VERIFICA_NAVE = 1.0       # s: de quanto em quanto tempo conferir se a nave ativa mudou
 ESPERA_READY = 4.0        # s: tempo máximo esperando o painel terminar de ligar
 ALT_MAX = 2**31 - 1       # o painel guarda a altitude num long de 32 bits
+INTERVALO_RECONEXAO = 5.0
 
 # Sistemas liga/desliga: nome no protocolo → propriedade de vessel.control no
 # kRPC. Cada um tem uma chave no painel (SW <nome> <0|1>) e um LED (<nome> <0|1>).
@@ -102,45 +106,87 @@ def encontrar_porta():
     sys.exit(f"{motivo} Escolha a porta com --porta. Portas seriais disponíveis:\n{lista}")
 
 
-def conectar_krpc(address):
-    # Se o auto-accept estiver desligado, o connect fica parado até alguém
-    # aceitar a conexão na janela do kRPC, dentro do jogo.
+def descartar(dispositivos, segundos):
+    """Lê e descarta o que os dispositivos mandam enquanto a ponte espera.
+
+    Um STAGE apertado no hangar ou com o jogo fechado não pode ficar guardado
+    e disparar sozinho depois. Com a lista vazia, só espera.
+    """
+    fim = time.monotonic() + segundos
+    while True:
+        for dispositivo in dispositivos:
+            dispositivo.linhas()
+        if time.monotonic() >= fim:
+            return
+        time.sleep(0.02)
+
+
+def conectar_krpc(address, *dispositivos):
+    """Conecta no kRPC, tentando de novo até o jogo abrir.
+
+    Se o auto-accept estiver desligado, o connect fica parado até alguém
+    aceitar a conexão na janela do kRPC, dentro do jogo. Cada motivo de falha
+    é avisado uma vez; entre as tentativas, o que os dispositivos mandam é
+    descartado.
+    """
     print(f"Conectando ao kRPC em {address}... (se demorar, aceite a conexão no jogo)")
-    try:
-        return krpc.connect(name="KSP Cockpit", address=address)
-    except krpc.ConnectionError as e:
-        sys.exit(f"O servidor kRPC recusou a conexão: {e}")
-    except ConnectionRefusedError:
-        sys.exit(
-            f"{address} recusou a conexão. O servidor kRPC está iniciado, "
-            "com o endereço em 'Any'?"
-        )
-    except OSError as e:
-        sys.exit(
-            f"Não foi possível alcançar {address} ({e}). Confira o IP, o firewall "
-            "e se a rede do Windows está como Privada."
-        )
+    ultimo = None
+    while True:
+        try:
+            conn = krpc.connect(name="KSP Cockpit", address=address)
+        except krpc.ConnectionError as e:
+            motivo = f"O servidor kRPC recusou a conexão: {e}"
+        except ConnectionRefusedError:
+            motivo = (
+                f"{address} recusou a conexão. O KSP está aberto, com o servidor "
+                "do kRPC ligado e o endereço em 'Any'?"
+            )
+        except OSError as e:
+            motivo = (
+                f"Não foi possível alcançar {address} ({e}). Confira o IP, o cabo "
+                "e o firewall do Windows."
+            )
+        else:
+            print("Conectado ao kRPC.")
+            return conn
+        if motivo != ultimo:
+            print(f"{motivo} Tentando de novo a cada {INTERVALO_RECONEXAO:g} s.")
+            ultimo = motivo
+        descartar(dispositivos, INTERVALO_RECONEXAO)
 
 
-def esperar_nave(conn, painel):
+def esperar_nave(conn, *dispositivos):
     """Espera existir uma nave ativa (cena de voo) e a devolve."""
     avisou = False
     while True:
         try:
             return conn.space_center.active_vessel
         except (ValueError, RuntimeError):
-            # Fora da cena de voo (KSC, hangar, menu) não há nave ativa.
             if not avisou:
                 print("Nenhuma nave ativa. Aguardando a cena de voo...")
                 avisou = True
 
-        # Enquanto espera, lê e DESCARTA o que o painel mandar: um STAGE
-        # apertado no hangar não pode ficar guardado e disparar sozinho quando
-        # o foguete chegar na plataforma.
-        fim = time.monotonic() + 1.0
-        while time.monotonic() < fim:
-            painel.linhas()
-            time.sleep(0.02)
+        descartar(dispositivos, 1.0)
+
+
+def manter_krpc(address, dispositivos, acompanhar):
+    """Conecta no kRPC, acompanha cada nave ativa e reconecta se a conexão cair.
+
+    Cada nave ativa é entregue a acompanhar(conn, nave). Se a conexão cair
+    (o jogo fechou), fecha e espera o jogo de novo. dispositivos são os que
+    mandam linhas (painel, tela), descartadas durante as esperas.
+    """
+    while True:
+        conn = conectar_krpc(address, *dispositivos)
+        try:
+            while True:
+                acompanhar(conn, esperar_nave(conn, *dispositivos))
+        except serial.SerialException:
+            raise
+        except OSError as e:
+            print(f"A conexão com o kRPC caiu ({e}). Esperando o jogo de novo...")
+        finally:
+            conn.close()
 
 
 def ativar_estagio(nave):
@@ -304,17 +350,13 @@ def main():
     else:
         print("O painel não mandou READY; seguindo assim mesmo.")
 
-    conn = conectar_krpc(args.address)
     try:
-        while True:
-            nave = esperar_nave(conn, painel)
-            voar(conn, painel, nave)
+        manter_krpc(args.address, [painel], lambda conn, nave: voar(conn, painel, nave))
     except KeyboardInterrupt:
         print()
     except serial.SerialException:
         print("\nO painel foi desconectado.")
     finally:
-        conn.close()
         painel.fechar()
 
 

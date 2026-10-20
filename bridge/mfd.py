@@ -39,6 +39,9 @@ O painel de scripts também (painel_scripts.py): segurar o korry POUSO 5 s abre
 o scripts/pouso.py num processo próprio, e segurar de novo 5 s aborta. O
 pouso manda o estado dele por UDP, e a tela mostra a página POUSO enquanto
 ele voa. Com --demo, o pouso é o de uma nave simulada (pouso.py --demo).
+
+Com o KSP, a ponte espera o jogo abrir e reconecta sozinha quando ele fecha e
+abre de novo.
 """
 
 import argparse
@@ -52,7 +55,7 @@ import serial
 
 from avisos import FRASES, Avisos, Voo, Voz
 from painel_scripts import PainelScripts, processo_pouso
-from ponte import BAUD, ESPERA_READY, Painel, conectar_krpc, esperar_nave
+from ponte import BAUD, ESPERA_READY, Painel, manter_krpc
 from sistemas import Remetente, Sistemas
 
 INTERVALO_ATITUDE = 0.05  # s: navball 20 vezes por segundo
@@ -1155,9 +1158,6 @@ def main():
         testar_voz(voz)
         return
 
-    # O kRPC primeiro: enquanto o connect espera alguém aceitar a conexão no
-    # jogo, a janela do simulador ficaria congelada.
-    conn = None if args.demo else conectar_krpc(args.address)
     tela = abrir_tela(args)
     painel = abrir_painel(args)
     transmissor = Transmissor(tela)
@@ -1172,13 +1172,15 @@ def main():
             voar(tela, transmissor, scripts, scripts, lambda: True, painel, sistemas, painel_scripts, voz)
         else:
             scripts = Scripts()
-            while True:
-                nave = esperar_nave(conn, tela)
+            dispositivos = [tela] if painel is None else [tela, painel]
+
+            def acompanhar(conn, nave):
                 try:
                     acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, painel_scripts, voz)
                 except (ValueError, RuntimeError):
-                    # A nave deixou de existir ou o jogo saiu da cena de voo.
                     pass
+
+            manter_krpc(args.address, dispositivos, acompanhar)
     except KeyboardInterrupt:
         print()
     except serial.SerialException:
@@ -1190,8 +1192,6 @@ def main():
             painel.fechar()
         if scripts is not None:
             scripts.fechar()
-        if conn is not None:
-            conn.close()
 
 
 if __name__ == "__main__":

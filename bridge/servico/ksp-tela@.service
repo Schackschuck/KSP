@@ -1,0 +1,15 @@
+[Unit]
+Description=KSP Cockpit: ponte da tela multifuncao
+After=network.target
+
+[Service]
+User=%i
+WorkingDirectory=/home/%i/cockpit/bridge
+EnvironmentFile=/home/%i/.config/ksp-tela.conf
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/%i/ksp/bin/python /home/%i/cockpit/bridge/mfd.py $ARGS
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
