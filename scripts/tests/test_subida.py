@@ -11,12 +11,18 @@ Uso, a partir da raiz do repositório:
     python scripts/tests/test_subida.py -v    # uma linha por teste
 """
 
+import argparse
+import contextlib
 import dataclasses
+import io
 import math
 import os
+import re
 import sys
+import types
 import unittest
 from dataclasses import dataclass
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
@@ -39,6 +45,8 @@ from subida import (
     elementos,
     esc,
     escolher_giro,
+    inclinacao_de,
+    plano_com_janela,
     plano_do_lancamento,
     plano_pela_posicao,
     ponto,
@@ -79,11 +87,6 @@ class Resultado:
         return angulo(unit(cruz(l.r, l.v)), n)
 
 
-def inclinacao_de(corpo, r, v):
-    n = unit(cruz(r, v))
-    return math.degrees(math.acos(ponto(n, corpo.polo)))
-
-
 def voar(nave, guiagem):
     """Roda a guiagem a 10 Hz na nave simulada, até ORBITA, FALHA ou o limite."""
     fases = []
@@ -118,16 +121,6 @@ def subir_de_kerbin(altitude, inclinacao, latitude=subida.LATITUDE_KSC, n_alvo=N
         nave = NaveSimulada(KERBIN, estagios, subida.AREA_FOGUETE_KERBIN, latitude, 0.0, aceso)
     guiagem = Guiagem(KERBIN, altitude, inclinacao, n_alvo=n_alvo, ler_estagios=nave.estagios)
     return voar(nave, guiagem)
-
-
-def plano_com_janela(nave, atraso, inclinacao, sentido=1):
-    """O normal de um plano que passa pela base daqui a `atraso` segundos."""
-    corpo = nave.corpo
-    r_futuro = rotacionar(nave.r, corpo.polo, corpo.omega * atraso)
-    i = math.radians(inclinacao)
-    leste = unit(cruz(corpo.polo, r_futuro))
-    direcao = soma(esc(math.cos(i), leste), esc(sentido * math.sin(i), corpo.polo))
-    return unit(cruz(unit(r_futuro), direcao))
 
 
 def estagios_kerbin(combustivel_baixo, combustivel_cima):
@@ -755,6 +748,882 @@ class TestVoos(unittest.TestCase):
         self.assertEqual(r.fase, ORBITA)
         self.assertEqual(guiagem.giro, subida.GIRO_PADRAO_AR)
         self.assertTrue(77_000.0 < r.pe < r.ap < 82_000.0, (r.pe, r.ap))
+
+
+FASES_SUB = {
+    "JANELA", "DECOLAGEM", "GIRO", "CURVA", "VACUO", "COSTA", "CIRCULARIZA", "PLANO", "ORBITA", "FALHA",
+}
+AVISOS_SUB = {"EMPUXO", "ALTITUDE", "INCLINACAO", "ALVO", "COMBUSTIVEL"}
+ORDEM_SUB = ["FASE", "ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR", "AVISO"]
+
+
+def _inteiro(texto):
+    return re.fullmatch(r"-?\d+", texto) is not None
+
+
+def _inteiro_ou_off(texto):
+    return texto == "OFF" or _inteiro(texto)
+
+
+VALIDADORES_SUB = {
+    "FASE": lambda v: v in FASES_SUB,
+    "ALT": _inteiro,
+    "VEL": _inteiro,
+    "AP": _inteiro_ou_off,
+    "PE": _inteiro_ou_off,
+    "ALVO": _inteiro,
+    "Q": _inteiro,
+    "INC": _inteiro,
+    "INCA": _inteiro,
+    "DV": _inteiro,
+    "JAN": _inteiro_ou_off,
+    "GIRO": _inteiro_ou_off,
+    "MOTOR": lambda v: _inteiro(v) and 0 <= int(v) <= 100,
+    "AVISO": lambda v: v == "OFF" or v in AVISOS_SUB,
+}
+
+
+def valores_sub(linhas):
+    return {linha.split(" ", 2)[1]: linha.split(" ", 2)[2] for linha in linhas}
+
+
+def voar_coletando(nave, guiagem, a_cada=50):
+    """Como voar(), mas guarda as linhas SUB a cada `a_cada` passos e a cada troca de fase."""
+    coletadas = []
+    fase = None
+    for passo in range(PASSOS_MAX):
+        l = nave.leitura()
+        comando = guiagem.passo(l)
+        if guiagem.fase != fase or passo % a_cada == 0:
+            fase = guiagem.fase
+            coletadas.append(subida.linhas_de_estado(l, guiagem, nave.corpo))
+        if guiagem.fase in (ORBITA, FALHA) or nave.t > T_MAX_JOGO:
+            coletadas.append(subida.linhas_de_estado(l, guiagem, nave.corpo))
+            break
+        nave.executar(comando)
+        nave.avancar(DT)
+    return coletadas
+
+
+class TestLinhasDeEstado(unittest.TestCase):
+    def conferir(self, linhas):
+        self.assertEqual([linha.split(" ")[1] for linha in linhas], ORDEM_SUB)
+        for linha in linhas:
+            with self.subTest(linha=linha):
+                self.assertLessEqual(len(linha), 31)
+                self.assertTrue(linha.isascii())
+                partes = linha.split(" ", 2)
+                self.assertEqual(len(partes), 3)
+                self.assertEqual(partes[0], "SUB")
+                self.assertTrue(VALIDADORES_SUB[partes[1]](partes[2]), linha)
+
+    def test_voo_com_janela_e_troca_de_plano(self):
+        nave = NaveSimulada.kerbin()
+        n_alvo = plano_com_janela(nave, 7_200.0, 30.0)
+        guiagem = Guiagem(KERBIN, 80_000.0, 0.0, n_alvo=n_alvo, ler_estagios=nave.estagios)
+        coletadas = voar_coletando(nave, guiagem)
+        fases = []
+        for linhas in coletadas:
+            self.conferir(linhas)
+            valores = valores_sub(linhas)
+            if not fases or fases[-1] != valores["FASE"]:
+                fases.append(valores["FASE"])
+            self.assertEqual(valores["ALVO"], "80000")
+            self.assertEqual(valores["INCA"], "300")
+            self.assertEqual(valores["JAN"] != "OFF", valores["FASE"] == "JANELA")
+            self.assertEqual(valores["GIRO"] != "OFF", valores["FASE"] not in ("JANELA", "DECOLAGEM"))
+        for fase in ("JANELA", "DECOLAGEM", "GIRO", "CURVA", "COSTA", "CIRCULARIZA", "PLANO", "ORBITA"):
+            self.assertIn(fase, fases)
+        primeira = valores_sub(coletadas[0])
+        self.assertEqual(primeira["FASE"], "JANELA")
+        self.assertTrue(7_190 <= int(primeira["JAN"]) <= 7_210)
+        self.assertEqual(primeira["MOTOR"], "0")
+        ultima = valores_sub(coletadas[-1])
+        self.assertEqual(ultima["FASE"], "ORBITA")
+        self.assertEqual(ultima["MOTOR"], "0")
+        self.assertEqual(ultima["AVISO"], "OFF")
+        self.assertTrue(abs(int(ultima["INC"]) - 300) <= 1)
+        self.assertTrue(78_500 < int(ultima["PE"]) < int(ultima["AP"]) < 81_500)
+        self.assertTrue(3_000 < int(ultima["DV"]) < 4_500)
+
+    def test_valores_da_subida_sem_alvo(self):
+        nave = NaveSimulada.kerbin()
+        guiagem = Guiagem(KERBIN, 100_000.0, 45.0, ler_estagios=nave.estagios)
+        coletadas = voar_coletando(nave, guiagem)
+        for linhas in coletadas:
+            self.conferir(linhas)
+        inicio = valores_sub(coletadas[0])
+        self.assertEqual(inicio["JAN"], "OFF")
+        self.assertEqual(inicio["GIRO"], "OFF")
+        self.assertEqual(inicio["INCA"], "450")
+        self.assertEqual(inicio["ALT"], "0")
+        meio = [valores_sub(linhas) for linhas in coletadas if valores_sub(linhas)["FASE"] == "CURVA"]
+        self.assertTrue(meio)
+        self.assertTrue(all(int(v["Q"]) >= 0 for v in meio))
+        self.assertTrue(any(int(v["Q"]) > 1_000 for v in meio))
+
+    def test_avisos_na_linha(self):
+        r = subir_de_kerbin(80_000.0, 10.0, latitude=28.5)
+        l = r.nave.leitura()
+        linhas = subida.linhas_de_estado(l, r.guiagem, KERBIN)
+        self.conferir(linhas)
+        self.assertEqual(valores_sub(linhas)["AVISO"], "INCLINACAO")
+
+        r = subir_de_kerbin(80_000.0, 0.0, estagios=estagios_kerbin(5_500.0, 300.0))
+        linhas = subida.linhas_de_estado(r.nave.leitura(), r.guiagem, KERBIN)
+        self.conferir(linhas)
+        valores = valores_sub(linhas)
+        self.assertEqual(valores["AVISO"], "COMBUSTIVEL")
+        self.assertEqual(valores["FASE"], "FALHA")
+        self.assertEqual(valores["MOTOR"], "0")
+
+    def test_recusa_sai_com_falha_e_aviso(self):
+        nave = NaveSimulada.kerbin()
+        guiagem = Guiagem(KERBIN, 50_000.0, 0.0)
+        guiagem.recusar(subida.AVISO_ALTITUDE)
+        linhas = subida.linhas_de_estado(nave.leitura(), guiagem, KERBIN)
+        self.conferir(linhas)
+        valores = valores_sub(linhas)
+        self.assertEqual(valores["FASE"], "FALHA")
+        self.assertEqual(valores["AVISO"], "ALTITUDE")
+        self.assertEqual(guiagem.passo(nave.leitura()).acelerador, 0.0)
+        self.assertEqual(guiagem.fase, FALHA)
+
+    def test_escape_nao_tem_apoastro(self):
+        nave = NaveSimulada.kerbin()
+        guiagem = Guiagem(KERBIN, 80_000.0, 0.0)
+        l = nave.leitura()
+        r = KERBIN.raio + 100_000.0
+        rapido = dataclasses.replace(l, r=(r, 0.0, 0.0), v=(0.0, 0.0, -1.5 * math.sqrt(2.0 * KERBIN.mu / r)))
+        linhas = subida.linhas_de_estado(rapido, guiagem, KERBIN)
+        self.conferir(linhas)
+        self.assertEqual(valores_sub(linhas)["AP"], "OFF")
+        self.assertTrue(_inteiro(valores_sub(linhas)["PE"]))
+
+    def test_inteiros_ficam_dentro_dos_32_bits(self):
+        nave = NaveSimulada.kerbin()
+        guiagem = Guiagem(KERBIN, 80_000.0, 0.0)
+        guiagem.dv = 1e15
+        l = nave.leitura()
+        longe = dataclasses.replace(l, r=(1e15, 0.0, 0.0), q=1e15)
+        linhas = subida.linhas_de_estado(longe, guiagem, KERBIN)
+        self.conferir(linhas)
+        valores = valores_sub(linhas)
+        for campo in ("ALT", "DV", "Q"):
+            self.assertEqual(valores[campo], str(2**31 - 1))
+
+    def test_periastro_dentro_do_planeta_e_negativo(self):
+        nave = NaveSimulada.kerbin()
+        guiagem = Guiagem(KERBIN, 80_000.0, 0.0)
+        linhas = subida.linhas_de_estado(nave.leitura(), guiagem, KERBIN)
+        self.conferir(linhas)
+        self.assertLess(int(valores_sub(linhas)["PE"]), 0)
+
+
+NR = "nr"
+SUP = "sup"
+CORPO_GIRATORIO = "corpo"
+HIBRIDO = "hibrido"
+
+
+class FluxoFalso:
+    def __init__(self, funcao, argumentos):
+        self.funcao = funcao
+        self.argumentos = argumentos
+        self.removido = False
+
+    def __call__(self):
+        return self.funcao(*self.argumentos)
+
+    def remove(self):
+        self.removido = True
+
+
+class PecaFalsa:
+    def __init__(self, stage, decouple_stage, dry_mass, combustivel=None):
+        self.stage = stage
+        self.decouple_stage = decouple_stage
+        self.dry_mass = dry_mass
+        self._combustivel = combustivel
+
+    @property
+    def mass(self):
+        return self.dry_mass + (self._combustivel() if self._combustivel else 0.0)
+
+
+class MotorFalso:
+    def __init__(self, jogo, indice, peca):
+        self.jogo = jogo
+        self.indice = indice
+        self.part = peca
+
+    @property
+    def active(self):
+        sim = self.jogo.sim
+        return sim.aceso and sim.indice == self.indice
+
+    @property
+    def has_fuel(self):
+        sim = self.jogo.sim
+        return sim.combustivel > 0.0 if sim.indice == self.indice else True
+
+    def max_thrust_at(self, pressao):
+        return subida.empuxo_em(subida.FOGUETE_KERBIN[self.indice], pressao)
+
+    def specific_impulse_at(self, pressao):
+        return subida.isp_em(subida.FOGUETE_KERBIN[self.indice], pressao)
+
+
+class PartesFalsas:
+    def __init__(self, jogo):
+        sim = jogo.sim
+        cima = sim._estagios[-1].combustivel
+        self.jogo = jogo
+        self.tanque_baixo = PecaFalsa(-1, 0, 1_500.0, lambda: sim.combustivel if sim.indice == 0 else 0.0)
+        self.peca_motor_baixo = PecaFalsa(1, 0, 500.0)
+        self.tanque_cima = PecaFalsa(-1, -1, 400.0, lambda: sim.combustivel if sim.indice == 1 else cima)
+        self.peca_motor_cima = PecaFalsa(0, -1, 300.0)
+        self.carga = PecaFalsa(-1, -1, 500.0)
+        self.motor_baixo = MotorFalso(jogo, 0, self.peca_motor_baixo)
+        self.motor_cima = MotorFalso(jogo, 1, self.peca_motor_cima)
+
+    @property
+    def engines(self):
+        sim = self.jogo.sim
+        return [m for m in (self.motor_baixo, self.motor_cima) if m.indice >= sim.indice]
+
+    @property
+    def all(self):
+        sim = self.jogo.sim
+        pecas = [self.tanque_cima, self.peca_motor_cima, self.carga]
+        if sim.indice == 0:
+            pecas = [self.tanque_baixo, self.peca_motor_baixo] + pecas
+        return pecas
+
+
+class ControleFalso:
+    def __init__(self, jogo):
+        self.jogo = jogo
+        self.sas = True
+        self.throttle = 0.0
+        self.current_stage = 2
+
+    def activate_next_stage(self):
+        self.current_stage -= 1
+        self.jogo.sim.executar(Comando(estagiar=True))
+
+
+class PilotoFalso:
+    def __init__(self):
+        self.reference_frame = None
+        self.engajado = False
+        self.pitch = 90.0
+        self.heading = 90.0
+
+    def engage(self):
+        self.engajado = True
+
+    def disengage(self):
+        self.engajado = False
+
+    def target_pitch_and_heading(self, pitch, heading):
+        self.pitch, self.heading = pitch, heading
+
+
+class VooFalso:
+    def __init__(self, jogo, referencia):
+        self.jogo = jogo
+        self.referencia = referencia
+
+    @property
+    def velocity(self):
+        l = self.jogo.sim.leitura()
+        return self.jogo.eixos(l.v_sup if self.referencia == HIBRIDO else l.v)
+
+    @property
+    def normal(self):
+        l = self.jogo.sim.leitura()
+        return self.jogo.eixos(unit(cruz(l.r, l.v)))
+
+    @property
+    def surface_altitude(self):
+        return self.jogo.sim.leitura().radar
+
+    @property
+    def dynamic_pressure(self):
+        return self.jogo.sim.leitura().q
+
+    @property
+    def static_pressure(self):
+        return self.jogo.sim.leitura().pressao * subida.PASCAL_POR_ATM
+
+    @property
+    def drag(self):
+        return (self.jogo.sim.leitura().arrasto, 0.0, 0.0)
+
+
+class NaveFalsa:
+    name = "Foguete falso"
+
+    def __init__(self, jogo):
+        self.jogo = jogo
+        self.orbit = types.SimpleNamespace(body=jogo.corpo)
+        self.surface_reference_frame = SUP
+        self.control = ControleFalso(jogo)
+        self.auto_pilot = PilotoFalso()
+        self.parts = PartesFalsas(jogo)
+
+    def position(self, referencia):
+        return self.jogo.eixos(self.jogo.sim.r)
+
+    def velocity(self, referencia):
+        return self.jogo.eixos(self.jogo.sim.v)
+
+    def direction(self, referencia):
+        return self.jogo.eixos(self.jogo.sim.nariz)
+
+    def flight(self, referencia=None):
+        return VooFalso(self.jogo, referencia)
+
+    @property
+    def mass(self):
+        return self.jogo.sim.massa
+
+    @property
+    def available_thrust(self):
+        return self.jogo.sim.leitura().empuxo
+
+    @property
+    def specific_impulse(self):
+        return self.jogo.sim.leitura().isp
+
+    @property
+    def situation(self):
+        return "pre_launch" if self.jogo.sim.pousada else "flying"
+
+
+class CorpoFalso:
+    def __init__(self, jogo):
+        corpo = jogo.sim.corpo
+        self._corpo = corpo
+        self.name = corpo.nome
+        self.gravitational_parameter = corpo.mu
+        self.equatorial_radius = corpo.raio
+        self.rotational_period = corpo.periodo
+        self.has_atmosphere = corpo.topo > 0.0
+        self.atmosphere_depth = corpo.topo
+        self.non_rotating_reference_frame = NR
+        self.reference_frame = CORPO_GIRATORIO
+
+    def density_at(self, altitude):
+        return self._corpo.densidade(altitude)
+
+    def pressure_at(self, altitude):
+        return self._corpo.pressao(altitude) * subida.PASCAL_POR_ATM
+
+
+class CentroFalso:
+    def __init__(self, jogo):
+        self.jogo = jogo
+        self.target_vessel = None
+        self.target_body = None
+        self.warp_proibido = False
+        self.warps = []
+        self.ReferenceFrame = types.SimpleNamespace(create_hybrid=self.criar_hibrido)
+        self.VesselSituation = types.SimpleNamespace(
+            pre_launch="pre_launch", landed="landed", splashed="splashed", flying="flying"
+        )
+
+    @property
+    def ut(self):
+        return self.jogo.sim.t
+
+    @property
+    def active_vessel(self):
+        return self.jogo.nave
+
+    def criar_hibrido(self, position, rotation):
+        assert position == CORPO_GIRATORIO and rotation == NR
+        return HIBRIDO
+
+    def transform_direction(self, direcao, de, para):
+        assert de == SUP and para == NR
+        l = self.jogo.sim.leitura()
+        base = {(1.0, 0.0, 0.0): unit(l.r), (0.0, 1.0, 0.0): l.norte, (0.0, 0.0, 1.0): l.leste}[
+            tuple(float(x) for x in direcao)
+        ]
+        if self.jogo.leste_errado and tuple(direcao) == (0.0, 0.0, 1.0):
+            base = esc(-1.0, base)
+        return self.jogo.eixos(base)
+
+    def warp_to(self, ut):
+        if self.warp_proibido:
+            raise RuntimeError("não dá para acelerar o tempo agora")
+        self.warps.append(ut)
+        piloto = self.jogo.nave.auto_pilot
+        self.jogo.sim.executar(Comando(0.0, piloto.pitch, piloto.heading, acelerar_ate=ut))
+
+
+class JogoFalso:
+    """Um KSP de mentira em volta de uma NaveSimulada, com os eixos canhotos do kRPC (z trocado)."""
+
+    def __init__(self, sim=None, canhoto=True, leste_errado=False):
+        self.sim = sim or NaveSimulada.kerbin()
+        self.canhoto = canhoto
+        self.leste_errado = leste_errado
+        self.fluxos = []
+        self.fechada = False
+        self.corpo = CorpoFalso(self)
+        self.space_center = CentroFalso(self)
+        self.nave = NaveFalsa(self)
+
+    def eixos(self, vetor):
+        if self.canhoto:
+            return (vetor[0], vetor[1], -vetor[2])
+        return tuple(vetor)
+
+    def add_stream(self, funcao, *argumentos):
+        fluxo = FluxoFalso(funcao, argumentos)
+        self.fluxos.append(fluxo)
+        return fluxo
+
+    def close(self):
+        self.fechada = True
+
+    def avancar(self, dt):
+        controle = self.nave.control
+        piloto = self.nave.auto_pilot
+        self.sim.executar(Comando(controle.throttle, piloto.pitch, piloto.heading))
+        self.sim.avancar(dt)
+
+    def alvo_com_plano(self, n_alvo, nome="Alvo falso"):
+        """Um alvo em órbita circular no plano de normal n_alvo, em volta do mesmo planeta."""
+        corpo = self.sim.corpo
+        raio_orbita = corpo.raio + 100_000.0
+        direcao = unit(cruz(n_alvo, corpo.polo))
+        r = esc(raio_orbita, direcao)
+        v = esc(math.sqrt(corpo.mu / raio_orbita), cruz(n_alvo, unit(r)))
+        eixos = self.eixos
+        return types.SimpleNamespace(
+            name=nome,
+            orbit=types.SimpleNamespace(body=self.corpo),
+            position=lambda referencia: eixos(r),
+            velocity=lambda referencia: eixos(v),
+        )
+
+
+class TelaFalsa:
+    def __init__(self):
+        self.pacotes = []
+
+    def enviar(self, linhas, agora=True):
+        self.pacotes.append(list(linhas))
+
+    def fechar(self):
+        pass
+
+
+@contextlib.contextmanager
+def sem_espera():
+    """Tira as esperas de tempo real, para voar o roteiro todo em poucos segundos de teste."""
+    with contextlib.ExitStack() as pilha:
+        pilha.enter_context(mock.patch.object(subida.time, "sleep"))
+        pilha.enter_context(mock.patch.object(subida, "ESPERA_AVISO", 0.05))
+        pilha.enter_context(mock.patch.object(subida, "INTERVALO_MOTORES", 0.0))
+        saida = pilha.enter_context(contextlib.redirect_stdout(io.StringIO()))
+        yield saida
+
+
+def argumentos(**extras):
+    base = dict(altitude=80_000.0, inclinacao=0.0, plano_do_alvo=False)
+    base.update(extras)
+    return argparse.Namespace(**base)
+
+
+class TestNaveKrpc(unittest.TestCase):
+    def setUp(self):
+        patch = mock.patch.object(subida, "INTERVALO_MOTORES", 0.0)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def criar(self, **extras):
+        jogo = JogoFalso(**extras)
+        corpo = subida.corpo_do_jogo(jogo.corpo)
+        return jogo, subida.NaveKrpc(jogo, jogo.nave, jogo.corpo, corpo)
+
+    def test_corpo_do_jogo_com_ar(self):
+        jogo = JogoFalso()
+        corpo = subida.corpo_do_jogo(jogo.corpo)
+        self.assertEqual(corpo.nome, "Kerbin")
+        self.assertEqual(corpo.mu, KERBIN.mu)
+        self.assertEqual(corpo.raio, KERBIN.raio)
+        self.assertEqual(corpo.periodo, KERBIN.periodo)
+        self.assertEqual(corpo.topo, KERBIN.topo)
+        self.assertEqual(corpo.polo, (0.0, 1.0, 0.0))
+        for altitude in (0.0, 1_000.0, 10_000.0, 35_000.0, 69_000.0):
+            with self.subTest(altitude=altitude):
+                self.assertAlmostEqual(corpo.densidade(altitude) / KERBIN.densidade(altitude), 1.0, delta=0.005)
+                self.assertAlmostEqual(corpo.pressao(altitude) / KERBIN.pressao(altitude), 1.0, delta=0.005)
+        self.assertEqual(corpo.densidade(70_000.0), 0.0)
+        self.assertEqual(corpo.pressao(200_000.0), 0.0)
+        self.assertAlmostEqual(corpo.pressao(0.0), 1.0)
+
+    def test_corpo_do_jogo_sem_ar(self):
+        jogo = JogoFalso(NaveSimulada.mun())
+        corpo = subida.corpo_do_jogo(jogo.corpo)
+        self.assertEqual(corpo.topo, 0.0)
+        self.assertEqual(corpo.densidade(0.0), 0.0)
+        self.assertEqual(corpo.pressao(1_000.0), 0.0)
+
+    def test_leitura_igual_a_da_nave_simulada_nos_dois_sentidos_do_referencial(self):
+        for canhoto in (True, False):
+            with self.subTest(canhoto=canhoto):
+                jogo, fonte = self.criar(canhoto=canhoto)
+                jogo.nave.control.activate_next_stage()
+                jogo.nave.control.throttle = 1.0
+                jogo.avancar(5.0)
+                l = fonte.ler()
+                esperada = jogo.sim.leitura()
+                for campo in ("r", "v", "v_sup", "norte", "leste", "nariz"):
+                    self.assertLess(subida.norma(subida.sub(getattr(l, campo), getattr(esperada, campo))), 1e-6, campo)
+                for campo in ("t", "radar", "q", "massa", "empuxo", "isp", "pressao", "arrasto"):
+                    self.assertAlmostEqual(getattr(l, campo), getattr(esperada, campo), places=6, msg=campo)
+                self.assertFalse(l.pousada)
+                self.assertEqual(fonte._sinal_z, -1.0 if canhoto else 1.0)
+
+    def test_leste_errado_levanta_erro_claro(self):
+        jogo = JogoFalso(leste_errado=True)
+        with self.assertRaises(subida.ReferencialErrado) as erro:
+            subida.NaveKrpc(jogo, jogo.nave, jogo.corpo, subida.corpo_do_jogo(jogo.corpo))
+        self.assertIn("leste", str(erro.exception))
+        self.assertIsInstance(erro.exception, RuntimeError)
+
+    def test_nave_sem_velocidade_nao_calibra(self):
+        jogo = JogoFalso()
+        jogo.sim.v = (0.0, 0.0, 0.0)
+        with self.assertRaises(subida.ReferencialErrado):
+            subida.NaveKrpc(jogo, jogo.nave, jogo.corpo, subida.corpo_do_jogo(jogo.corpo))
+
+    def test_motores_apagado_e_abaixo(self):
+        jogo, fonte = self.criar()
+        l = fonte.ler()
+        self.assertTrue(l.pousada)
+        self.assertTrue(l.motor_abaixo)
+        self.assertFalse(l.apagado)
+        self.assertEqual(l.empuxo, 0.0)
+        jogo.nave.control.activate_next_stage()
+        l = fonte.ler()
+        self.assertTrue(l.motor_abaixo)
+        self.assertFalse(l.apagado)
+        self.assertGreater(l.empuxo, 0.0)
+        jogo.sim.combustivel = 0.0
+        l = fonte.ler()
+        self.assertTrue(l.apagado)
+        jogo.nave.control.activate_next_stage()
+        l = fonte.ler()
+        self.assertFalse(l.apagado)
+        self.assertFalse(l.motor_abaixo)
+
+    def test_estagios_confere_com_os_da_nave_simulada(self):
+        jogo, fonte = self.criar()
+        jogo.nave.control.activate_next_stage()
+        jogo.nave.control.throttle = 1.0
+        jogo.avancar(3.0)
+        obtidos = fonte.estagios()
+        esperados = jogo.sim.estagios()
+        self.assertEqual(len(obtidos), len(esperados))
+        for obtido, esperado in zip(obtidos, esperados):
+            for campo in dataclasses.fields(esperado):
+                with self.subTest(campo=campo.name):
+                    self.assertAlmostEqual(
+                        getattr(obtido, campo.name) / getattr(esperado, campo.name), 1.0, delta=1e-6
+                    )
+
+    def test_executar_liga_o_piloto_automatico_e_desliga_o_sas(self):
+        jogo, fonte = self.criar()
+        nave = jogo.nave
+        fonte.executar(Comando(acelerador=0.7, pitch=80.0, rumo=45.0))
+        self.assertFalse(nave.control.sas)
+        self.assertTrue(nave.auto_pilot.engajado)
+        self.assertEqual(nave.auto_pilot.reference_frame, SUP)
+        self.assertEqual(nave.control.throttle, 0.7)
+        self.assertEqual((nave.auto_pilot.pitch, nave.auto_pilot.heading), (80.0, 45.0))
+        self.assertEqual(nave.control.current_stage, 2)
+        fonte.executar(Comando(acelerador=1.0, pitch=90.0, rumo=90.0, estagiar=True))
+        self.assertEqual(nave.control.current_stage, 1)
+        self.assertTrue(jogo.sim.aceso)
+
+    def test_time_warp_bloqueia_ate_o_tempo_pedido(self):
+        jogo, fonte = self.criar()
+        fonte.executar(Comando(acelerar_ate=500.0))
+        self.assertEqual(jogo.space_center.warps, [500.0])
+        self.assertAlmostEqual(jogo.sim.t, 500.0)
+        fonte.executar(Comando(acelerar_ate=100.0))
+        self.assertEqual(jogo.space_center.warps, [500.0])
+
+    def test_sem_warp_o_aviso_sai_uma_vez_so(self):
+        jogo, fonte = self.criar()
+        jogo.space_center.warp_proibido = True
+        saida = io.StringIO()
+        with contextlib.redirect_stdout(saida):
+            fonte.executar(Comando(acelerar_ate=500.0))
+            fonte.executar(Comando(acelerar_ate=600.0))
+        self.assertEqual(saida.getvalue().count("AVISO"), 1)
+        self.assertEqual(jogo.sim.t, 0.0)
+
+    def test_liberar_faz_cada_passo_por_si(self):
+        jogo, fonte = self.criar()
+        fonte.executar(Comando(acelerador=1.0))
+
+        def quebrar():
+            raise RuntimeError("a nave não existe mais")
+
+        jogo.nave.auto_pilot.disengage = quebrar
+        fonte.liberar()
+        self.assertEqual(jogo.nave.control.throttle, 0.0)
+        self.assertTrue(jogo.nave.control.sas)
+        self.assertTrue(all(f.removido for f in jogo.fluxos))
+
+    def test_plano_do_alvo(self):
+        jogo, fonte = self.criar()
+        n, nome, problema = fonte.alvo()
+        self.assertIsNone(n)
+        self.assertIsNone(nome)
+        self.assertIn("nenhum alvo", problema)
+
+        n_alvo = plano_com_janela(jogo.sim, 1_200.0, 10.0)
+        jogo.space_center.target_vessel = jogo.alvo_com_plano(n_alvo, "Estação")
+        n, nome, problema = fonte.alvo()
+        self.assertIsNone(problema)
+        self.assertEqual(nome, "Estação")
+        self.assertLess(angulo(n, n_alvo), 1e-6)
+
+        jogo.space_center.target_vessel = None
+        jogo.space_center.target_body = jogo.alvo_com_plano(n_alvo, "Mun")
+        n, nome, problema = fonte.alvo()
+        self.assertLess(angulo(n, n_alvo), 1e-6)
+
+        outro = jogo.alvo_com_plano(n_alvo, "Duna")
+        outro.orbit = types.SimpleNamespace(body=object())
+        jogo.space_center.target_body = outro
+        n, nome, problema = fonte.alvo()
+        self.assertIsNone(n)
+        self.assertEqual(nome, "Duna")
+        self.assertIn("não orbita", problema)
+
+    def test_voo_completo_pelo_kRPC_nos_dois_sentidos_do_referencial(self):
+        for canhoto in (True, False):
+            with self.subTest(canhoto=canhoto):
+                jogo, fonte = self.criar(canhoto=canhoto)
+                guiagem = Guiagem(fonte.corpo, 80_000.0, 45.0, ler_estagios=fonte.estagios)
+                for _ in range(PASSOS_MAX):
+                    comando = guiagem.passo(fonte.ler())
+                    if guiagem.fase in (ORBITA, FALHA):
+                        break
+                    fonte.executar(comando)
+                    jogo.avancar(DT)
+                self.assertEqual(guiagem.fase, ORBITA)
+                l = jogo.sim.leitura()
+                self.assertAlmostEqual(inclinacao_de(KERBIN, l.r, l.v), 45.0, delta=0.5)
+                _, _, ra, rp = elementos(KERBIN, l.r, l.v)
+                self.assertTrue(78_500.0 < rp - KERBIN.raio < ra - KERBIN.raio < 81_500.0)
+                self.assertTrue(jogo.space_center.warps)
+
+
+class TestSubir(unittest.TestCase):
+    def test_sobe_ate_a_orbita_e_deixa_a_nave_livre(self):
+        jogo = JogoFalso()
+        tela = TelaFalsa()
+        original = subida.NaveKrpc.executar
+
+        def executar(fonte, comando):
+            original(fonte, comando)
+            jogo.avancar(subida.INTERVALO)
+
+        with sem_espera():
+            with mock.patch.object(subida.NaveKrpc, "executar", executar):
+                codigo = subida.subir(jogo, argumentos(), tela)
+        self.assertEqual(codigo, subida.EM_ORBITA)
+        valores = valores_sub(tela.pacotes[-1])
+        self.assertEqual(valores["FASE"], "ORBITA")
+        self.assertEqual(jogo.nave.control.throttle, 0.0)
+        self.assertTrue(jogo.nave.control.sas)
+        self.assertFalse(jogo.nave.auto_pilot.engajado)
+        self.assertTrue(all(f.removido for f in jogo.fluxos))
+        for pacote in tela.pacotes:
+            self.assertTrue(all(len(linha) <= 31 and linha.isascii() for linha in pacote))
+
+    def sem_voar(self, jogo, **extras):
+        tela = TelaFalsa()
+        with sem_espera() as saida:
+            codigo = subida.subir(jogo, argumentos(**extras), tela)
+        return codigo, tela, saida.getvalue()
+
+    def test_altitude_dentro_do_ar_nao_decola(self):
+        jogo = JogoFalso()
+        codigo, tela, texto = self.sem_voar(jogo, altitude=50_000.0)
+        self.assertEqual(codigo, subida.NAO_CHEGOU)
+        self.assertIn("altitude", texto)
+        valores = valores_sub(tela.pacotes[-1])
+        self.assertEqual(valores["AVISO"], "ALTITUDE")
+        self.assertEqual(valores["FASE"], "FALHA")
+        self.assertTrue(jogo.sim.pousada)
+        self.assertEqual(jogo.nave.control.throttle, 0.0)
+        self.assertEqual(jogo.nave.control.current_stage, 2)
+
+    def test_altitude_minima_sem_ar_e_maior_que_a_do_chao(self):
+        jogo = JogoFalso(NaveSimulada.mun())
+        codigo, tela, _ = self.sem_voar(jogo, altitude=5_000.0)
+        self.assertEqual(codigo, subida.NAO_CHEGOU)
+        self.assertEqual(valores_sub(tela.pacotes[-1])["AVISO"], "ALTITUDE")
+
+    def test_plano_do_alvo_sem_alvo_nao_decola(self):
+        jogo = JogoFalso()
+        codigo, tela, texto = self.sem_voar(jogo, plano_do_alvo=True)
+        self.assertEqual(codigo, subida.NAO_CHEGOU)
+        self.assertEqual(valores_sub(tela.pacotes[-1])["AVISO"], "ALVO")
+        self.assertTrue(jogo.sim.pousada)
+
+    def test_plano_do_alvo_de_outro_planeta_nao_decola(self):
+        jogo = JogoFalso()
+        alvo = jogo.alvo_com_plano(plano_com_janela(jogo.sim, 1_200.0, 10.0), "Duna")
+        alvo.orbit = types.SimpleNamespace(body=object())
+        jogo.space_center.target_body = alvo
+        codigo, tela, texto = self.sem_voar(jogo, plano_do_alvo=True)
+        self.assertEqual(codigo, subida.NAO_CHEGOU)
+        self.assertEqual(valores_sub(tela.pacotes[-1])["AVISO"], "ALVO")
+        self.assertIn("Duna", texto)
+
+    def test_nave_no_ar_nao_sobe(self):
+        jogo = JogoFalso()
+        jogo.sim.pousada = False
+        codigo, tela, texto = self.sem_voar(jogo)
+        self.assertEqual(codigo, subida.NAO_CHEGOU)
+        self.assertIn("parada no chão", texto)
+        self.assertEqual(tela.pacotes, [])
+
+    def test_eixos_errados_nao_decolam(self):
+        jogo = JogoFalso(leste_errado=True)
+        codigo, tela, texto = self.sem_voar(jogo)
+        self.assertEqual(codigo, subida.NAO_CHEGOU)
+        self.assertIn("ERRO", texto)
+        self.assertEqual(jogo.nave.control.current_stage, 2)
+
+    def test_plano_do_alvo_escolhido_no_jogo(self):
+        jogo = JogoFalso()
+        n_alvo = plano_com_janela(jogo.sim, 1_200.0, 10.0)
+        jogo.space_center.target_vessel = jogo.alvo_com_plano(n_alvo)
+        original = subida.NaveKrpc.executar
+
+        def executar(fonte, comando):
+            original(fonte, comando)
+            jogo.avancar(subida.INTERVALO)
+
+        tela = TelaFalsa()
+        with sem_espera() as saida:
+            with mock.patch.object(subida.NaveKrpc, "executar", executar):
+                codigo = subida.subir(jogo, argumentos(plano_do_alvo=True), tela)
+        self.assertEqual(codigo, subida.EM_ORBITA)
+        l = jogo.sim.leitura()
+        self.assertLess(angulo(unit(cruz(l.r, l.v)), n_alvo), 0.1)
+        self.assertIn("erro de plano", saida.getvalue())
+        fases = [valores_sub(p)["FASE"] for p in tela.pacotes]
+        self.assertIn("JANELA", fases)
+        self.assertIn("PLANO", fases)
+
+    def test_ctrl_c_no_meio_do_warp_corta_o_motor(self):
+        jogo = JogoFalso()
+        original = subida.NaveKrpc.executar
+
+        def executar(fonte, comando):
+            original(fonte, comando)
+            jogo.avancar(subida.INTERVALO)
+
+        def interromper(ut):
+            raise KeyboardInterrupt
+
+        jogo.space_center.warp_to = interromper
+        with sem_espera():
+            with mock.patch.object(subida.NaveKrpc, "executar", executar):
+                with self.assertRaises(KeyboardInterrupt):
+                    subida.subir(jogo, argumentos(), TelaFalsa())
+        self.assertEqual(jogo.nave.control.throttle, 0.0)
+        self.assertTrue(jogo.nave.control.sas)
+        self.assertFalse(jogo.nave.auto_pilot.engajado)
+        self.assertTrue(all(f.removido for f in jogo.fluxos))
+
+
+class TestMain(unittest.TestCase):
+    def rodar(self, *opcoes):
+        with sem_espera() as saida:
+            with mock.patch.object(sys, "argv", ["subida.py", "--tela", "127.0.0.1:9", *opcoes]):
+                codigo = subida.main()
+        return codigo, saida.getvalue()
+
+    def test_demo_chega_em_orbita(self):
+        codigo, texto = self.rodar("--demo")
+        self.assertEqual(codigo, subida.EM_ORBITA)
+        self.assertIn("Em órbita", texto)
+        self.assertIn("--> COSTA", texto)
+
+    def test_demo_com_plano_do_alvo_passa_pela_janela_e_iguala_o_plano(self):
+        codigo, texto = self.rodar("--demo", "--plano-do-alvo")
+        self.assertEqual(codigo, subida.EM_ORBITA)
+        for fase in ("JANELA", "DECOLAGEM", "PLANO", "ORBITA"):
+            self.assertIn(f"--> {fase}", texto)
+        erro = float(re.search(r"erro de plano ([0-9.]+)", texto).group(1))
+        self.assertLess(erro, 0.1)
+
+    def test_demo_com_inclinacao_e_altitude(self):
+        codigo, texto = self.rodar("--demo", "--altitude", "100000", "--inclinacao", "45")
+        self.assertEqual(codigo, subida.EM_ORBITA)
+        inclinacao = float(re.search(r"inclinação ([0-9.]+)°", texto).group(1))
+        self.assertAlmostEqual(inclinacao, 45.0, delta=0.5)
+
+    def test_demo_recusa_altitude_dentro_do_ar(self):
+        codigo, texto = self.rodar("--demo", "--altitude", "50000")
+        self.assertEqual(codigo, subida.NAO_CHEGOU)
+        self.assertIn("Não vou decolar", texto)
+
+    def test_ctrl_c_devolve_130(self):
+        with mock.patch.object(subida, "subir_demo", side_effect=KeyboardInterrupt):
+            codigo, texto = self.rodar("--demo")
+        self.assertEqual(codigo, subida.INTERROMPIDO)
+        self.assertEqual(subida.INTERROMPIDO, 130)
+
+    def test_krpc_conecta_sem_esperar_e_fecha_a_conexao(self):
+        jogo = JogoFalso()
+        chamadas = []
+
+        def conectar_krpc(address, *dispositivos, esperar=True):
+            chamadas.append((address, dispositivos, esperar))
+            return jogo
+
+        falsa = types.SimpleNamespace(conectar_krpc=conectar_krpc)
+        original = subida.NaveKrpc.executar
+
+        def executar(fonte, comando):
+            original(fonte, comando)
+            jogo.avancar(subida.INTERVALO)
+
+        with mock.patch.dict(sys.modules, {"ponte": falsa}):
+            with mock.patch.object(subida.NaveKrpc, "executar", executar):
+                codigo, _ = self.rodar("10.0.0.5")
+        self.assertEqual(codigo, subida.EM_ORBITA)
+        self.assertEqual(chamadas, [("10.0.0.5", (), False)])
+        self.assertTrue(jogo.fechada)
+
+    def test_nave_perdida_devolve_nao_chegou(self):
+        jogo = JogoFalso()
+        falsa = types.SimpleNamespace(conectar_krpc=lambda address, *d, esperar=True: jogo)
+        with mock.patch.dict(sys.modules, {"ponte": falsa}):
+            with mock.patch.object(Guiagem, "passo", side_effect=RuntimeError("a nave explodiu")):
+                codigo, texto = self.rodar()
+        self.assertEqual(codigo, subida.NAO_CHEGOU)
+        self.assertIn("Perdi a nave", texto)
+        self.assertTrue(jogo.fechada)
+        self.assertEqual(jogo.nave.control.throttle, 0.0)
+        self.assertTrue(jogo.nave.control.sas)
 
 
 if __name__ == "__main__":

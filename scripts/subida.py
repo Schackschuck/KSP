@@ -69,21 +69,37 @@ script manda o estado dele para a ponte por UDP (as linhas SUB de
 docs/protocolo.md).
 
 Uso:
-    python scripts/subida.py                      # KSP neste computador, 80 km, 0°
+    python scripts/subida.py                      # KSP neste computador: 80 km, inclinação 0°
     python scripts/subida.py --altitude 100000 --inclinacao 45
-    python scripts/subida.py --plano-do-alvo      # órbita no plano do alvo escolhido
-    python scripts/subida.py 192.168.1.10         # KSP em outro computador
+    python scripts/subida.py --plano-do-alvo      # órbita no plano do alvo escolhido no jogo
+    python scripts/subida.py 192.168.1.10         # KSP em outro computador (ex.: a partir do Pi)
+    python scripts/subida.py --tela 192.168.1.20  # ponte da tela em outro computador
     python scripts/subida.py --demo               # sem o KSP: uma nave simulada sobe de Kerbin
+    python scripts/subida.py --demo --plano-do-alvo
+
+--altitude é em metros sobre o nível do mar e --inclinacao em graus (0 é leste,
+180 é retrógrada). Com --plano-do-alvo a inclinação pedida é ignorada: vale a
+órbita da nave ou do corpo escolhido como alvo no jogo, que tem de estar em
+volta do mesmo planeta.
 
 A nave tem de estar parada no chão, com o primeiro estágio ainda por acender: o
 script dá a ignição e troca de estágio quando o motor apaga. A carenagem não é
-aberta pelo script.
-Ctrl+C corta o motor e devolve o controle ao piloto.
+aberta pelo script. O script liga o piloto automático e desliga o SAS enquanto
+voa; ao terminar (inclusive com Ctrl+C) corta o motor e devolve o SAS ao
+piloto.
 
-Sai com o código 0 em órbita, 1 se não chegou e 130 se foi interrompido.
+Sai com o código 0 em órbita, 1 se não chegou (ou se recusou decolar) e 130 se
+foi interrompido (Ctrl+C, ou o korry segurado de novo): a ponte usa o código
+para acender o korry.
 """
 
+import argparse
 import math
+import os
+import signal
+import socket
+import sys
+import time
 from dataclasses import dataclass, replace
 
 G0 = 9.80665
@@ -134,6 +150,21 @@ ALTITUDE_MIN_VACUO = 10_000.0
 PASSO_FISICA = 0.05
 PASSO_WARP = 1.0
 GIRO_NARIZ_MAX = 15.0
+
+INTERVALO = 0.05
+INTERVALO_STATUS = 1.0
+INTERVALO_MOTORES = 0.25
+INTERVALO_TELA = 0.1
+ESPERA_AVISO = 3.0
+AMOSTRAS_ATMOSFERA = 100
+PASCAL_POR_ATM = 101_325
+PORTA_TELA = 50100
+LIMITE_INTEIRO = 2**31 - 1
+VELOCIDADE_DEMO = 4
+ATRASO_JANELA_DEMO = 1200.0
+INCLINACAO_PLANO_DEMO = 10.0
+
+EM_ORBITA, NAO_CHEGOU, INTERROMPIDO = 0, 1, 130
 
 JANELA = "JANELA"
 DECOLAGEM = "DECOLAGEM"
@@ -743,6 +774,18 @@ class Guiagem:
         }
 
     @property
+    def n_alvo(self):
+        """O normal do plano do alvo, ou None sem alvo."""
+        return self._n_alvo
+
+    def recusar(self, aviso):
+        """Não decola: marca o aviso e vai direto para FALHA (antes do primeiro passo)."""
+        self._avisar(aviso)
+        self._iniciada = True
+        self.fase = FALHA
+        self.acelerador = 0.0
+
+    @property
     def aviso(self):
         """O aviso mais importante que vale agora, ou None."""
         for nome in PRIORIDADE_AVISOS:
@@ -1308,3 +1351,602 @@ class NaveSimulada:
             saida.append(replace(e, massa_inicial=massa, combustivel=combustivel))
             massa -= combustivel + e.seca_solta
         return saida
+
+
+def plano_com_janela(nave, atraso, inclinacao, sentido=1):
+    """O normal de um plano de dada inclinação que passa pela base daqui a `atraso` segundos.
+
+    Com sentido = -1 o plano sai para o sudeste em vez de para o nordeste.
+    Serve ao --demo e aos testes: a janela dele cai em `atraso`.
+    """
+    corpo = nave.corpo
+    r_futuro = rotacionar(nave.r, corpo.polo, corpo.omega * atraso)
+    i = math.radians(inclinacao)
+    leste = unit(cruz(corpo.polo, r_futuro))
+    direcao = soma(esc(math.cos(i), leste), esc(sentido * math.sin(i), corpo.polo))
+    return unit(cruz(unit(r_futuro), direcao))
+
+
+def _interpolador(tabela, topo):
+    """Função altitude → valor, interpolando a tabela de AMOSTRAS_ATMOSFERA+1 pontos até o topo."""
+    passo = topo / AMOSTRAS_ATMOSFERA
+
+    def valor(altitude):
+        if altitude >= topo:
+            return 0.0
+        x = max(altitude, 0.0) / passo
+        i = min(int(x), AMOSTRAS_ATMOSFERA - 1)
+        return tabela[i] + (tabela[i + 1] - tabela[i]) * (x - i)
+
+    return valor
+
+
+def corpo_do_jogo(corpo):
+    """Monta o Corpo da guiagem a partir de um CelestialBody do kRPC.
+
+    As tabelas de densidade e de pressão são lidas do jogo uma vez só, em
+    AMOSTRAS_ATMOSFERA+1 pontos até o topo da atmosfera, e interpoladas aqui:
+    consultar o jogo a cada passo da simulação do giro seria lento demais. O
+    polo é (0, 1, 0), o eixo y do referencial não rotativo do kRPC.
+    """
+    topo = corpo.atmosphere_depth if corpo.has_atmosphere else 0.0
+    if topo > 0.0:
+        passo = topo / AMOSTRAS_ATMOSFERA
+        densidades = [corpo.density_at(i * passo) for i in range(AMOSTRAS_ATMOSFERA + 1)]
+        pressoes = [corpo.pressure_at(i * passo) / PASCAL_POR_ATM for i in range(AMOSTRAS_ATMOSFERA + 1)]
+        densidade = _interpolador(densidades, topo)
+        pressao = _interpolador(pressoes, topo)
+    else:
+        densidade = pressao = _sem_ar
+    return Corpo(
+        nome=corpo.name,
+        mu=corpo.gravitational_parameter,
+        raio=corpo.equatorial_radius,
+        periodo=corpo.rotational_period,
+        topo=topo,
+        densidade=densidade,
+        pressao=pressao,
+        polo=(0.0, 1.0, 0.0),
+    )
+
+
+class ReferencialErrado(RuntimeError):
+    """Os eixos que o kRPC entrega não batem com o referencial destro da guiagem."""
+
+
+def _empuxo_e_isp(motores, pressao):
+    """(empuxo total em N, Isp do conjunto em s) na pressão dada (atm)."""
+    total = 0.0
+    vazao = 0.0
+    for motor in motores:
+        empuxo = motor.max_thrust_at(pressao)
+        isp = motor.specific_impulse_at(pressao)
+        total += empuxo
+        if isp > 0.0:
+            vazao += empuxo / isp
+    return total, (total / vazao if vazao > 0.0 else 0.0)
+
+
+class NaveKrpc:
+    """Lê a nave pelo kRPC, com streams, e monta a Leitura para a guiagem.
+
+    O referencial do kRPC é canhoto (o do Unity), e a guiagem trabalha no
+    destro. Na criação, o sinal de (r × v) · normal, com o normal que o jogo
+    entrega para a órbita, diz se a conta de produto vetorial dá o sentido
+    certo; se não dá, todo vetor lido passa a ter o z trocado de sinal, o que
+    deixa o referencial destro. Depois confere que o leste lido gira no sentido
+    certo em volta do polo (0, 1, 0); se não, levanta ReferencialErrado: seria
+    a conta do referencial errada, e a guiagem apontaria para o lado errado.
+
+    Referenciais: nr, o não rotativo do planeta (inercial); sup, o da
+    superfície da nave (x cima, y norte, z leste); e um híbrido com a posição
+    presa ao planeta e os eixos do nr, só para a velocidade em relação ao chão.
+
+    apagado e motor_abaixo vêm da lista de motores, relida a cada
+    INTERVALO_MOTORES s porque muda com os estágios.
+
+    estagios() monta os trechos de queima a partir do estágio de agora
+    (control.current_stage, lido depois da ignição): o trecho k tem os motores
+    de part.stage >= k que ainda não foram largados (decouple_stage < k), e no
+    fim larga as peças com decouple_stage == k - 1. Vale bem para foguetes em
+    série; com boosters laterais a previsão erra um pouco, e a guiagem corrige
+    em voo.
+    """
+
+    def __init__(self, conn, nave, corpo_krpc, corpo):
+        space_center = conn.space_center
+        self._space_center = space_center
+        self._nave = nave
+        self._corpo_krpc = corpo_krpc
+        self.corpo = corpo
+        self._nr = corpo_krpc.non_rotating_reference_frame
+        self._sup = nave.surface_reference_frame
+        hibrido = space_center.ReferenceFrame.create_hybrid(
+            position=corpo_krpc.reference_frame, rotation=self._nr
+        )
+        situacao = space_center.VesselSituation
+        self._no_chao = (situacao.landed, situacao.pre_launch, situacao.splashed)
+        self._sinal_z = 1.0
+        self._calibrar()
+
+        voo = nave.flight()
+        stream = conn.add_stream
+        self._streams = {
+            "ut": stream(getattr, space_center, "ut"),
+            "r": stream(nave.position, self._nr),
+            "v": stream(getattr, nave.flight(self._nr), "velocity"),
+            "v_sup": stream(getattr, nave.flight(hibrido), "velocity"),
+            "nariz": stream(nave.direction, self._nr),
+            "norte": stream(space_center.transform_direction, (0.0, 1.0, 0.0), self._sup, self._nr),
+            "leste": stream(space_center.transform_direction, (0.0, 0.0, 1.0), self._sup, self._nr),
+            "radar": stream(getattr, voo, "surface_altitude"),
+            "q": stream(getattr, voo, "dynamic_pressure"),
+            "pressao": stream(getattr, voo, "static_pressure"),
+            "arrasto": stream(getattr, voo, "drag"),
+            "massa": stream(getattr, nave, "mass"),
+            "empuxo": stream(getattr, nave, "available_thrust"),
+            "isp": stream(getattr, nave, "specific_impulse"),
+            "situacao": stream(getattr, nave, "situation"),
+        }
+        self._proximos_motores = 0.0
+        self._apagado = False
+        self._motor_abaixo = True
+        self._piloto_ligado = False
+        self._sem_warp = False
+
+    def _corrigir(self, vetor):
+        return (vetor[0], vetor[1], self._sinal_z * vetor[2])
+
+    def _calibrar(self):
+        nave = self._nave
+        r = nave.position(self._nr)
+        v = nave.velocity(self._nr)
+        normal = nave.flight(self._nr).normal
+        h = cruz(r, v)
+        if norma(h) == 0.0:
+            raise ReferencialErrado(
+                "Não consegui calibrar os eixos do kRPC: a nave está sem velocidade em relação ao centro do planeta."
+            )
+        alinhamento = ponto(unit(h), normal)
+        if abs(alinhamento) < 0.5:
+            raise ReferencialErrado(
+                f"Não consegui calibrar os eixos do kRPC: o normal da órbita não bate com r x v "
+                f"(cosseno {alinhamento:.2f})."
+            )
+        self._sinal_z = 1.0 if alinhamento > 0.0 else -1.0
+        leste = self._corrigir(self._space_center.transform_direction((0.0, 0.0, 1.0), self._sup, self._nr))
+        polo = (0.0, 1.0, 0.0)
+        if ponto(cruz(polo, self._corrigir(r)), leste) <= 0.0:
+            raise ReferencialErrado(
+                "Os eixos do kRPC não bateram com o referencial da guiagem: o leste lido não gira no "
+                "sentido do planeta em volta do polo. Não vou decolar com os eixos trocados."
+            )
+
+    def _atualizar_motores(self):
+        motores = self._nave.parts.engines
+        self._apagado = any(m.active and not m.has_fuel for m in motores)
+        self._motor_abaixo = any(not m.active for m in motores)
+
+    def ler(self):
+        s = {nome: stream() for nome, stream in self._streams.items()}
+        agora = time.monotonic()
+        if agora >= self._proximos_motores:
+            self._atualizar_motores()
+            self._proximos_motores = agora + INTERVALO_MOTORES
+        return Leitura(
+            t=s["ut"],
+            r=self._corrigir(s["r"]),
+            v=self._corrigir(s["v"]),
+            v_sup=self._corrigir(s["v_sup"]),
+            norte=self._corrigir(s["norte"]),
+            leste=self._corrigir(s["leste"]),
+            nariz=self._corrigir(s["nariz"]),
+            radar=s["radar"],
+            q=s["q"],
+            pressao=s["pressao"] / PASCAL_POR_ATM,
+            arrasto=math.hypot(*s["arrasto"]),
+            massa=s["massa"],
+            empuxo=s["empuxo"],
+            isp=s["isp"],
+            apagado=self._apagado,
+            motor_abaixo=self._motor_abaixo,
+            pousada=s["situacao"] in self._no_chao,
+        )
+
+    def estagios(self):
+        """Os trechos de queima a partir do estágio de agora, como lista de Estagio."""
+        nave = self._nave
+        atual = nave.control.current_stage
+        pecas = [(p.stage, p.decouple_stage, p.mass, p.dry_mass) for p in nave.parts.all]
+        motores = [(m, m.part.stage, m.part.decouple_stage) for m in nave.parts.engines]
+        massa = nave.mass
+        saida = []
+        for k in range(atual, -1, -1):
+            do_trecho = [m for m, estagio, desacopla in motores if estagio >= k and desacopla < k]
+            largadas = [(mass, seca) for _, desacopla, mass, seca in pecas if desacopla == k - 1]
+            combustivel = sum(max(mass - seca, 0.0) for mass, seca in largadas)
+            seca_solta = sum(seca for _, seca in largadas)
+            empuxo_vacuo, isp_vacuo = _empuxo_e_isp(do_trecho, 0.0)
+            empuxo_mar, isp_mar = _empuxo_e_isp(do_trecho, 1.0)
+            saida.append(Estagio(massa, combustivel, seca_solta, empuxo_vacuo, empuxo_mar, isp_vacuo, isp_mar))
+            massa -= combustivel + seca_solta
+        return saida
+
+    def alvo(self):
+        """(n_alvo, nome, problema): o plano da órbita do alvo escolhido no jogo.
+
+        n_alvo é None quando não há alvo ou ele não orbita o mesmo planeta da
+        nave, e problema diz o que houve (None quando deu certo).
+        """
+        space_center = self._space_center
+        alvo = space_center.target_vessel
+        if alvo is None:
+            alvo = space_center.target_body
+        if alvo is None:
+            return None, None, "nenhum alvo escolhido no jogo para o plano"
+        nome = alvo.name
+        orbita = alvo.orbit
+        if orbita is None or orbita.body != self._corpo_krpc:
+            return None, nome, f"{nome} não orbita {self.corpo.nome}, o planeta da nave"
+        r = self._corrigir(alvo.position(self._nr))
+        v = self._corrigir(alvo.velocity(self._nr))
+        return unit(cruz(r, v)), nome, None
+
+    def executar(self, comando):
+        """Aplica o Comando: acelerador, piloto automático, estágio e time warp."""
+        nave = self._nave
+        controle = nave.control
+        piloto = nave.auto_pilot
+        if not self._piloto_ligado:
+            controle.sas = False
+            piloto.reference_frame = self._sup
+            piloto.engage()
+            self._piloto_ligado = True
+        controle.throttle = comando.acelerador
+        piloto.target_pitch_and_heading(comando.pitch, comando.rumo)
+        if comando.estagiar:
+            controle.activate_next_stage()
+        if comando.acelerar_ate is not None and not self._sem_warp:
+            self._acelerar(comando.acelerar_ate)
+
+    def _acelerar(self, ut):
+        """Time warp até o UT pedido; bloqueia até chegar. Sem o warp, a espera fica em tempo real."""
+        try:
+            if ut > self._space_center.ut:
+                self._space_center.warp_to(ut)
+        except (RuntimeError, ValueError) as e:
+            self._sem_warp = True
+            print(f"AVISO: o jogo não deixou acelerar o tempo ({e}); esperando em tempo real.")
+
+    def _remover_streams(self):
+        for stream in self._streams.values():
+            try:
+                stream.remove()
+            except Exception:
+                pass
+
+    def liberar(self):
+        """Motor em 0, piloto automático desligado, SAS ligado e streams removidas, cada um por si."""
+        controle = self._nave.control
+        for acao in (
+            lambda: setattr(controle, "throttle", 0.0),
+            lambda: self._nave.auto_pilot.disengage(),
+            lambda: setattr(controle, "sas", True),
+            self._remover_streams,
+        ):
+            try:
+                acao()
+            except Exception:
+                pass
+
+
+class FonteSimulada:
+    """A NaveSimulada no lugar do kRPC (--demo): cada executar() anda INTERVALO s de jogo."""
+
+    def __init__(self, nave):
+        self.nave = nave
+
+    def ler(self):
+        return self.nave.leitura()
+
+    def executar(self, comando):
+        self.nave.executar(comando)
+        self.nave.avancar(INTERVALO)
+
+    def estagios(self):
+        return self.nave.estagios()
+
+    def liberar(self):
+        pass
+
+
+class TelaSubida:
+    """Manda o estado da subida para a ponte da tela, por UDP, 10 vezes por segundo.
+
+    Um pacote só, com uma linha SUB por vez. Sem a ponte aberta, o pacote se
+    perde e nada acontece: a tela é opcional.
+    """
+
+    def __init__(self, endereco):
+        """endereco: IP da ponte, ou IP:PORTA (a porta padrão é PORTA_TELA)."""
+        ip, _, porta = endereco.partition(":")
+        self._destino = (ip, int(porta) if porta else PORTA_TELA)
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._proximo = 0.0
+
+    def enviar(self, linhas, agora=True):
+        """agora=False: só manda se já passou INTERVALO_TELA desde o último pacote."""
+        instante = time.monotonic()
+        if not agora and instante < self._proximo:
+            return
+        self._proximo = instante + INTERVALO_TELA
+        try:
+            self._socket.sendto("\n".join(linhas).encode("ascii"), self._destino)
+        except OSError:
+            pass
+
+    def fechar(self):
+        self._socket.close()
+
+
+def _inteiro(valor):
+    return int(max(-LIMITE_INTEIRO, min(LIMITE_INTEIRO, round(valor))))
+
+
+def inclinacao_de(corpo, r, v):
+    """Inclinação da órbita de agora, em graus."""
+    n = unit(cruz(r, v))
+    return math.degrees(math.acos(limitar(ponto(n, corpo.polo), -1.0, 1.0)))
+
+
+def linhas_de_estado(l, guiagem, corpo):
+    """O estado da subida nas linhas SUB do protocolo da tela (docs/protocolo.md).
+
+    Todas em ASCII e com no máximo 31 caracteres. Altitude, apoastro e
+    periastro em metros; velocidade, inclinação e giro em décimos; pressão
+    dinâmica em Pa; Δv em m/s; janela em segundos; motor em %. OFF onde o
+    valor não existe (escape, fora da janela, giro ainda não escolhido).
+    """
+    _, _, ra, rp = elementos(corpo, l.r, l.v)
+    ap = _inteiro(ra - corpo.raio) if math.isfinite(ra) else "OFF"
+    pe = _inteiro(rp - corpo.raio) if math.isfinite(rp) else "OFF"
+    janela = "OFF"
+    if guiagem.fase == JANELA and guiagem.janela is not None:
+        janela = _inteiro(max(0.0, guiagem.janela - l.t))
+    giro = "OFF" if guiagem.giro is None else _inteiro(guiagem.giro * 10)
+    return [
+        f"SUB FASE {guiagem.fase}",
+        f"SUB ALT {_inteiro(norma(l.r) - corpo.raio)}",
+        f"SUB VEL {_inteiro(norma(l.v) * 10)}",
+        f"SUB AP {ap}",
+        f"SUB PE {pe}",
+        f"SUB ALVO {_inteiro(guiagem.alvo_alt)}",
+        f"SUB Q {_inteiro(l.q)}",
+        f"SUB INC {_inteiro(inclinacao_de(corpo, l.r, l.v) * 10)}",
+        f"SUB INCA {_inteiro(guiagem.inclinacao_alvo * 10)}",
+        f"SUB DV {_inteiro(guiagem.dv)}",
+        f"SUB JAN {janela}",
+        f"SUB GIRO {giro}",
+        f"SUB MOTOR {_inteiro(100 * limitar(guiagem.acelerador, 0.0, 1.0))}",
+        f"SUB AVISO {guiagem.aviso or 'OFF'}",
+    ]
+
+
+TEXTOS_AVISO = {
+    AVISO_EMPUXO: "empuxo/peso baixo no chão: a nave pode não conseguir subir.",
+    AVISO_ALTITUDE: "altitude pedida dentro do ar ou perto demais do chão.",
+    AVISO_INCLINACAO: "inclinação fora do alcance da latitude da base: sai na menor possível.",
+    AVISO_ALVO: "sem alvo válido para o plano.",
+    AVISO_COMBUSTIVEL: "combustível insuficiente para chegar na órbita.",
+}
+
+
+def status(l, guiagem, corpo, comando):
+    """Uma linha de situação para o terminal."""
+    _, _, ra, rp = elementos(corpo, l.r, l.v)
+    ap = f"{(ra - corpo.raio) / 1000:7.1f}" if math.isfinite(ra) else "    ---"
+    pe = f"{(rp - corpo.raio) / 1000:7.1f}" if math.isfinite(rp) else "    ---"
+    return (
+        f"{guiagem.fase:11} alt {(norma(l.r) - corpo.raio) / 1000:7.1f} km  ap {ap} km  pe {pe} km  "
+        f"q {l.q:6.0f} Pa  inc {inclinacao_de(corpo, l.r, l.v):6.1f}  motor {guiagem.acelerador * 100:3.0f}%  "
+        f"pitch {comando.pitch:5.1f}  rumo {comando.rumo:5.1f}"
+    )
+
+
+def conferir_altitude(corpo, altitude):
+    """(aviso, mensagem) se a altitude pedida não serve, ou (None, None)."""
+    minima = corpo.topo + ALTITUDE_MIN_AR if corpo.topo > 0.0 else ALTITUDE_MIN_VACUO
+    if altitude < minima:
+        return AVISO_ALTITUDE, (
+            f"A altitude pedida ({altitude / 1000:.1f} km) está dentro do ar ou perto demais do chão: "
+            f"o mínimo em {corpo.nome} é {minima / 1000:.1f} km."
+        )
+    return None, None
+
+
+def recusar(fonte, guiagem, corpo, tela, aviso, mensagem):
+    """Não decola: mostra o aviso na tela por ESPERA_AVISO s, imprime o motivo e devolve NAO_CHEGOU."""
+    guiagem.recusar(aviso)
+    print(f"Não vou decolar: {mensagem}")
+    fim = time.monotonic() + ESPERA_AVISO
+    while True:
+        tela.enviar(linhas_de_estado(fonte.ler(), guiagem, corpo))
+        if time.monotonic() >= fim:
+            return NAO_CHEGOU
+        time.sleep(INTERVALO_TELA)
+
+
+def conduzir(fonte, guiagem, corpo, tela, repeticoes=1):
+    """O laço da subida a 20 Hz de jogo: ler, decidir, executar, mostrar. Devolve o código de saída.
+
+    repeticoes > 1 roda vários passos de jogo por volta (o --demo, mais rápido
+    que o tempo real); o terminal e a tela ficam no tempo real.
+    """
+    fase = None
+    aviso = None
+    proximo_status = 0.0
+    while True:
+        inicio = time.monotonic()
+        for _ in range(repeticoes):
+            l = fonte.ler()
+            comando = guiagem.passo(l)
+            if guiagem.fase != fase:
+                fase = guiagem.fase
+                print(f"--> {fase} a {(norma(l.r) - corpo.raio) / 1000:.1f} km de altitude (t = {l.t:.0f} s)")
+            if guiagem.aviso != aviso:
+                aviso = guiagem.aviso
+                if aviso:
+                    print(f"AVISO: {TEXTOS_AVISO[aviso]}")
+            if guiagem.fase in (ORBITA, FALHA):
+                return encerrar(l, guiagem, corpo, tela)
+            fonte.executar(comando)
+        tela.enviar(linhas_de_estado(l, guiagem, corpo), agora=False)
+        agora = time.monotonic()
+        if agora >= proximo_status:
+            print(status(l, guiagem, corpo, comando))
+            proximo_status = agora + INTERVALO_STATUS
+        espera = INTERVALO - (time.monotonic() - inicio)
+        if espera > 0.0:
+            time.sleep(espera)
+
+
+def encerrar(l, guiagem, corpo, tela):
+    """Manda o estado final para a tela, imprime o resultado e devolve EM_ORBITA ou NAO_CHEGOU."""
+    tela.enviar(linhas_de_estado(l, guiagem, corpo))
+    _, _, ra, rp = elementos(corpo, l.r, l.v)
+    if guiagem.fase == ORBITA:
+        texto = (
+            f"Em órbita: apoastro {(ra - corpo.raio) / 1000:.1f} km, periastro {(rp - corpo.raio) / 1000:.1f} km, "
+            f"inclinação {inclinacao_de(corpo, l.r, l.v):.2f}°, Δv gasto {guiagem.dv:.0f} m/s"
+        )
+        if guiagem.n_alvo is not None:
+            erro = angulo(unit(cruz(l.r, l.v)), guiagem.n_alvo)
+            texto += f", erro de plano {erro:.3f}°"
+        print(texto)
+        return EM_ORBITA
+    motivo = TEXTOS_AVISO.get(guiagem.aviso, "a guiagem desistiu.")
+    print(f"Não chegou na órbita: {motivo}")
+    return NAO_CHEGOU
+
+
+def subir(conn, args, tela):
+    """Sobe a nave ativa do KSP. Devolve o código de saída."""
+    try:
+        nave = conn.space_center.active_vessel
+    except (ValueError, RuntimeError):
+        print("Nenhuma nave ativa: rode o script na cena de voo.")
+        return NAO_CHEGOU
+    corpo_krpc = nave.orbit.body
+    corpo = corpo_do_jogo(corpo_krpc)
+    try:
+        fonte = NaveKrpc(conn, nave, corpo_krpc, corpo)
+    except ReferencialErrado as e:
+        print(f"ERRO: {e}")
+        return NAO_CHEGOU
+    try:
+        situacao = conn.space_center.VesselSituation
+        if nave.situation not in (situacao.pre_launch, situacao.landed):
+            print("A nave precisa estar parada no chão para subir.")
+            return NAO_CHEGOU
+        n_alvo = None
+        aviso, mensagem = conferir_altitude(corpo, args.altitude)
+        if aviso is None and args.plano_do_alvo:
+            n_alvo, nome, problema = fonte.alvo()
+            if n_alvo is None:
+                aviso, mensagem = AVISO_ALVO, problema
+            else:
+                print(f"Plano do alvo: {nome}")
+        guiagem = Guiagem(corpo, args.altitude, args.inclinacao, n_alvo=n_alvo, ler_estagios=fonte.estagios)
+        if aviso is not None:
+            return recusar(fonte, guiagem, corpo, tela, aviso, mensagem)
+        l = fonte.ler()
+        twr = l.empuxo / (l.massa * corpo.mu / corpo.raio**2) if l.massa > 0 else 0.0
+        pedido = "no plano do alvo" if n_alvo is not None else f"inclinação {args.inclinacao:g}°"
+        print(
+            f"Nave: {nave.name} ({corpo.nome})  empuxo/peso: {twr:.2f}  "
+            f"órbita de {args.altitude / 1000:g} km, {pedido}"
+        )
+        return conduzir(fonte, guiagem, corpo, tela)
+    finally:
+        fonte.liberar()
+
+
+def subir_demo(args, tela):
+    """A mesma subida, com a NaveSimulada de Kerbin no lugar do kRPC e do jogo."""
+    nave = NaveSimulada.kerbin()
+    fonte = FonteSimulada(nave)
+    n_alvo = None
+    if args.plano_do_alvo:
+        n_alvo = plano_com_janela(nave, ATRASO_JANELA_DEMO, INCLINACAO_PLANO_DEMO)
+    guiagem = Guiagem(KERBIN, args.altitude, args.inclinacao, n_alvo=n_alvo, ler_estagios=fonte.estagios)
+    pedido = (
+        f"no plano de um alvo de mentira de {INCLINACAO_PLANO_DEMO:g}° (janela em "
+        f"{ATRASO_JANELA_DEMO / 60:.0f} min)"
+        if n_alvo is not None
+        else f"inclinação {args.inclinacao:g}°"
+    )
+    print(
+        f"Demonstração: foguete de mentira em Kerbin, {VELOCIDADE_DEMO}x mais rápido que o tempo real, "
+        f"órbita de {args.altitude / 1000:g} km, {pedido}."
+    )
+    aviso, mensagem = conferir_altitude(KERBIN, args.altitude)
+    if aviso is not None:
+        return recusar(fonte, guiagem, KERBIN, tela, aviso, mensagem)
+    return conduzir(fonte, guiagem, KERBIN, tela, repeticoes=VELOCIDADE_DEMO)
+
+
+def main():
+    """Devolve o código de saída: EM_ORBITA, NAO_CHEGOU ou INTERROMPIDO."""
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "address",
+        nargs="?",
+        default="127.0.0.1",
+        help="IP do computador onde o KSP está rodando (padrão: este computador)",
+    )
+    parser.add_argument(
+        "--tela",
+        default="127.0.0.1",
+        metavar="IP[:PORTA]",
+        help="IP do computador da ponte da tela, bridge/mfd.py (padrão: este computador)",
+    )
+    parser.add_argument("--altitude", type=float, default=80_000.0, help="altitude da órbita, em metros (padrão: 80000)")
+    parser.add_argument("--inclinacao", type=float, default=0.0, help="inclinação da órbita, em graus (padrão: 0)")
+    parser.add_argument(
+        "--plano-do-alvo", action="store_true", help="órbita no plano do alvo escolhido no jogo (ignora --inclinacao)"
+    )
+    parser.add_argument("--demo", action="store_true", help="não conecta no KSP: sobe uma nave simulada de Kerbin")
+    args = parser.parse_args()
+
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, signal.default_int_handler)
+
+    tela = TelaSubida(args.tela)
+    try:
+        if args.demo:
+            try:
+                return subir_demo(args, tela)
+            except KeyboardInterrupt:
+                print("\nInterrompido.")
+                return INTERROMPIDO
+
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bridge"))
+        from ponte import conectar_krpc
+
+        conn = conectar_krpc(args.address, esperar=False)
+        try:
+            return subir(conn, args, tela)
+        except KeyboardInterrupt:
+            print("\nInterrompido: motor cortado, o controle volta para o piloto.")
+            return INTERROMPIDO
+        except (ValueError, RuntimeError) as e:
+            print(f"\nPerdi a nave (explodiu ou o jogo saiu da cena de voo): {e}")
+            return NAO_CHEGOU
+        finally:
+            conn.close()
+    finally:
+        tela.fechar()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
