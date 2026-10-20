@@ -121,13 +121,19 @@ def descartar(dispositivos, segundos):
         time.sleep(0.02)
 
 
-def conectar_krpc(address, *dispositivos):
+def conectar_krpc(address, *dispositivos, esperar=True):
     """Conecta no kRPC, tentando de novo até o jogo abrir.
 
     Se o auto-accept estiver desligado, o connect fica parado até alguém
     aceitar a conexão na janela do kRPC, dentro do jogo. Cada motivo de falha
     é avisado uma vez; entre as tentativas, o que os dispositivos mandam é
     descartado.
+
+    Com esperar=False não há nova tentativa: o primeiro motivo de falha
+    encerra o programa com sys.exit(motivo), como era antes de as pontes
+    esperarem o jogo. É o caso dos scripts de voo, que a ponte da tela abre e
+    que têm de falhar, e não esperar para sempre, e do editor de manobras e do
+    fly by wire, que se abrem na mão, com o jogo já aberto.
     """
     print(f"Conectando ao kRPC em {address}... (se demorar, aceite a conexão no jogo)")
     ultimo = None
@@ -149,6 +155,8 @@ def conectar_krpc(address, *dispositivos):
         else:
             print("Conectado ao kRPC.")
             return conn
+        if not esperar:
+            sys.exit(motivo)
         if motivo != ultimo:
             print(f"{motivo} Tentando de novo a cada {INTERVALO_RECONEXAO:g} s.")
             ultimo = motivo

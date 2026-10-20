@@ -40,6 +40,13 @@ o scripts/pouso.py num processo próprio, e segurar de novo 5 s aborta. O
 pouso manda o estado dele por UDP, e a tela mostra a página POUSO enquanto
 ele voa. Com --demo, o pouso é o de uma nave simulada (pouso.py --demo).
 
+O korry LANCAR faz o mesmo com o scripts/subida.py, que leva a nave do chão até
+a órbita; a altitude, a inclinação e o plano do alvo vêm do menu da subida,
+que o encoder da subida mexe (ENC SUB e BTN SUB). A tela mostra a página
+SUBIDA, com o menu e depois o voo, mas só a mikromedia a desenha: o simulador
+e o celular aceitam as linhas e mostram a navball. Com --demo, a subida é a de
+um foguete simulado (subida.py --demo).
+
 Com o KSP, a ponte espera o jogo abrir e reconecta sozinha quando ele fecha e
 abre de novo.
 """
@@ -54,7 +61,7 @@ from dataclasses import dataclass
 import serial
 
 from avisos import FRASES, Avisos, Voo, Voz
-from painel_scripts import PainelScripts, processo_pouso
+from painel_scripts import MenuSubida, PainelScripts, processo_pouso, processo_subida
 from ponte import BAUD, ESPERA_READY, Painel, manter_krpc
 from sistemas import Remetente, Sistemas
 
@@ -104,6 +111,13 @@ CAMPOS_POUSO = {
     "FREADA": (int, "OFF"),
     "SAS": ("RETRO", "ESTAB"),
     "AVISO": ("EMPUXO", "MOTOR", "NARIZ", "OFF"),
+}
+
+CAMPOS_SUBIDA = {
+    "FASE": ("JANELA", "DECOLAGEM", "GIRO", "CURVA", "VACUO", "COSTA", "CIRCULARIZA", "PLANO", "ORBITA", "FALHA"),
+    "ALT": int, "VEL": int, "Q": int, "INC": int, "INCA": int, "DV": int, "MOTOR": int, "ALVO": int,
+    "AP": (int, "OFF"), "PE": (int, "OFF"), "JAN": (int, "OFF"), "GIRO": (int, "OFF"),
+    "AVISO": ("EMPUXO", "ALTITUDE", "INCLINACAO", "ALVO", "COMBUSTIVEL", "OFF"),
 }
 
 # Perto do chão, a altitude passa a ser a do radar (acima do chão, ou do mar).
@@ -398,8 +412,8 @@ def _inteiro(texto):
     return int(texto) if corpo.isascii() and corpo.isdigit() else None
 
 
-def _campo_pouso_valido(campo, valor):
-    aceitos = CAMPOS_POUSO.get(campo)
+def _campo_valido(campos, campo, valor):
+    aceitos = campos.get(campo)
     if aceitos is None:
         return False
     if aceitos is int:
@@ -407,11 +421,20 @@ def _campo_pouso_valido(campo, valor):
     return valor in aceitos or (int in aceitos and _inteiro(valor) is not None)
 
 
+def _campo_pouso_valido(campo, valor):
+    return _campo_valido(CAMPOS_POUSO, campo, valor)
+
+
+def _campo_subida_valido(campo, valor):
+    return _campo_valido(CAMPOS_SUBIDA, campo, valor)
+
+
 class Scripts:
     """O que os scripts de voo (scripts/) mandam para a tela, por UDP.
 
     O pouso (scripts/pouso.py) manda o estado dele nas linhas POU, que a
-    ponte confere e repassa para a página POUSO da tela.
+    ponte confere e repassa para a página POUSO da tela. A subida
+    (scripts/subida.py) faz o mesmo com as linhas SUB e a página SUBIDA.
 
     O fly by wire (scripts/fbw.py) manda 10 vezes por segundo,
     num pacote, linhas do próprio protocolo da tela: o ponto (FBW <pitch>
@@ -429,6 +452,8 @@ class Scripts:
         self._endereco = None      # de onde o fbw.py manda
         self._pouso = {}           # campo → linha POU
         self._quando_pouso = -math.inf
+        self._subida = {}
+        self._quando_subida = -math.inf
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             # Qualquer rede: o script pode rodar noutro computador (ex.: no PC, com a ponte no Pi).
@@ -447,7 +472,7 @@ class Scripts:
             except OSError:
                 return  # nada na fila (ou, no Windows, um aviso de pacote perdido)
             linhas = [linha.strip() for linha in dados.decode("ascii", errors="replace").split("\n") if linha.strip()]
-            if not all(linha.startswith("POU ") for linha in linhas):
+            if not all(linha.startswith(("POU ", "SUB ")) for linha in linhas):
                 self._endereco = endereco   # só o fbw.py recebe resposta
             for linha in linhas:
                 self._linha(linha)
@@ -471,6 +496,9 @@ class Scripts:
         elif len(partes) == 3 and partes[0] == "POU" and _campo_pouso_valido(partes[1], partes[2]):
             self._pouso[partes[1]] = linha
             self._quando_pouso = time.monotonic()
+        elif len(partes) == 3 and partes[0] == "SUB" and _campo_subida_valido(partes[1], partes[2]):
+            self._subida[partes[1]] = linha
+            self._quando_subida = time.monotonic()
         else:
             print(f"Linha desconhecida de um script: {linha[:40]}")
 
@@ -494,6 +522,14 @@ class Scripts:
             self._pouso = {}
             return {"POU": "POU OFF"}
         return {f"POU {campo}": linha for campo, linha in self._pouso.items()}
+
+    def estado_subida(self):
+        """As linhas SUB da subida para a tela, ou SUB OFF se ela não está mandando."""
+        self._ler()
+        if time.monotonic() - self._quando_subida > VALIDADE_SCRIPTS:
+            self._subida = {}
+            return {"SUB": "SUB OFF"}
+        return {f"SUB {campo}": linha for campo, linha in self._subida.items()}
 
     def comando_fbw(self, linha):
         """Manda uma linha ao fbw.py (CMD ..., APV ...). Sem o fbw.py, se perde."""
@@ -726,7 +762,7 @@ class Demo:
         self._sas_modo = "ESTAB"
         self._sas_desde = -math.inf   # quando o modo foi escolhido
         self.fbw = FbwDemo()
-        self._udp = Scripts()         # o pouso.py --demo manda o estado por UDP, como no jogo
+        self._udp = Scripts()         # o pouso.py e o subida.py --demo mandam o estado por UDP, como no jogo
 
     def ler(self):
         t = time.monotonic() - self._inicio
@@ -826,6 +862,9 @@ class Demo:
 
     def estado_pouso(self):
         return self._udp.estado_pouso()
+
+    def estado_subida(self):
+        return self._udp.estado_subida()
 
     def remover(self):
         pass
@@ -961,15 +1000,19 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
             for linha in painel.linhas():
                 if linha == "READY":
                     luzes_painel.esquecer()
-                elif painel_scripts.tratar(linha, agora):
-                    if linha.endswith(" 1"):
-                        sistemas.abrir(painel_scripts.em_uso(agora) or "NAV", agora)
+                    continue
+                pagina = painel_scripts.tratar(linha, agora, sistemas.pagina)
+                if pagina is not None:
+                    if pagina:
+                        sistemas.abrir(pagina, agora)
                 elif not sistemas.tratar(linha, agora, t.rumo, t.altitude):
                     print(f"Linha desconhecida do painel: {linha[:40]}")
         painel_scripts.atualizar(agora)
         # Com um script voando, a tela fica na página dele, e não na navball.
-        sistemas.pagina_base = painel_scripts.em_uso(agora) or "NAV"
+        sistemas.pagina_base = painel_scripts.pagina_em_uso(agora) or "NAV"
         sistemas.atualizar(agora)
+        if sistemas.pagina != "SUBIDA":
+            painel_scripts.sair_do_menu()
         atual = modo.atualizar(t)
         if atual != anterior:
             print(f"Modo da navball: {atual}")
@@ -984,6 +1027,8 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
             luzes["GPWS"] = f"GPWS {avisos.nivel}"
             na_tela = sistemas.tela(luzes, erro, sas)
             na_tela.update(scripts.estado_pouso())
+            na_tela.update(scripts.estado_subida())
+            na_tela.update(painel_scripts.tela())
             luzes_tela.mandar(na_tela, agora)
             if luzes_painel is not None:
                 luzes_painel.mandar(luzes, agora)
@@ -1162,12 +1207,20 @@ def main():
     painel = abrir_painel(args)
     transmissor = Transmissor(tela)
     sistemas = Sistemas(None)
-    painel_scripts = PainelScripts({"POUSO": processo_pouso(args.address, demo=args.demo)})
+    menu = MenuSubida()
+    painel_scripts = PainelScripts(
+        {
+            "POUSO": processo_pouso(args.address, demo=args.demo),
+            "LANCAR": processo_subida(args.address, menu, demo=args.demo),
+        },
+        menu,
+    )
     scripts = None
     try:
         if args.demo:
             print("Demonstração: a nave se mexe sozinha. Clique nos botões da tela e do painel.")
             print("Segurar o POUSO 5 s pousa uma nave simulada (scripts/pouso.py --demo).")
+            print("Segurar o LANCAR 5 s sobe um foguete simulado até a órbita (scripts/subida.py --demo).")
             scripts = Demo()
             voar(tela, transmissor, scripts, scripts, lambda: True, painel, sistemas, painel_scripts, voz)
         else:

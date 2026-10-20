@@ -235,7 +235,9 @@ Com `python mfd.py --demo --celular`, a página de botões e as páginas novas d
 
 ## Painel de scripts e a página do pouso
 
-O [painel de scripts](../hardware/construcao.md#painel-de-scripts) tem um korry por script de voo; por enquanto, só o POUSO, que dispara o [`scripts/pouso.py`](../scripts/pouso.py). Ele fica na mesma página de botões do painel de sistemas (porta **8001**), embaixo, com os lugares vagos dos próximos scripts.
+O [painel de scripts](../hardware/construcao.md#painel-de-scripts) tem um korry por script de voo; por enquanto, o POUSO, que dispara o [`scripts/pouso.py`](../scripts/pouso.py), e o LANCAR, que dispara a [subida até a órbita](subida.md) ([`scripts/subida.py`](../scripts/subida.py)). Eles ficam na mesma página de botões do painel de sistemas (porta **8001**), embaixo, com os lugares vagos dos próximos scripts.
+
+**O LANCAR e a página SUBIDA** funcionam como o POUSO, com uma diferença: antes de lançar, a altitude, a inclinação e o plano do alvo são escolhidos num menu da página SUBIDA, mexido pelo encoder "CONFIGURAR SUBIDA" da página de botões (como o do piloto automático: girar move o cursor, apertar escolhe a linha, girar muda o valor). Segurar o LANCAR 5 s abre o script com esses valores, e a página passa a mostrar o voo. **A página SUBIDA só existe na mikromedia:** o simulador e o celular aceitam as linhas dela e continuam mostrando a navball. Como usar e testar: [docs/subida.md](subida.md).
 
 - **Segurar o POUSO 5 s** abre o pouso. O korry pisca âmbar enquanto conta, e a tela abre a página POUSO com `SEGURE 3 S / PARA POUSAR`. Soltar antes não faz nada.
 - Com o pouso voando, o korry fica **verde** e a página acompanha a descida. **Segurar de novo 5 s aborta:** o script corta o motor e devolve a nave; o korry fica **vermelho** por 10 s.

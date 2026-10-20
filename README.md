@@ -109,11 +109,12 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de telemetria;
                   tela multifunção: ponte (mfd.py), simulador, navball e a página do celular (celular/);
                   painel de sistemas de controle (sistemas.py), com a página de botões (celular/painel.html);
-                  painel de scripts (painel_scripts.py): o korry POUSO abre o scripts/pouso.py;
+                  painel de scripts (painel_scripts.py): o korry POUSO abre o scripts/pouso.py, e o
+                  LANCAR, o scripts/subida.py, com o menu da subida;
                   avisos de voo por voz, como o GPWS (avisos.py);
                   editor de nós de manobra com botões na página (manobras.py); testes em bridge/tests/;
                   o serviço do systemd que abre a ponte da tela quando o Pi liga (servico/)
-scripts/          scripts de voo (pouso, fly by wire...), que rodam com ou sem o cockpit; testes em scripts/tests/
+scripts/          scripts de voo (pouso, subida até a órbita, fly by wire...), que rodam com ou sem o cockpit; testes em scripts/tests/
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
 firmware/passos/  sketches de aprendizado, um por passo da fase 1
 firmware/mfd/     mikromedia for ARM / LPC2148 (C, compilado com o LLVM pelo compilar.py): a tela multifunção
@@ -254,7 +255,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 **Status: script de pouso escrito, em teste no jogo; o korry POUSO já dispara o script pela página de botões.** No primeiro teste, em Kerbin, a freada terminou alta e a nave tocou o chão inclinada e tombou. Corrigido: o pé agora é medido pelas pernas do trem. No segundo teste o pé ficou certo (0,4 m de erro no toque), mas a nave balançou até 31° na freada: o piloto automático do kRPC não segurava a nave. Agora quem aponta a nave é o SAS do KSP (falta testar de novo). [`scripts/pouso.py`](scripts/pouso.py) faz a queima de suicídio numa descida vertical, em qualquer planeta, contando o arrasto do ar; roda pela linha de comando ou pelo korry POUSO do [painel de scripts](hardware/construcao.md#painel-de-scripts), e a tela multifunção mostra o pouso numa página própria ([docs/mfd.md](docs/mfd.md#painel-de-scripts-e-a-página-do-pouso)). [`scripts/tests/test_pouso.py`](scripts/tests/test_pouso.py) testa a mesma guiagem numa nave simulada, sem o KSP, em planetas com e sem atmosfera.
 
 - Migrar para o protocolo binário (COBS + CRC).
-- **Painel de scripts** ([desenho](hardware/construcao.md#painel-de-scripts)): um korry por script, em faixas na ordem do voo (SUBIDA, ORBITA, DESCIDA). Por enquanto só o POUSO; os outros cinco lugares ficam vagos, com a tampa lisa. Segurar o korry 5 s abre o script; segurar de novo 5 s aborta. O korry pisca âmbar enquanto conta, fica verde com o script voando e vermelho se ele foi abortado ou falhou.
+- **Painel de scripts** ([desenho](hardware/construcao.md#painel-de-scripts)): um korry por script, em faixas na ordem do voo (SUBIDA, ORBITA, DESCIDA). Por enquanto o POUSO e o LANCAR, da [subida até a órbita](#subida-até-a-órbita); os outros quatro lugares ficam vagos, com a tampa lisa. Segurar o korry 5 s abre o script; segurar de novo 5 s aborta. O korry pisca âmbar enquanto conta, fica verde com o script voando e vermelho se ele foi abortado ou falhou.
 - Korry "EXEC" (um lugar vago do painel de scripts) que executa o nó de manobra da fase 4: aponta a nave para o nó, acelera o tempo até perto dele, queima e corta quando o Δv restante chega a zero.
 - Painel e tela mostram o estado do script (armando, voando, pousado, abortado). A página POUSO da tela, inspirada na tela do booster da SpaceX, mostra a nave descendo até o alvo, a fase, a altura, a descida, o empuxo/peso e quanto do empuxo a freada precisa. O pouso e o EXEC seguem a [base comum dos scripts](#base-comum).
 
@@ -265,7 +266,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - [x] Página POUSO no simulador e no celular; korry POUSO na página de botões (`bridge/celular/painel.html`).
 - [ ] Testar no jogo: o korry abre o pouso, a página acompanha, e segurar de novo aborta com o motor cortado.
 - [ ] Firmware do Mega: o korry POUSO no módulo da ação executiva, mandando `BTN POUSO 1` e `0`, e o LED de duas cores pela linha `SCR POUSO`.
-- Os outros scripts (piloto automático de avião, subida até a órbita, pouso de precisão...) estão em [Scripts de voo](#scripts-de-voo) e não entram no critério desta fase.
+- Os outros scripts (piloto automático de avião, [subida até a órbita](#subida-até-a-órbita), pouso de precisão...) estão em [Scripts de voo](#scripts-de-voo) e não entram no critério desta fase.
 
 **Pronto quando:** um booster pousa sozinho a partir de um botão no painel, e um nó de manobra é executado pelo botão EXEC.
 
@@ -275,7 +276,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de flash, 32 KB de RAM), tela 320x240 com touch resistivo, microSD, saída de áudio e carregador de Li-Po. Aqui o firmware é escrito **sem framework**: C, registradores, script de linker e código de inicialização próprios.
 
-**Status: rodando na placa, com o jogo.** O firmware em `firmware/mfd/` faz na placa o que o simulador faz no PC: navball, números, botões de toque e as páginas SAS, AP e POUSO, no protocolo em texto. Ligada no Pi pela PROG, com a ponte da tela aberta pelo serviço, a placa mostra a navball ao vivo, lisa, e o toque funciona no jogo. O controlador da tela é o `0047`, o HX8347-D. Falta o áudio. Gravar e ligar: [docs/mikromedia.md](docs/mikromedia.md). A tela também roda no simulador do PC e no navegador do celular: [docs/mfd.md](docs/mfd.md).
+**Status: rodando na placa, com o jogo.** O firmware em `firmware/mfd/` faz na placa o que o simulador faz no PC: navball, números, botões de toque e as páginas SAS, AP e POUSO, no protocolo em texto. A página SUBIDA ([subida até a órbita](#subida-até-a-órbita)) existe só na placa: o simulador e o celular mostram a navball no lugar dela. Ligada no Pi pela PROG, com a ponte da tela aberta pelo serviço, a placa mostra a navball ao vivo, lisa, e o toque funciona no jogo. O controlador da tela é o `0047`, o HX8347-D. Falta o áudio. Gravar e ligar: [docs/mikromedia.md](docs/mikromedia.md). A tela também roda no simulador do PC e no navegador do celular: [docs/mfd.md](docs/mfd.md).
 
 - **Placa:** duas mini-USB. A **USB** vai direto no LPC2148, e a **PROG** tem um conversor USB-serial **FT232RL**, por onde o PC conversa com a placa e o Flash Magic grava o firmware. No cockpit, o Pi liga na PROG; a USB só alimenta a placa, porque o firmware não usa ela. A tela é um módulo MI0283QT2 (320x240, barramento de 16 bits), com touch resistivo lido pelo ADC. Pinos em [docs/mikromedia.md](docs/mikromedia.md#como-o-firmware-funciona).
 - **Ferramentas:** LLVM (clang, ld.lld e llvm-objcopy), chamado pelo `firmware/mfd/compilar.py`; o `mfd.hex` já vem compilado. Gravação pelo bootloader serial de fábrica do LPC2148, pela PROG, com o Flash Magic.
@@ -284,7 +285,7 @@ Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de fla
   2. [x] Serial com interrupção e o protocolo da tela ([docs/protocolo.md](docs/protocolo.md#tela-multifunção-mikromedia)), em texto como o simulador; mais tarde o v1.
   3. [x] Driver da tela (HX8347) e desenho em faixas de 16 linhas, porque não cabe um *framebuffer* (320×240×2 = 150 KB contra 32 KB de RAM).
   4. [x] Touch pelo ADC, com a orientação e a calibração escolhidas na própria tela e guardadas na flash.
-  5. [x] Páginas: navball, roda do SAS, piloto automático e pouso. Depois: mapa da órbita, informações e uma página para cada módulo do painel que precisa de números (a começar pelo editor de nós de manobra).
+  5. [x] Páginas: navball, roda do SAS, piloto automático, pouso e subida. Depois: mapa da órbita, informações e uma página para cada módulo do painel que precisa de números (a começar pelo editor de nós de manobra).
   6. [x] Rodar na placa: o controlador é o `0047` (HX8347-D), o toque responde e a navball anda lisa ([conferido na placa](docs/mikromedia.md#conferido-na-placa)).
   7. [ ] Áudio: alarme de estol e avisos gravados no microSD (combustível baixo, contagem de altitude no pouso), pelo VS1053.
 
@@ -305,7 +306,7 @@ Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de fla
 
 ## Scripts de voo
 
-Scripts que pilotam a nave, ou ajudam o piloto a pilotar, disparados pelo painel e acompanhados na tela. O primeiro é o pouso autônomo da [fase 5](#fase-5--protocolo-v1--scripts-de-voo) ([`scripts/pouso.py`](scripts/pouso.py)); o segundo, o [fly by wire de avião](#fly-by-wire-de-avião) ([`scripts/fbw.py`](scripts/fbw.py)). Os outros desta seção são ideias ainda sem código e sem ordem: cada um entra no roteiro quando o hardware de que precisa existir.
+Scripts que pilotam a nave, ou ajudam o piloto a pilotar, disparados pelo painel e acompanhados na tela. O primeiro é o pouso autônomo da [fase 5](#fase-5--protocolo-v1--scripts-de-voo) ([`scripts/pouso.py`](scripts/pouso.py)); o segundo, o [fly by wire de avião](#fly-by-wire-de-avião) ([`scripts/fbw.py`](scripts/fbw.py)); o terceiro, a [subida até a órbita](#subida-até-a-órbita) ([`scripts/subida.py`](scripts/subida.py)). Os outros desta seção são ideias ainda sem código e sem ordem: cada um entra no roteiro quando o hardware de que precisa existir.
 
 Os scripts ficam em [`scripts/`](scripts/), fora da ponte: cada um roda sozinho pela linha de comando, no PC ou no Pi, mesmo sem o painel. No cockpit, a ponte só dispara o script pelo botão e mostra o estado dele no painel e na tela. Os testes, com naves simuladas e sem o KSP, ficam em `scripts/tests/`.
 
@@ -402,10 +403,21 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
 
 ### Subida até a órbita
 
-- O piloto escolhe a altitude da órbita e a inclinação nos encoders e segura o korry LANCAR (vago no painel de scripts) 5 s.
-- O script decola, faz a curva de gravidade, solta os estágios quando o combustível acaba e corta o motor quando o apoastro chega na altitude escolhida.
-- No apoastro, circulariza com um nó de manobra executado pelo EXEC da fase 5.
+**Status: script escrito e testado numa nave simulada; falta testar no jogo.** [`scripts/subida.py`](scripts/subida.py) leva a nave da plataforma até uma órbita circular, em qualquer planeta, com ar ou sem. Como funciona, as contas e o roteiro de teste no jogo estão em [docs/subida.md](docs/subida.md).
+
+- **O piloto escolhe** a altitude, a inclinação e, se quiser, o plano do alvo escolhido no jogo, na página SUBIDA da tela multifunção, por um encoder. Segura o korry LANCAR 5 s, e o script voa.
+- **O rumo** desconta a rotação do planeta e é refeito a cada passo, pela velocidade que ainda falta. A inclinação final sai a menos de 0,1° da pedida.
+- **O giro** da curva de gravidade é escolhido por simulação: antes de inclinar, o script simula a subida inteira com 12 giros e fica com o de menor Δv, somando a subida e a circularização.
+- **Com o plano de um alvo**, o script espera a janela de lançamento, com time warp, e no fim iguala o plano numa queima na linha dos nós.
+- **Os estágios** saem sozinhos; o corte é no apoastro pedido, e a circularização, em malha fechada, centrada no apoastro. O próprio script queima: o EXEC ainda não existe.
 - Junto com o pouso, fecha o ciclo: do chão até a órbita e de volta.
+
+- [x] `scripts/subida.py`: a guiagem, a simulação do giro, a janela, o kRPC, o `--demo` e as linhas `SUB`; testes em `scripts/tests/test_subida.py`, numa nave simulada em Kerbin e na Mun.
+- [x] Ponte da tela: o korry LANCAR, o menu da subida (`ENC SUB`, `BTN SUB`) e a página SUBIDA; na página de botões, o LANCAR e um encoder para a configuração.
+- [x] A página SUBIDA na mikromedia: a configuração e o voo. O simulador e o celular mostram a navball no lugar dela.
+- [ ] Testar no jogo ([roteiro](docs/subida.md#testar-no-jogo)): primeiro 80 km e 0°, depois a inclinação, o plano de um alvo e a Mun.
+- [ ] O encoder de verdade da configuração no painel (os de hoje já têm dono).
+- [ ] Depois: a guiagem do vácuo (PEG), mais eficiente que seguir o pró-grado.
 
 ### Pouso de precisão (volta à base)
 

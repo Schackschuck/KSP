@@ -65,7 +65,11 @@
 enum { M_PRO, M_NRM, M_RDL, M_TGT, M_MNV, M_FBW, MARCADORES };
 enum { N_VEL, N_AP, N_PE, N_TAP, N_TPE, N_DIST, N_VV, N_ACEL, NUMEROS };
 enum { P_ALT, P_VV, P_MOTOR, P_TWR, P_FREADA, P_IGN, P_INCL, CAMPOS_POUSO };
-enum { PAG_NAV, PAG_SAS, PAG_AP, PAG_POUSO };
+enum { S_ALT, S_VEL, S_AP, S_PE, S_ALVO, S_Q, S_INC, S_INCA, S_DV, S_JAN, S_GIRO, S_MOTOR, CAMPOS_SUBIDA };
+enum { C_ALT, C_INC, C_PLANO, CAMPOS_CONFIG };
+enum { FS_JANELA, FS_DECOLAGEM, FS_GIRO, FS_CURVA, FS_VACUO, FS_COSTA, FS_CIRCULARIZA, FS_PLANO, FS_ORBITA, FS_FALHA, FASES_SUBIDA };
+enum { SCRIPT_POUSO, SCRIPT_LANCAR, SCRIPTS };
+enum { PAG_NAV, PAG_SAS, PAG_AP, PAG_POUSO, PAG_SUBIDA, PAGINAS };
 enum { MODO_NENHUM, MODO_SUP, MODO_ORB, MODO_ALVO };
 enum { SCR_OFF, SCR_ATIVO, SCR_FIM, SCR_ABORT, SCR_FALHA, SCR_LIGA, SCR_DESL };
 enum { SAS_ESTAB, SAS_MAN, SAS_PRO, SAS_RETRO, SAS_NRM, SAS_ANRM, SAS_RFORA, SAS_RDENTRO, SAS_ALVO, SAS_AALVO, MODOS_SAS };
@@ -79,7 +83,13 @@ typedef struct {
 static const char *const nomes_marcadores[MARCADORES] = {"PRO", "NRM", "RDL", "TGT", "MNV", "FBW"};
 static const char *const nomes_numeros[NUMEROS] = {"VEL", "AP", "PE", "TAP", "TPE", "DIST", "VV", "ACEL"};
 static const char *const nomes_pouso[CAMPOS_POUSO] = {"ALT", "VV", "MOTOR", "TWR", "FREADA", "IGN", "INCL"};
-static const char *const nomes_paginas[] = {"NAV", "SAS", "AP", "POUSO"};
+static const char *const nomes_subida[CAMPOS_SUBIDA] = {"ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR"};
+static const char *const nomes_config[CAMPOS_CONFIG] = {"ALT", "INC", "PLANO"};
+static const char *const nomes_fases_subida[FASES_SUBIDA] = {"JANELA", "DECOLAGEM", "GIRO", "CURVA", "VACUO", "COSTA", "CIRCULARIZA", "PLANO", "ORBITA", "FALHA"};
+static const char *const nomes_avisos_subida[5] = {"EMPUXO", "ALTITUDE", "INCLINACAO", "ALVO", "COMBUSTIVEL"};
+static const char *const textos_avisos_subida[5] = {"EMPUXO/PESO BAIXO", "ALTITUDE ABAIXO DO AR", "INCLINACAO FORA DO ALCANCE", "SEM ALVO PARA O PLANO", "SEM COMBUSTIVEL"};
+static const char *const nomes_scripts[SCRIPTS] = {"POUSO", "LANCAR"};
+static const char *const nomes_paginas[PAGINAS] = {"NAV", "SAS", "AP", "POUSO", "SUBIDA"};
 static const char *const nomes_modos[] = {"", "SUP", "ORB", "ALVO"};
 static const char *const nomes_scr[] = {"OFF", "ATIVO", "FIM", "ABORT", "FALHA", "LIGA", "DESL"};
 static const char *const nomes_sas[MODOS_SAS] = {"ESTAB", "MAN", "PRO", "RETRO", "NRM", "ANRM", "RFORA", "RDENTRO", "ALVO", "AALVO"};
@@ -88,6 +98,7 @@ static const char *const rotulos_ap[3] = {"HDG", "ALT", "V/S"};
 static const char *const nomes_leis[4] = {"FBW", "DIRETA", "CHAO", "OFF"};
 static const char *const textos_leis[4] = {"LEI FBW", "LEI DIRETA", "NO CHAO", "FBW FECHADO"};
 static const uint16_t cores_leis[4] = {VERDE, AMBAR, APAGADO, APAGADO};
+static const uint16_t cores_fases_subida[FASES_SUBIDA] = {AZUL, VERDE, VERDE, VERDE, VERDE, AZUL, VERDE, VERDE, VERDE, AVISO};
 
 static const int modos_roda[6] = {SAS_NRM, SAS_PRO, SAS_RFORA, SAS_ANRM, SAS_RETRO, SAS_RDENTRO};
 static const int angulos_roda[6] = {-90, -30, 30, 90, 150, -150};
@@ -115,8 +126,13 @@ static struct {
     Numero trava;
     int estol;
     int scr, scr_faltam;
+    int scr_lancar, lancar_faltam;
     char fase[12], sas_pouso[12], aviso[12];
     Numero pouso[CAMPOS_POUSO];
+    char fase_subida[16], aviso_subida[16];
+    Numero subida[CAMPOS_SUBIDA];
+    Numero config[CAMPOS_CONFIG];
+    int cursor_subida, escolhida_subida;
     int teve_valida;
     uint32_t ultima_valida;
     int tocado;
@@ -204,6 +220,9 @@ static int interpretar(char *linha)
     int bit = n == 1 && (igual(partes[0], "0") || igual(partes[0], "1"));
     int m = indice_de(nome, nomes_marcadores, MARCADORES);
     int k = indice_de(nome, nomes_numeros, NUMEROS);
+    int script = n >= 2 && igual(nome, "SCR") ? indice_de(partes[0], nomes_scripts, SCRIPTS) : -1;
+    int config = n == 2 ? indice_de(partes[0], nomes_config, CAMPOS_CONFIG) : -1;
+    int campo = n == 2 ? indice_de(partes[0], nomes_subida, CAMPOS_SUBIDA) : -1;
 
     if (igual(nome, "ATT") && n == 3 && tudo_numero) {
         e.atitude_ok = 1;
@@ -227,8 +246,8 @@ static int interpretar(char *linha)
         e.numeros[k].valor = numeros[0];
     } else if ((igual(nome, "SAS") || igual(nome, "RCS")) && bit) {
         *(igual(nome, "SAS") ? &e.sas : &e.rcs) = numeros[0];
-    } else if (igual(nome, "PAG") && n == 1 && indice_de(partes[0], nomes_paginas, 4) >= 0) {
-        e.pagina = indice_de(partes[0], nomes_paginas, 4);
+    } else if (igual(nome, "PAG") && n == 1 && indice_de(partes[0], nomes_paginas, PAGINAS) >= 0) {
+        e.pagina = indice_de(partes[0], nomes_paginas, PAGINAS);
     } else if (igual(nome, "SASM") && off) {
         e.sas_modo = -1;
         e.sas_cor = 0;
@@ -248,11 +267,28 @@ static int interpretar(char *linha)
     } else if (igual(nome, "APC") && n == 2 && indice_de(partes[0], nomes_ap, 3) >= 0 && (igual(partes[1], "0") || igual(partes[1], "1"))) {
         e.cursor = indice_de(partes[0], nomes_ap, 3);
         e.escolhida = partes[1][0] == '1';
-    } else if (igual(nome, "SCR") && n == 2 && igual(partes[0], "POUSO") && indice_de(partes[1], nomes_scr, 5) >= 0) {
-        e.scr = indice_de(partes[1], nomes_scr, 5);
-    } else if (igual(nome, "SCR") && n == 3 && igual(partes[0], "POUSO") && (igual(partes[1], "LIGA") || igual(partes[1], "DESL")) && ok[2]) {
-        e.scr = indice_de(partes[1], nomes_scr, 7);
-        e.scr_faltam = numeros[2];
+    } else if (script >= 0 && n == 2 && indice_de(partes[1], nomes_scr, 5) >= 0) {
+        *(script == SCRIPT_POUSO ? &e.scr : &e.scr_lancar) = indice_de(partes[1], nomes_scr, 5);
+    } else if (script >= 0 && n == 3 && (igual(partes[1], "LIGA") || igual(partes[1], "DESL")) && ok[2] && numeros[2] >= 0 && numeros[2] <= 99) {
+        *(script == SCRIPT_POUSO ? &e.scr : &e.scr_lancar) = indice_de(partes[1], nomes_scr, 7);
+        *(script == SCRIPT_POUSO ? &e.scr_faltam : &e.lancar_faltam) = numeros[2];
+    } else if (igual(nome, "SBV") && n == 2 && config >= 0 && ok[1] && (config != C_PLANO || numeros[1] == 0 || numeros[1] == 1)) {
+        e.config[config].valido = 1;
+        e.config[config].valor = numeros[1];
+    } else if (igual(nome, "SBC") && n == 2 && config >= 0 && (igual(partes[1], "0") || igual(partes[1], "1"))) {
+        e.cursor_subida = config;
+        e.escolhida_subida = partes[1][0] == '1';
+    } else if (igual(nome, "SUB") && off) {
+        e.fase_subida[0] = e.aviso_subida[0] = 0;
+        for (int i = 0; i < CAMPOS_SUBIDA; i++)
+            e.subida[i].valido = 0;
+    } else if (igual(nome, "SUB") && n == 2 && igual(partes[0], "FASE")) {
+        copiar(e.fase_subida, partes[1], sizeof(e.fase_subida));
+    } else if (igual(nome, "SUB") && n == 2 && igual(partes[0], "AVISO")) {
+        copiar(e.aviso_subida, partes[1], sizeof(e.aviso_subida));
+    } else if (igual(nome, "SUB") && n == 2 && campo >= 0 && (ok[1] || igual(partes[1], "OFF"))) {
+        e.subida[campo].valido = ok[1];
+        e.subida[campo].valor = ok[1] ? numeros[1] : 0;
     } else if (igual(nome, "POU") && off) {
         e.fase[0] = e.sas_pouso[0] = e.aviso[0] = 0;
         for (int i = 0; i < CAMPOS_POUSO; i++)
@@ -779,6 +815,16 @@ static void valor_ap(char *destino, int linha_ap, const Numero *v)
     }
 }
 
+static void cursor_da_linha(int y, int escolhida)
+{
+    int seta[6] = {12, y - 6, 20, y, 12, y + 6};
+    linhas(seta, 3, TEXTO, 1);
+    if (escolhida)
+        retangulo(176, y - 15, 130, 30, AMBAR, 2, 3);
+    else
+        retangulo(24, y - 17, 286, 34, TEXTO, 1, 4);
+}
+
 static void desenhar_pagina_ap(void)
 {
     static const char *const estados[3] = {"DESLIGADO", "LIGADO", "ARMADO"};
@@ -790,14 +836,8 @@ static void desenhar_pagina_ap(void)
         int y = 46 + i * 44;
         int no_cursor = i == e.cursor;
         int estado = e.ap_estado[i];
-        if (no_cursor) {
-            int seta[6] = {12, y - 6, 20, y, 12, y + 6};
-            linhas(seta, 3, TEXTO, 1);
-            if (e.escolhida)
-                retangulo(176, y - 15, 130, 30, AMBAR, 2, 3);
-            else
-                retangulo(24, y - 17, 286, 34, TEXTO, 1, 4);
-        }
+        if (no_cursor)
+            cursor_da_linha(y, e.escolhida);
         texto(rotulos_ap[i], TEXTO, &fonte_media, CANTO, 32, y - 9);
         texto(estados[estado], cores_estado[estado], &fonte_pequena, CANTO, 80, y - 6);
         valor_ap(buf, i, &e.ap_valor[i]);
@@ -838,6 +878,31 @@ static void nave_de_pouso(int x, int pe, int32_t motor, int trem)
         else
             linha(x + 3 * lado, pe - 12, x + 5 * lado, pe - 3, TEXTO, 1);
     }
+}
+
+static void caixa_segurar(int estado, int faltam, const char *para_abrir)
+{
+    if (estado != SCR_LIGA && estado != SCR_DESL)
+        return;
+    char buf[24];
+    retangulo(90, 80, 140, 56, FUNDO, 0, 6);
+    retangulo(90, 80, 140, 56, AMBAR, 2, 6);
+    char *q = escrever_texto(buf, "SEGURE ");
+    q = escrever_inteiro(q, faltam, 1);
+    escrever_texto(q, " S");
+    texto(buf, AMBAR, &fonte_grande, CENTRO, 160, 100);
+    texto(estado == SCR_LIGA ? para_abrir : "PARA ABORTAR", AMBAR, &fonte_pequena, CENTRO, 160, 122);
+}
+
+static void icone_fase(uint16_t cor)
+{
+    circulo(26, 212, 16, cor, 2);
+    circulo(26, 212, 7, cor, 2);
+    circulo(26, 212, 2, cor, 0);
+    linha(37, 212, 45, 212, cor, 2);
+    linha(15, 212, 7, 212, cor, 2);
+    linha(26, 223, 26, 231, cor, 2);
+    linha(26, 201, 26, 193, cor, 2);
 }
 
 static void desenhar_pagina_pouso(void)
@@ -913,15 +978,7 @@ static void desenhar_pagina_pouso(void)
     if (aviso >= 0 && (agora_quadro / 500u) % 2u == 0)
         texto(textos_avisos[aviso], AVISO, &fonte_pequena, CENTRO, 160, 56);
 
-    if (e.scr == SCR_LIGA || e.scr == SCR_DESL) {
-        retangulo(90, 80, 140, 56, FUNDO, 0, 6);
-        retangulo(90, 80, 140, 56, AMBAR, 2, 6);
-        char *q = escrever_texto(buf, "SEGURE ");
-        q = escrever_inteiro(q, e.scr_faltam, 1);
-        escrever_texto(q, " S");
-        texto(buf, AMBAR, &fonte_grande, CENTRO, 160, 100);
-        texto(e.scr == SCR_LIGA ? "PARA POUSAR" : "PARA ABORTAR", AMBAR, &fonte_pequena, CENTRO, 160, 122);
-    }
+    caixa_segurar(e.scr, e.scr_faltam, "PARA POUSAR");
 
     const char *fase;
     uint16_t cor;
@@ -950,13 +1007,7 @@ static void desenhar_pagina_pouso(void)
         fase = "PARADO";
         cor = APAGADO;
     }
-    circulo(26, 212, 16, cor, 2);
-    circulo(26, 212, 7, cor, 2);
-    circulo(26, 212, 2, cor, 0);
-    linha(37, 212, 45, 212, cor, 2);
-    linha(15, 212, 7, 212, cor, 2);
-    linha(26, 223, 26, 231, cor, 2);
-    linha(26, 201, 26, 193, cor, 2);
+    icone_fase(cor);
     texto(fase, cor, &fonte_normal, CANTO, 48, 203);
     linha(46, 222, 118, 222, cor, 1);
 
@@ -984,6 +1035,208 @@ static void desenhar_pagina_pouso(void)
     }
 }
 
+static char *escrever_graus(char *destino, const Numero *v)
+{
+    return v->valido ? escrever_decimal(destino, v->valor, 10, 1) : escrever_texto(destino, "---");
+}
+
+static void valor_config(char *destino, int campo)
+{
+    const Numero *v = &e.config[campo];
+    if (campo == C_INC && e.config[C_PLANO].valido && e.config[C_PLANO].valor) {
+        escrever_texto(destino, "DO ALVO");
+    } else if (!v->valido) {
+        escrever_texto(destino, "---");
+    } else if (campo == C_ALT) {
+        char *p = escrever_inteiro(destino, v->valor, 1);
+        escrever_texto(p, " KM");
+    } else if (campo == C_INC) {
+        char *p = escrever_inteiro(destino, v->valor, 1);
+        escrever_texto(p, " GR");
+    } else {
+        escrever_texto(destino, v->valor ? "SIM" : "NAO");
+    }
+}
+
+static int subida_voando(void)
+{
+    if (e.scr_lancar == SCR_ATIVO || e.scr_lancar == SCR_DESL)
+        return 1;
+    if (e.scr_lancar != SCR_FIM && e.scr_lancar != SCR_ABORT && e.scr_lancar != SCR_FALHA)
+        return 0;
+    if (e.fase_subida[0] || e.aviso_subida[0])
+        return 1;
+    for (int i = 0; i < CAMPOS_SUBIDA; i++) {
+        if (e.subida[i].valido)
+            return 1;
+    }
+    return 0;
+}
+
+static void desenhar_configuracao_subida(void)
+{
+    static const char *const rotulos[CAMPOS_CONFIG] = {"ALTITUDE", "INCLINACAO", "PLANO DO ALVO"};
+    char buf[20];
+    texto("SUBIDA ATE A ORBITA", ROTULO, &fonte_normal, CENTRO, 160, 12);
+    linha(12, 24, 308, 24, BORDA, 1);
+    for (int i = 0; i < CAMPOS_CONFIG; i++) {
+        int y = 46 + i * 44;
+        int no_cursor = i == e.cursor_subida;
+        if (no_cursor)
+            cursor_da_linha(y, e.escolhida_subida);
+        texto(rotulos[i], TEXTO, &fonte_media, CANTO, 32, y - 9);
+        valor_config(buf, i);
+        texto(buf, no_cursor && e.escolhida_subida ? AMBAR : TEXTO, &fonte_grande, MEIO_DIREITA, 300, y);
+    }
+    linha(12, 184, 308, 184, BORDA, 1);
+    const char *resultado = "PRONTO";
+    uint16_t cor = TEXTO;
+    if (e.scr_lancar == SCR_FIM) {
+        resultado = "EM ORBITA";
+        cor = VERDE;
+    } else if (e.scr_lancar == SCR_ABORT) {
+        resultado = "ABORTADO";
+        cor = AVISO;
+    } else if (e.scr_lancar == SCR_FALHA) {
+        resultado = "FALHOU";
+        cor = AVISO;
+    }
+    texto(resultado, cor, &fonte_normal, CANTO, 16, 192);
+    texto("SEGURE LANCAR 5 S", ROTULO, &fonte_normal, DIREITA, 304, 192);
+    texto(e.escolhida_subida ? "GIRAR: VALOR  APERTAR: SAI" : "GIRAR: LINHA  APERTAR: ESCOLHE", ROTULO, &fonte_pequena, CENTRO, 160, 226);
+}
+
+static int posicao_barra(int32_t valor, int32_t alvo, int largura)
+{
+    while (alvo > 4000000) {
+        alvo >>= 1;
+        valor >>= 1;
+    }
+    int32_t maximo = alvo + alvo / 5;
+    if (valor < 0)
+        valor = 0;
+    if (valor > maximo)
+        valor = maximo;
+    return valor * largura / maximo;
+}
+
+static void barra_orbita(const char *rotulo, int y, const Numero *valor, int escape)
+{
+    const Numero *alvo = &e.subida[S_ALVO];
+    int pedido = alvo->valido && alvo->valor > 0;
+    texto(rotulo, ROTULO, &fonte_pequena, CANTO, 16, y);
+    preencher(16, y + 14, 288, 10, ARO);
+    if (pedido && valor->valido) {
+        uint16_t cor = valor->valor >= alvo->valor - alvo->valor / 50 ? VERDE : AZUL;
+        preencher(16, y + 14, posicao_barra(valor->valor, alvo->valor, 288), 10, cor);
+    } else if (escape) {
+        preencher(16, y + 14, 288, 10, AVISO);
+    }
+    retangulo(16, y + 14, 288, 10, BORDA, 1, 0);
+    if (pedido) {
+        int x = 16 + posicao_barra(alvo->valor, alvo->valor, 288);
+        linha(x, y + 11, x, y + 26, AMBAR, 2);
+    }
+}
+
+static void desenhar_voo_subida(void)
+{
+    Numero *s = e.subida;
+    char alt[20], vel[20], pressao[20], dv[20], ap[20], pe[20], inc[28], buf[24];
+    char *p;
+
+    formatar_distancia(alt, s[S_ALT].valido, s[S_ALT].valor);
+    formatar_velocidade(vel, s[S_VEL].valido, s[S_VEL].valor);
+    if (s[S_Q].valido) {
+        p = escrever_decimal(pressao, s[S_Q].valor, 1000, 1);
+        escrever_texto(p, " kPa");
+    } else {
+        escrever_texto(pressao, "---");
+    }
+    if (s[S_DV].valido) {
+        p = escrever_inteiro(dv, s[S_DV].valor, 1);
+        escrever_texto(p, " m/s");
+    } else {
+        escrever_texto(dv, "---");
+    }
+    const char *rotulos_esq[4] = {"ALT", "VEL", "Q", "DV"};
+    const char *valores_esq[4] = {alt, vel, pressao, dv};
+    for (int i = 0; i < 4; i++) {
+        texto(rotulos_esq[i], ROTULO, &fonte_normal, CANTO, 8, 6 + i * 15);
+        texto(valores_esq[i], VERDE, &fonte_normal, CANTO, 44, 6 + i * 15);
+    }
+
+    formatar_distancia(ap, s[S_AP].valido, s[S_AP].valor);
+    formatar_distancia(pe, s[S_PE].valido, s[S_PE].valor);
+    if (s[S_INC].valido || s[S_INCA].valido) {
+        p = escrever_graus(inc, &s[S_INC]);
+        *p++ = '/';
+        escrever_graus(p, &s[S_INCA]);
+    } else {
+        escrever_texto(inc, "---");
+    }
+    const char *rotulos_dir[3] = {"AP", "PE", "INC"};
+    const char *valores_dir[3] = {ap, pe, inc};
+    for (int i = 0; i < 3; i++) {
+        texto(rotulos_dir[i], ROTULO, &fonte_normal, CANTO, 176, 6 + i * 15);
+        texto(valores_dir[i], VERDE, &fonte_normal, DIREITA, 312, 6 + i * 15);
+    }
+
+    int aviso = indice_de(e.aviso_subida, nomes_avisos_subida, 5);
+    if (aviso >= 0 && (agora_quadro / 500u) % 2u == 0)
+        texto(textos_avisos_subida[aviso], AVISO, &fonte_pequena, CENTRO, 160, 68);
+
+    barra_orbita("APOASTRO", 100, &s[S_AP], !s[S_AP].valido && s[S_PE].valido);
+    barra_orbita("PERIASTRO", 148, &s[S_PE], 0);
+
+    int f = indice_de(e.fase_subida, nomes_fases_subida, FASES_SUBIDA);
+    const char *fase;
+    uint16_t cor;
+    if (e.scr_lancar == SCR_FIM) {
+        fase = "EM ORBITA";
+        cor = VERDE;
+    } else if (e.scr_lancar == SCR_ABORT) {
+        fase = "ABORTADO";
+        cor = AVISO;
+    } else if (e.scr_lancar == SCR_FALHA) {
+        fase = "FALHOU";
+        cor = AVISO;
+    } else if (f >= 0) {
+        fase = e.fase_subida;
+        cor = cores_fases_subida[f];
+    } else {
+        fase = "LIGANDO";
+        cor = AZUL;
+    }
+    icone_fase(cor);
+    texto(fase, cor, &fonte_normal, CANTO, 48, 203);
+    linha(46, 222, 140, 222, cor, 1);
+
+    if (f == FS_JANELA && s[S_JAN].valido) {
+        formatar_tempo(buf, 1, s[S_JAN].valor);
+    } else if ((f == FS_GIRO || f == FS_CURVA) && s[S_GIRO].valido) {
+        p = escrever_texto(buf, "GIRO ");
+        p = escrever_decimal(p, s[S_GIRO].valor, 10, 1);
+        escrever_texto(p, " GR");
+    } else if (s[S_MOTOR].valido) {
+        p = escrever_texto(buf, "MOTOR ");
+        p = escrever_inteiro(p, s[S_MOTOR].valor, 1);
+        escrever_texto(p, "%");
+    } else {
+        buf[0] = 0;
+    }
+    texto(buf, TEXTO, &fonte_pequena, CANTO, 48, 225);
+}
+
+static void desenhar_pagina_subida(void)
+{
+    if (subida_voando())
+        desenhar_voo_subida();
+    else
+        desenhar_configuracao_subida();
+    caixa_segurar(e.scr_lancar, e.lancar_faltam, "PARA LANCAR");
+}
+
 static void cena(void)
 {
     preencher(0, banda_y0, LARGURA, BANDA, FUNDO);
@@ -993,6 +1246,8 @@ static void cena(void)
         desenhar_pagina_ap();
     } else if (com_sinal && e.pagina == PAG_POUSO) {
         desenhar_pagina_pouso();
+    } else if (com_sinal && e.pagina == PAG_SUBIDA) {
+        desenhar_pagina_subida();
     } else {
         desenhar_navball();
         desenhar_caixas();

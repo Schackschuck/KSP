@@ -2,6 +2,8 @@
 
 O firmware da mikromedia for ARM (MIKROE-780) está em [`firmware/mfd/`](../firmware/mfd/). Ele faz na placa o que o [simulador](mfd.md) faz no PC: recebe o [protocolo da tela](protocolo.md#tela-multifunção-mikromedia) pela porta PROG, desenha a navball e as páginas SAS, AP e POUSO e manda os toques. O desenho copia o do simulador, com as mesmas posições, tamanhos e cores.
 
+A página **SUBIDA** ([subida até a órbita](subida.md)) é a exceção: existe só na placa, sem cópia no simulador nem no celular. Ela tem a configuração da subida (altitude, inclinação e o plano do alvo, num menu como o do piloto automático) e o acompanhamento do voo (os números, as barras do apoastro e do periastro e a fase). Quem já tinha gravado a placa precisa gravar o `mfd.hex` novo, pelo [passo 4](#4-gravar-o-mfdhex), para ter a página.
+
 O **`mfd.hex` já vem compilado** no repositório. Para gravar, só é preciso o Flash Magic; o compilador só entra se o código mudar ([abaixo](#compilar-de-novo)).
 
 **Onde estamos:** **o firmware roda na placa, com o jogo.** Ligada no Pi pela PROG, com a ponte da tela aberta pelo serviço ([docs/setup-pi.md](setup-pi.md#9-a-ponte-da-tela-abrindo-sozinha)), a placa mostra a navball ao vivo, lisa, e o toque em SAS, RCS e MODO funciona no jogo. O controlador é o `0047`, o HX8347-D ([conferido na placa](#conferido-na-placa)).

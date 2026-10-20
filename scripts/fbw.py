@@ -1062,7 +1062,7 @@ def main():
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bridge"))
     from ponte import conectar_krpc
 
-    conn = conectar_krpc(args.address)
+    conn = conectar_krpc(args.address, esperar=False)
     tela = TelaFbw(args.tela)
     gravador = Gravador(args.gravar) if args.gravar else SemGravacao()
     try:
