@@ -4,7 +4,7 @@ O firmware da mikromedia for ARM (MIKROE-780) está em [`firmware/mfd/`](../firm
 
 O **`mfd.hex` já vem compilado** no repositório. Para gravar, só é preciso o Flash Magic; o compilador só entra se o código mudar ([abaixo](#compilar-de-novo)).
 
-**Onde estamos:** o firmware compila sem avisos, e o desenho foi conferido no PC contra o simulador, com o mesmo código compilado para o PC. **Nada rodou na placa ainda.** O controlador da tela, a orientação, o touch e a velocidade só se confirmam na placa ([o que falta confirmar](#o-que-ainda-falta-confirmar-na-placa)).
+**Onde estamos:** **o firmware roda na placa, com o jogo.** Ligada no Pi pela PROG, com a ponte da tela aberta pelo serviço ([docs/setup-pi.md](setup-pi.md#9-a-ponte-da-tela-abrindo-sozinha)), a placa mostra a navball ao vivo, lisa, e o toque em SAS, RCS e MODO funciona no jogo. O controlador é o `0047`, o HX8347-D ([conferido na placa](#conferido-na-placa)).
 
 ## Passo a passo, no Windows
 
@@ -74,6 +74,8 @@ python mfd.py --demo --porta COM7
 
 Com o jogo, como sempre, só trocando a janela pela porta: `python mfd.py --porta COM7`. A lista do que conferir é a mesma do simulador: [Testar com o KSP](mfd.md#testar-com-o-ksp).
 
+**No cockpit, a placa vai na USB do Pi, pela PROG.** A mini-USB marcada **USB** vai direto no LPC2148, e o firmware não usa ela: por ali a placa só recebe energia, e fica em `SEM SINAL`. No Pi, a PROG aparece como `/dev/ttyUSB0`, mas o melhor é usar o caminho do `ls -l /dev/serial/by-id/` (o `usb-FTDI_FT232R_USB_UART_...`), que não muda quando outra placa USB-serial entra. A ponte abre pelo serviço, com `--porta` e esse caminho ([docs/setup-pi.md](setup-pi.md#9-a-ponte-da-tela-abrindo-sozinha)).
+
 ## Problemas
 
 | Sintoma | Causa provável | O que fazer |
@@ -87,6 +89,7 @@ Com o jogo, como sempre, só trocando a janela pela porta: `python mfd.py --port
 | O toque não reage nem no ajuste | O limiar do touch (`LIMIAR_TOQUE` em `toque.c`) não serve para esta tela | Anotar e ajustar o limiar no código ([compilar de novo](#compilar-de-novo)) |
 | `A tela não mandou READY; seguindo assim mesmo.` | A placa estava no ajuste, ou é a porta errada | Terminar o ajuste; a ponte reenvia tudo quando o `READY` chegar |
 | A placa trava ao abrir outro programa na porta (monitor serial, Arduino IDE) | Esses programas ligam o DTR, que na PROG segura a placa em reset | Usar só o `mfd.py`, que abre a porta com o DTR desligado |
+| `SEM SINAL` na navball, com a ponte conectada no jogo | O cabo está na mini-USB marcada USB, que só alimenta; ou a ponte está mandando a tela para o celular (`--celular`) | Passar o cabo para a PROG e abrir a ponte com `--porta` ([no cockpit](#6-ligar-na-ponte)) |
 
 ## Como o firmware funciona
 
@@ -134,11 +137,13 @@ Só é preciso se o código mudar.
 2. Na pasta `firmware/mfd`: `python compilar.py`. Ele compila com todos os avisos tratados como erro, confere a RAM que sobra para a pilha e grava o `mfd.hex`, já com a soma de verificação que o bootloader do LPC2148 confere.
 3. Mudou uma fonte, o raio da bola ou as linhas da navball? Antes, `python gerar_tabelas.py` (precisa do pygame). Por padrão ele usa a DejaVu Sans Mono; no Windows, `python gerar_tabelas.py --fonte C:\Windows\Fonts\consola.ttf` usa a Consolas, a mesma do simulador.
 
-## O que ainda falta confirmar na placa
+## Conferido na placa
 
-- **O controlador da tela.** O manual não diz qual é. O módulo MI0283QT2 costuma vir com o HX8347-D (o firmware escolhe a inicialização do HX8347-G se o ID terminar em 75). O número de `CONTROLADOR` confirma.
-- **A orientação e o touch**, resolvidos pelo ajuste na tela, e o **limiar do toque**.
-- **A velocidade.** A conta dá uns 10 a 20 quadros por segundo, mas só medindo na placa.
-- **O divisor fracionário da serial** (115200 baud a partir de 60 MHz), que o manual do LPC214x descreve. Se a ponte receber lixo, é aqui.
+O que só dava para confirmar na placa, conferido com ela ligada no Pi pela PROG e o jogo voando:
+
+- **O controlador da tela é o `0047`, o HX8347-D**, o que o módulo MI0283QT2 costuma trazer. O manual não dizia. O firmware usa a inicialização dele; a do HX8347-G fica para um ID que termine em 75.
+- **A orientação e o toque** ficaram certos pelo ajuste na tela, e o **limiar do toque** serve: SAS, RCS e a caixa da velocidade (MODO) respondem no jogo.
+- **A velocidade:** a navball anda lisa. A conta dava de 10 a 20 quadros por segundo; não foi medido.
+- **O divisor fracionário da serial** (115200 baud a partir de 60 MHz) está certo: a ponte recebe o `READY` e o `ID` sem lixo.
 
 Fica para depois: o **alarme de estol**, que o simulador toca e a placa ainda não, porque precisa do chip de áudio (VS1053); e os sons de alarme do roteiro, no microSD.
