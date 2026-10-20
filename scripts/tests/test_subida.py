@@ -631,6 +631,36 @@ class TestVoos(unittest.TestCase):
         self.assertIsNone(r.guiagem.aviso)
         self.assertEqual(r.guiagem.acelerador, 0.0)
 
+    def test_foguete_que_so_vira_com_empuxo(self):
+        nave = NaveSimulada.kerbin()
+        nave.giro_sem_empuxo = 0.0
+        guiagem = Guiagem(KERBIN, 80_000.0, 0.0, ler_estagios=nave.estagios)
+        r = voar(nave, guiagem)
+        self.assertEqual(r.fase, ORBITA)
+        self.assertTrue(78_500.0 < r.ap < 81_500.0, r.ap)
+        self.assertTrue(78_500.0 < r.pe < 81_500.0, r.pe)
+        self.assertTrue(3_000.0 < r.dv < 4_200.0, r.dv)
+
+    def test_desalinhado_o_motor_fica_baixo_para_virar(self):
+        nave = NaveSimulada.kerbin(aceso=True)
+        guiagem = Guiagem(KERBIN, 80_000.0, 0.0, ler_estagios=nave.estagios)
+        l = nave.leitura()
+        guiagem._w_min = math.inf
+        w = esc(500.0, l.leste)
+        self.assertEqual(guiagem._queimar(l, w).acelerador, subida.ACEL_VIRAR)
+        self.assertLess(guiagem._queimar(l, esc(0.5, l.leste)).acelerador, subida.ACEL_VIRAR)
+
+    def test_acelerador_de_virada_pelo_logaritmo_do_erro(self):
+        virada = subida.acelerador_de_virada
+        self.assertEqual(virada(0.0), 1.0)
+        self.assertEqual(virada(subida.ERRO_APONTAR), 1.0)
+        self.assertEqual(virada(subida.ERRO_VIRAR), subida.ACEL_VIRAR)
+        self.assertEqual(virada(120.0), subida.ACEL_VIRAR)
+        meio = math.sqrt(subida.ERRO_APONTAR * subida.ERRO_VIRAR)
+        self.assertAlmostEqual(virada(meio), (1.0 + subida.ACEL_VIRAR) / 2.0)
+        valores = [virada(e) for e in range(5, 46)]
+        self.assertTrue(all(a > b for a, b in zip(valores, valores[1:])))
+
     def test_kerbin_100_km_a_45_graus(self):
         r = subir_de_kerbin(100_000.0, 45.0)
         self.assertEqual(r.fase, ORBITA)
@@ -1009,6 +1039,7 @@ class ControleFalso:
     def __init__(self, jogo):
         self.jogo = jogo
         self.sas = True
+        self.rcs = False
         self.throttle = 0.0
         self.current_stage = 2
 
@@ -1377,6 +1408,7 @@ class TestNaveKrpc(unittest.TestCase):
         nave = jogo.nave
         fonte.executar(Comando(acelerador=0.7, pitch=80.0, rumo=45.0))
         self.assertFalse(nave.control.sas)
+        self.assertTrue(nave.control.rcs)
         self.assertTrue(nave.auto_pilot.engajado)
         self.assertEqual(nave.auto_pilot.reference_frame, SUP)
         self.assertEqual(nave.control.throttle, 0.7)
