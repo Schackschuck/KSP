@@ -1061,6 +1061,13 @@ class MotorFalso:
         return subida.isp_em(subida.FOGUETE_KERBIN[self.indice], pressao)
 
 
+class SuperficieFalsa:
+    def __init__(self, roll=True):
+        self.pitch_enabled = True
+        self.yaw_enabled = True
+        self.roll_enabled = roll
+
+
 class PartesFalsas:
     def __init__(self, jogo):
         sim = jogo.sim
@@ -1073,6 +1080,7 @@ class PartesFalsas:
         self.carga = PecaFalsa(-1, -1, 500.0)
         self.motor_baixo = MotorFalso(jogo, 0, self.peca_motor_baixo)
         self.motor_cima = MotorFalso(jogo, 1, self.peca_motor_cima)
+        self.control_surfaces = [SuperficieFalsa(), SuperficieFalsa(roll=False)]
 
     @property
     def engines(self):
@@ -1464,6 +1472,8 @@ class TestNaveKrpc(unittest.TestCase):
         self.assertFalse(nave.control.sas)
         self.assertTrue(nave.control.rcs)
         self.assertTrue(math.isnan(nave.auto_pilot.target_roll))
+        for superficie in nave.parts.control_surfaces:
+            self.assertEqual((superficie.pitch_enabled, superficie.yaw_enabled, superficie.roll_enabled), (False,) * 3)
         self.assertTrue(nave.auto_pilot.engajado)
         self.assertEqual(nave.auto_pilot.reference_frame, SUP)
         self.assertEqual(nave.control.throttle, 0.7)
@@ -1504,6 +1514,13 @@ class TestNaveKrpc(unittest.TestCase):
             fonte.executar(Comando(acelerar_ate=600.0))
         self.assertEqual(saida.getvalue().count("AVISO"), 1)
         self.assertEqual(jogo.sim.t, 0.0)
+
+    def test_liberar_devolve_as_aletas_como_estavam(self):
+        jogo, fonte = self.criar()
+        fonte.executar(Comando(acelerador=1.0))
+        fonte.liberar()
+        estados = [(s.pitch_enabled, s.yaw_enabled, s.roll_enabled) for s in jogo.nave.parts.control_surfaces]
+        self.assertEqual(estados, [(True, True, True), (True, True, False)])
 
     def test_liberar_faz_cada_passo_por_si(self):
         jogo, fonte = self.criar()

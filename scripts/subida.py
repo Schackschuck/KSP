@@ -1628,6 +1628,7 @@ class NaveKrpc:
         self._motor_abaixo = True
         self._piloto_ligado = False
         self._sem_warp = False
+        self._superficies = []
 
     def _corrigir(self, vetor):
         return (vetor[0], vetor[1], self._sinal_z * vetor[2])
@@ -1741,6 +1742,7 @@ class NaveKrpc:
             controle.rcs = True
             piloto.reference_frame = self._sup
             piloto.target_roll = math.nan
+            self._soltar_superficies()
             self._ligar_piloto(True)
             self._piloto_ligado = True
         controle.throttle = comando.acelerador
@@ -1749,6 +1751,30 @@ class NaveKrpc:
             controle.activate_next_stage()
         if comando.acelerar_ate is not None and not self._sem_warp:
             self._acelerar(comando.acelerar_ate)
+
+    def _soltar_superficies(self):
+        """Tira as superfícies de controle (aletas) do controle, guardando como estavam.
+
+        O KSP estima o torque das superfícies com o sinal trocado, e o piloto
+        automático do kRPC, que ajusta os ganhos dividindo pelo torque
+        disponível, ficava com o ganho de rolamento negativo: a nave rolava
+        cada vez mais rápido (250°/s, medido no jogo). Sem as superfícies, o
+        torque vem só do gimbal, das rodas e do RCS, e a estimativa fica certa.
+        As aletas continuam estabilizando a nave, paradas.
+        """
+        for superficie in self._nave.parts.control_surfaces:
+            self._superficies.append(
+                (superficie, superficie.pitch_enabled, superficie.yaw_enabled, superficie.roll_enabled)
+            )
+            superficie.pitch_enabled = superficie.yaw_enabled = superficie.roll_enabled = False
+
+    def _devolver_superficies(self):
+        for superficie, pitch, yaw, roll in self._superficies:
+            try:
+                superficie.pitch_enabled, superficie.yaw_enabled, superficie.roll_enabled = pitch, yaw, roll
+            except Exception:
+                pass
+        self._superficies = []
 
     def _ligar_piloto(self, ligado):
         """Liga ou desliga o piloto automático, com o servidor do kRPC que o jogo tiver.
@@ -1782,12 +1808,13 @@ class NaveKrpc:
                 pass
 
     def liberar(self):
-        """Motor em 0, piloto automático desligado, SAS ligado e streams removidas, cada um por si."""
+        """Motor em 0, piloto automático desligado, SAS ligado, aletas de volta e streams removidas, cada um por si."""
         controle = self._nave.control
         for acao in (
             lambda: setattr(controle, "throttle", 0.0),
             lambda: self._ligar_piloto(False),
             lambda: setattr(controle, "sas", True),
+            self._devolver_superficies,
             self._remover_streams,
         ):
             try:
