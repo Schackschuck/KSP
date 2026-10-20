@@ -127,6 +127,8 @@ ACEL_COSTA = 0.1
 MARGEM_WARP = 30.0
 ESPERA_TEMPO_REAL = 60.0
 ERRO_APONTAR = 5.0
+ERRO_VIRAR = 45.0
+ACEL_VIRAR = 0.1
 TEMPO_FINAL = 3.0
 TOL_DV = 0.3
 W_PROXIMO = 10.0
@@ -392,6 +394,23 @@ def tempo_de_queima(dv, massa, empuxo, isp):
     ve = isp * G0
     m_fim = massa * math.exp(-dv / ve)
     return (massa - m_fim) * ve / empuxo
+
+
+def acelerador_de_virada(erro):
+    """O acelerador máximo com o nariz a erro graus da queima.
+
+    1 até ERRO_APONTAR e ACEL_VIRAR de ERRO_VIRAR para cima. No meio, a curva
+    vai pelo logaritmo do erro: sobe devagar longe do alvo e depressa perto
+    dele, onde quase todo o empuxo já vai para a direção certa. O motor nunca
+    apaga só por estar fora da direção, porque o gimbal só vira a nave com
+    empuxo.
+    """
+    if erro <= ERRO_APONTAR:
+        return 1.0
+    if erro >= ERRO_VIRAR:
+        return ACEL_VIRAR
+    fracao = math.log(ERRO_VIRAR / erro) / math.log(ERRO_VIRAR / ERRO_APONTAR)
+    return ACEL_VIRAR + (1.0 - ACEL_VIRAR) * fracao
 
 
 def tempo_ate_apoastro(corpo, r, v):
@@ -1019,10 +1038,10 @@ class Guiagem:
             return None
         pitch = pitch_de(w, self._cima)
         rumo = rumo_de(w, l.norte, l.leste)
-        if l.empuxo <= 0.0 or angulo(l.nariz, w) > ERRO_APONTAR:
-            acelerador = 0.0
-        else:
-            acelerador = min(1.0, max(ACEL_MIN, tamanho * l.massa / (l.empuxo * TEMPO_FINAL)))
+        if l.empuxo <= 0.0:
+            return Comando(0.0, pitch, rumo)
+        pedido = tamanho * l.massa / (l.empuxo * TEMPO_FINAL)
+        acelerador = min(acelerador_de_virada(angulo(l.nariz, w)), max(ACEL_MIN, pedido))
         return Comando(acelerador, pitch, rumo)
 
     def _depois_da_circularizacao(self, l):
@@ -1146,7 +1165,9 @@ class NaveSimulada:
     longo do nariz (com empuxo e Isp que mudam com a pressão), arrasto
     area·densidade·|v_sup|² contra a velocidade em relação ao ar (que gira com
     o planeta) e a massa caindo. O nariz gira para a direção pedida (pitch e
-    rumo no horizonte local) a no máximo GIRO_NARIZ_MAX graus por segundo.
+    rumo no horizonte local) a no máximo GIRO_NARIZ_MAX graus por segundo, e a
+    giro_sem_empuxo graus por segundo com o motor apagado (0 é o foguete
+    grande que só vira pelo gimbal).
 
     A nave começa parada no chão (pousada) na latitude e longitude da base, e
     fica presa a ele, girando com o planeta, até o empuxo para cima vencer o
@@ -1170,6 +1191,7 @@ class NaveSimulada:
         self._acelerador = 0.0
         self._pitch = 90.0
         self._rumo = 90.0
+        self.giro_sem_empuxo = GIRO_NARIZ_MAX
 
         polo = corpo.polo
         referencia = (0.0, 0.0, 1.0) if abs(polo[2]) < 0.9 else (1.0, 0.0, 0.0)
@@ -1213,7 +1235,8 @@ class NaveSimulada:
     def _apontar(self, dt):
         alvo = self._direcao(self._pitch, self._rumo)
         c = limitar(ponto(self.nariz, alvo), -1.0, 1.0)
-        passo = math.radians(GIRO_NARIZ_MAX) * dt
+        com_empuxo = self.aceso and self._acelerador > 0.0 and self.combustivel > 0.0
+        passo = math.radians(GIRO_NARIZ_MAX if com_empuxo else self.giro_sem_empuxo) * dt
         if math.acos(c) <= passo:
             self.nariz = alvo
             return
@@ -1609,6 +1632,7 @@ class NaveKrpc:
         piloto = nave.auto_pilot
         if not self._piloto_ligado:
             controle.sas = False
+            controle.rcs = True
             piloto.reference_frame = self._sup
             self._ligar_piloto(True)
             self._piloto_ligado = True

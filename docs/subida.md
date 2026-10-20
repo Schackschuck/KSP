@@ -94,7 +94,9 @@ Os estágios da simulação vêm do jogo: os motores e o combustível que cada s
 ### O corte e a circularização
 
 - **O corte:** o apoastro sai da posição e da velocidade (vis-viva). Faltando menos de 5 km, o motor vai baixando; ele corta com o apoastro a 100 m do pedido. Na costa, ainda no ar, se o arrasto baixar o apoastro mais de 300 m, o motor acende a 10% até corrigir.
-- **A circularização:** `Δv = √(μ/ra) − v_ap`, com a duração pela equação do foguete. Ela começa metade da duração antes do apoastro, com o time warp parando 30 s antes. A queima é em malha fechada: a cada passo, mira a diferença entre a velocidade circular ali, no plano, e a velocidade de agora. O motor só acende com o nariz a menos de 5° dessa direção e vai baixando no fim, para terminar em uns 3 s. Termina com menos de 0,3 m/s de diferença.
+- **A circularização:** `Δv = √(μ/ra) − v_ap`, com a duração pela equação do foguete. Ela começa metade da duração antes do apoastro, com o time warp parando 30 s antes. A queima é em malha fechada: a cada passo, mira a diferença entre a velocidade circular ali, no plano, e a velocidade de agora. O motor só vai a toda com o nariz a menos de 5° dessa direção e vai baixando no fim, para terminar em uns 3 s. Termina com menos de 0,3 m/s de diferença.
+- **A virada para a queima:** fora da direção, o motor nunca apaga. Um foguete grande, com rodas de reação fracas, só vira pelo gimbal, e o gimbal só funciona com empuxo. No primeiro voo no jogo, com o motor em 0% nessa hora, um foguete de 265 t ficou 42° fora da direção até o apoastro e caiu de volta. O acelerador máximo vai pelo erro do nariz: 100% até 5°, 10% de 45° para cima e, no meio, uma curva no logaritmo do erro. A 15° ele fica em 55%; a 10°, em 72%; a 30°, em 27%. Perto da direção ele sobe depressa, porque ali quase todo o empuxo já ajuda: a 10° de erro, perde 1,5%.
+- **O RCS:** liga junto com o piloto automático e fica ligado depois do fim, para ajudar a virar a nave quando o gimbal tem pouco empuxo. Na subida, gasta um pouco do monopropelente da nave.
 
 ### O limite de pressão dinâmica
 
