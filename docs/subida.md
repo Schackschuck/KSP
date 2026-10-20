@@ -26,7 +26,7 @@ A nave tem que estar parada no chão, com o primeiro estágio ainda por acender.
 4. Segure o LANCAR 5 s. O korry pisca âmbar contando, fica verde com o script voando, e a página passa a mostrar o voo. Segurar de novo 5 s aborta.
 5. No fim, a página mostra `EM ORBITA`, `ABORTADO` ou `FALHOU` por 10 s.
 
-**A página SUBIDA só aparece na mikromedia.** O simulador e o celular aceitam as linhas dela, mas mostram a navball. Depois de mudar o firmware, é preciso gravar o `mfd.hex` de novo pelo Flash Magic ([docs/mikromedia.md](mikromedia.md)).
+**A página SUBIDA só aparece na mikromedia.** O simulador e o celular aceitam as linhas dela, mas mostram a navball. Depois de mudar o firmware, é preciso gravar o `mfd.hex` de novo, pelo Flash Magic ou pelo Pi ([docs/mikromedia.md](mikromedia.md#gravar-pelo-pi-sem-tirar-o-cabo)).
 
 ## As fases
 
