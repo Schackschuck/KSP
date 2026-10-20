@@ -1460,6 +1460,7 @@ class NaveKrpc:
 
     def __init__(self, conn, nave, corpo_krpc, corpo):
         space_center = conn.space_center
+        self._conn = conn
         self._space_center = space_center
         self._nave = nave
         self._corpo_krpc = corpo_krpc
@@ -1609,7 +1610,7 @@ class NaveKrpc:
         if not self._piloto_ligado:
             controle.sas = False
             piloto.reference_frame = self._sup
-            piloto.engaged = True
+            self._ligar_piloto(True)
             self._piloto_ligado = True
         controle.throttle = comando.acelerador
         piloto.target_pitch_and_heading(comando.pitch, comando.rumo)
@@ -1617,6 +1618,21 @@ class NaveKrpc:
             controle.activate_next_stage()
         if comando.acelerar_ate is not None and not self._sem_warp:
             self._acelerar(comando.acelerar_ate)
+
+    def _ligar_piloto(self, ligado):
+        """Liga ou desliga o piloto automático, com o servidor do kRPC que o jogo tiver.
+
+        O cliente 0.6 só tem a propriedade engaged (AutoPilot_set_Engaged), que
+        o servidor 0.5.4 não tem: nele, o piloto liga com AutoPilot_Engage e
+        desliga com AutoPilot_Disengage, chamados direto pelo cliente.
+        """
+        piloto = self._nave.auto_pilot
+        try:
+            piloto.engaged = ligado
+        except RuntimeError:
+            tipo = self._conn._types.class_type("SpaceCenter", "AutoPilot")
+            procedimento = "AutoPilot_Engage" if ligado else "AutoPilot_Disengage"
+            self._conn._invoke("SpaceCenter", procedimento, [piloto], ["self"], [tipo], None)
 
     def _acelerar(self, ut):
         """Time warp até o UT pedido; bloqueia até chegar. Sem o warp, a espera fica em tempo real."""
@@ -1639,7 +1655,7 @@ class NaveKrpc:
         controle = self._nave.control
         for acao in (
             lambda: setattr(controle, "throttle", 0.0),
-            lambda: setattr(self._nave.auto_pilot, "engaged", False),
+            lambda: self._ligar_piloto(False),
             lambda: setattr(controle, "sas", True),
             self._remover_streams,
         ):

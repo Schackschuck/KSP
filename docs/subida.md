@@ -137,6 +137,7 @@ Se algo der errado, anote a fase, o que o terminal imprimiu e o foguete. O prime
 ## Limites
 
 - **Foguetes em série.** Com boosters laterais, a simulação do giro erra um pouco, e a guiagem em voo corrige.
+- **As versões do kRPC.** O Pi tem o cliente 0.6.0, e o jogo, o servidor 0.5.4. Quase tudo bate, menos o piloto automático: o cliente liga e desliga pela propriedade `engaged`, que o servidor 0.5.4 não tem. Quando o servidor recusa, o script chama direto os procedimentos dele, `AutoPilot_Engage` e `AutoPilot_Disengage`. Com o mod do kRPC atualizado, a propriedade passa a funcionar sozinha.
 - **A carenagem e os painéis** ficam com o piloto, num action group.
 - **O time warp:** abortar durante um `warp_to` corta o motor, mas o warp pode continuar no jogo até o fim.
 - **A guiagem do vácuo** segue o pró-grado orbital. A guiagem dos ônibus espaciais (PEG), que é a forma ótima no vácuo, fica para depois.

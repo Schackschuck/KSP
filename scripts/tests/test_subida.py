@@ -1022,6 +1022,7 @@ class PilotoFalso:
         self.reference_frame = None
         self.engajado = False
         self.quebrado = False
+        self.servidor_antigo = False
         self.pitch = 90.0
         self.heading = 90.0
 
@@ -1033,6 +1034,8 @@ class PilotoFalso:
     def engaged(self, valor):
         if self.quebrado:
             raise RuntimeError("a nave não existe mais")
+        if self.servidor_antigo:
+            raise RuntimeError('Procedure "AutoPilot_set_Engaged" not found, in service "SpaceCenter"')
         self.engajado = valor
 
     def target_pitch_and_heading(self, pitch, heading):
@@ -1193,6 +1196,8 @@ class JogoFalso:
         self.canhoto = canhoto
         self.leste_errado = leste_errado
         self.fluxos = []
+        self.procedimentos = []
+        self._types = types.SimpleNamespace(class_type=lambda servico, classe: (servico, classe))
         self.fechada = False
         self.corpo = CorpoFalso(self)
         self.space_center = CentroFalso(self)
@@ -1210,6 +1215,13 @@ class JogoFalso:
 
     def close(self):
         self.fechada = True
+
+    def _invoke(self, servico, procedimento, argumentos, nomes, tipos, retorno):
+        piloto = argumentos[0]
+        if piloto.quebrado:
+            raise RuntimeError("a nave não existe mais")
+        self.procedimentos.append((servico, procedimento, tipos[0]))
+        piloto.engajado = procedimento == "AutoPilot_Engage"
 
     def avancar(self, dt):
         controle = self.nave.control
@@ -1373,6 +1385,20 @@ class TestNaveKrpc(unittest.TestCase):
         fonte.executar(Comando(acelerador=1.0, pitch=90.0, rumo=90.0, estagiar=True))
         self.assertEqual(nave.control.current_stage, 1)
         self.assertTrue(jogo.sim.aceso)
+        self.assertEqual(jogo.procedimentos, [])
+
+    def test_piloto_automatico_com_o_servidor_0_5(self):
+        jogo, fonte = self.criar()
+        jogo.nave.auto_pilot.servidor_antigo = True
+        fonte.executar(Comando(acelerador=1.0))
+        self.assertTrue(jogo.nave.auto_pilot.engajado)
+        fonte.liberar()
+        self.assertFalse(jogo.nave.auto_pilot.engajado)
+        tipo = ("SpaceCenter", "AutoPilot")
+        self.assertEqual(
+            jogo.procedimentos,
+            [("SpaceCenter", "AutoPilot_Engage", tipo), ("SpaceCenter", "AutoPilot_Disengage", tipo)],
+        )
 
     def test_time_warp_bloqueia_ate_o_tempo_pedido(self):
         jogo, fonte = self.criar()
