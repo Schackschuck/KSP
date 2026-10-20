@@ -13,13 +13,16 @@ Uso, a partir da raiz do repositório:
 
 import argparse
 import contextlib
+import csv
 import dataclasses
 import io
 import math
 import os
 import re
+import shutil
 import socket
 import sys
+import tempfile
 import threading
 import time
 import types
@@ -139,6 +142,20 @@ def estagios_kerbin(combustivel_baixo, combustivel_cima):
         massa_inicial=baixo.seca_solta + combustivel_baixo + cima.massa_inicial,
     )
     return [baixo, cima]
+
+
+class TestParaANave(unittest.TestCase):
+    def test_sem_rotacao_fica_igual(self):
+        self.assertEqual(subida.para_a_nave((0.0, 0.0, 0.0, 1.0), (1.0, 2.0, 3.0)), (1.0, 2.0, 3.0))
+
+    def test_desfaz_a_rotacao_da_nave(self):
+        meio = math.sqrt(0.5)
+        rotacao = (0.0, 0.0, meio, meio)
+        for v, esperado in (((0.0, 1.0, 0.0), (1.0, 0.0, 0.0)), ((1.0, 0.0, 0.0), (0.0, -1.0, 0.0))):
+            with self.subTest(v=v):
+                obtido = subida.para_a_nave(rotacao, v)
+                for o, e in zip(obtido, esperado):
+                    self.assertAlmostEqual(o, e)
 
 
 class TestVetores(unittest.TestCase):
@@ -1116,6 +1133,10 @@ class PilotoFalso:
         self.quebrado = False
         self.servidor_antigo = False
         self.target_roll = 0.0
+        self.pitch_error = 1.5
+        self.heading_error = -0.5
+        self.pitch_pid_gains = (10.0, 11.0, 0.0)
+        self.roll_pid_gains = (2.0, 3.0, 0.0)
         self.pitch = 90.0
         self.heading = 90.0
 
@@ -1183,6 +1204,12 @@ class NaveFalsa:
 
     def velocity(self, referencia):
         return self.jogo.eixos(self.jogo.sim.v)
+
+    def angular_velocity(self, referencia):
+        return (0.0, 0.0, 0.1)
+
+    def rotation(self, referencia):
+        return (0.0, 0.0, 0.0, 1.0)
 
     def direction(self, referencia):
         return self.jogo.eixos(self.jogo.sim.nariz)
@@ -1515,6 +1542,18 @@ class TestNaveKrpc(unittest.TestCase):
         self.assertEqual(saida.getvalue().count("AVISO"), 1)
         self.assertEqual(jogo.sim.t, 0.0)
 
+    def test_diagnostico_do_log(self):
+        jogo, fonte = self.criar()
+        self.assertEqual(fonte.diagnostico(), {})
+        fonte.executar(Comando(acelerador=1.0))
+        diagnostico = fonte.diagnostico()
+        self.assertAlmostEqual(diagnostico["giro_yaw"], math.degrees(0.1))
+        self.assertEqual((diagnostico["giro_pitch"], diagnostico["giro_roll"]), (0.0, 0.0))
+        self.assertEqual((diagnostico["erro_pitch"], diagnostico["erro_rumo"]), (1.5, -0.5))
+        self.assertEqual((diagnostico["kp_pitch"], diagnostico["ki_pitch"]), (10.0, 11.0))
+        self.assertEqual((diagnostico["kp_roll"], diagnostico["ki_roll"]), (2.0, 3.0))
+        self.assertNotIn("aoa", diagnostico)
+
     def test_liberar_devolve_as_aletas_como_estavam(self):
         jogo, fonte = self.criar()
         fonte.executar(Comando(acelerador=1.0))
@@ -1817,6 +1856,8 @@ class TestBatimentoNoWarp(unittest.TestCase):
 
 class TestMain(unittest.TestCase):
     def rodar(self, *opcoes):
+        if "--log" not in opcoes:
+            opcoes = (*opcoes, "--sem-log")
         with sem_espera() as saida:
             with mock.patch.object(sys, "argv", ["subida.py", "--tela", "127.0.0.1:9", *opcoes]):
                 codigo = subida.main()
@@ -1829,6 +1870,25 @@ class TestMain(unittest.TestCase):
         self.assertIn("--> COSTA", texto)
         self.assertRegex(texto, r"--> GIRO a .*, giro de [0-9.]+°")
         self.assertRegex(texto, r"pitch +[-0-9.]+  nariz +[-0-9.]+  desvio +[-0-9.]+  rumo")
+
+    def test_demo_grava_o_log_do_voo(self):
+        pasta = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, pasta, ignore_errors=True)
+        caminho = os.path.join(pasta, "voo.csv")
+        codigo, texto = self.rodar("--demo", "--log", caminho)
+        self.assertEqual(codigo, subida.EM_ORBITA)
+        self.assertIn(f"Log do voo: {caminho}", texto)
+        with open(caminho, encoding="utf-8") as arquivo:
+            linhas = list(csv.DictReader(arquivo))
+        self.assertEqual(list(linhas[0].keys()), list(subida.COLUNAS_REGISTRO))
+        self.assertGreater(len(linhas), 500)
+        self.assertEqual(linhas[0]["fase"], DECOLAGEM)
+        self.assertEqual(linhas[-1]["fase"], ORBITA)
+        tempos = [float(linha["t"]) for linha in linhas]
+        self.assertEqual(tempos[0], 0.0)
+        self.assertTrue(all(b > a for a, b in zip(tempos, tempos[1:])))
+        self.assertTrue(any(float(linha["desvio"]) != 0.0 for linha in linhas))
+        self.assertEqual(linhas[0]["giro_pitch"], "")
 
     def test_demo_com_plano_do_alvo_passa_pela_janela_e_iguala_o_plano(self):
         codigo, texto = self.rodar("--demo", "--plano-do-alvo")
