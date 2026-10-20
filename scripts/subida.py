@@ -171,6 +171,7 @@ INTERVALO = 0.05
 INTERVALO_STATUS = 1.0
 INTERVALO_MOTORES = 0.25
 INTERVALO_TELA = 0.1
+INTERVALO_REGISTRO = 0.1
 ESPERA_AVISO = 3.0
 AMOSTRAS_ATMOSFERA = 100
 PASCAL_POR_ATM = 101_325
@@ -269,6 +270,18 @@ def pitch_de(v, cima):
 def rumo_de(v, norte, leste):
     """Rumo de v em graus, de 0 a 360: 0 norte, 90 leste."""
     return math.degrees(math.atan2(ponto(v, leste), ponto(v, norte))) % 360.0
+
+
+def para_a_nave(rotacao, v):
+    """O vetor v (no referencial da rotação) nos eixos da nave: x à direita, y para a frente, z para baixo.
+
+    rotacao é o quatérnio (x, y, z, w) do kRPC, que leva os eixos da nave para
+    o referencial: aqui vale a inversa, v' = q*·v·q.
+    """
+    x, y, z, w = rotacao
+    q = (-x, -y, -z)
+    t = esc(2.0, cruz(q, v))
+    return soma(v, soma(esc(w, t), cruz(q, t)))
 
 
 def rotacionar(a, eixo, radianos):
@@ -1629,6 +1642,7 @@ class NaveKrpc:
         self._piloto_ligado = False
         self._sem_warp = False
         self._superficies = []
+        self._diagnostico = {}
 
     def _corrigir(self, vetor):
         return (vetor[0], vetor[1], self._sinal_z * vetor[2])
@@ -1745,6 +1759,7 @@ class NaveKrpc:
             self._soltar_superficies()
             self._ligar_piloto(True)
             self._piloto_ligado = True
+            self._criar_diagnostico()
         controle.throttle = comando.acelerador
         piloto.target_pitch_and_heading(comando.pitch, comando.rumo)
         if comando.estagiar:
@@ -1800,8 +1815,50 @@ class NaveKrpc:
             self._sem_warp = True
             print(f"AVISO: o jogo não deixou acelerar o tempo ({e}); esperando em tempo real.")
 
+    def _criar_diagnostico(self):
+        """As streams que só o log usa; as do piloto automático só existem com ele ligado.
+
+        Cada uma por si: o que faltar no servidor só fica vazio no log, sem
+        atrapalhar o voo.
+        """
+        nave = self._nave
+        nr = self._nr
+        fontes = {
+            "giro": lambda: (nave.angular_velocity, nr),
+            "rotacao": lambda: (nave.rotation, nr),
+            "aoa": lambda: (getattr, nave.flight(), "angle_of_attack"),
+            "derrapagem": lambda: (getattr, nave.flight(), "sideslip_angle"),
+            "erro_pitch": lambda: (getattr, nave.auto_pilot, "pitch_error"),
+            "erro_rumo": lambda: (getattr, nave.auto_pilot, "heading_error"),
+            "ganhos_pitch": lambda: (getattr, nave.auto_pilot, "pitch_pid_gains"),
+            "ganhos_roll": lambda: (getattr, nave.auto_pilot, "roll_pid_gains"),
+        }
+        for nome, argumentos in fontes.items():
+            try:
+                self._diagnostico[nome] = self._conn.add_stream(*argumentos())
+            except Exception:
+                pass
+
+    def diagnostico(self):
+        """Os números a mais do log: o giro da nave nos eixos dela, o ângulo de ataque e os erros e ganhos do piloto."""
+        lidos = {}
+        for nome, stream in self._diagnostico.items():
+            try:
+                lidos[nome] = stream()
+            except Exception:
+                pass
+        saida = {nome: lidos[nome] for nome in ("aoa", "derrapagem", "erro_pitch", "erro_rumo") if nome in lidos}
+        if "giro" in lidos and "rotacao" in lidos:
+            giro = para_a_nave(lidos["rotacao"], lidos["giro"])
+            saida["giro_pitch"], saida["giro_roll"], saida["giro_yaw"] = (math.degrees(g) for g in giro)
+        if "ganhos_pitch" in lidos:
+            saida["kp_pitch"], saida["ki_pitch"] = lidos["ganhos_pitch"][:2]
+        if "ganhos_roll" in lidos:
+            saida["kp_roll"], saida["ki_roll"] = lidos["ganhos_roll"][:2]
+        return saida
+
     def _remover_streams(self):
-        for stream in self._streams.values():
+        for stream in list(self._streams.values()) + list(self._diagnostico.values()):
             try:
                 stream.remove()
             except Exception:
@@ -1841,6 +1898,9 @@ class FonteSimulada:
 
     def estagios(self):
         return self.nave.estagios()
+
+    def diagnostico(self):
+        return {}
 
     def liberar(self):
         pass
@@ -1990,6 +2050,84 @@ def status(l, guiagem, corpo, comando):
     )
 
 
+COLUNAS_REGISTRO = (
+    "t", "fase", "alt_km", "ap_km", "pe_km", "q_pa", "massa_t", "empuxo_kn", "acel",
+    "pitch_pedido", "rumo_pedido", "desvio", "pitch_nariz", "rumo_nariz", "pitch_vel", "rumo_vel",
+    "aoa", "derrapagem", "giro_pitch", "giro_yaw", "giro_roll",
+    "erro_pitch", "erro_rumo", "kp_pitch", "ki_pitch", "kp_roll", "ki_roll",
+)
+
+
+def caminho_do_registro():
+    """O log padrão: logs/subida-AAAAMMDD-HHMMSS.csv, na raiz do repositório."""
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(raiz, "logs", time.strftime("subida-%Y%m%d-%H%M%S.csv"))
+
+
+class RegistroVoo:
+    """O log do voo em CSV: uma linha a cada INTERVALO_REGISTRO s de jogo, com o pedido e o estado da nave.
+
+    O pedido é o Comando (acelerador, pitch, rumo) e o desvio da guiagem. O
+    estado é o da Leitura (nariz, movimento em relação ao ar, massa, empuxo) e
+    o diagnostico() da fonte: no jogo, o giro da nave nos eixos dela (graus/s),
+    o ângulo de ataque, a derrapagem e os erros e ganhos do piloto automático.
+    Os ângulos são em graus, t em segundos de jogo desde a primeira linha. O
+    arquivo é gravado linha a linha, para dar para acompanhar durante o voo.
+    """
+
+    def __init__(self, caminho):
+        pasta = os.path.dirname(caminho)
+        if pasta:
+            os.makedirs(pasta, exist_ok=True)
+        self.caminho = caminho
+        self._arquivo = open(caminho, "w", encoding="utf-8", newline="", buffering=1)
+        self._arquivo.write(",".join(COLUNAS_REGISTRO) + "\n")
+        self._t0 = None
+        self._proxima = -math.inf
+
+    def gravar(self, l, guiagem, comando, corpo, diagnostico, forcar=False):
+        """Grava uma linha se já passou INTERVALO_REGISTRO s de jogo (ou se forcar); diagnostico é chamado só aí."""
+        if not forcar and l.t < self._proxima:
+            return
+        self._proxima = l.t + INTERVALO_REGISTRO
+        if self._t0 is None:
+            self._t0 = l.t
+        cima = unit(l.r)
+        _, _, ra, rp = elementos(corpo, l.r, l.v)
+        movendo = norma(l.v_sup) > 1.0
+        valores = {
+            "t": l.t - self._t0,
+            "fase": guiagem.fase,
+            "alt_km": (norma(l.r) - corpo.raio) / 1000.0,
+            "ap_km": (ra - corpo.raio) / 1000.0,
+            "pe_km": (rp - corpo.raio) / 1000.0,
+            "q_pa": l.q,
+            "massa_t": l.massa / 1000.0,
+            "empuxo_kn": l.empuxo / 1000.0,
+            "acel": comando.acelerador,
+            "pitch_pedido": comando.pitch,
+            "rumo_pedido": comando.rumo,
+            "desvio": guiagem.desvio,
+            "pitch_nariz": pitch_de(l.nariz, cima),
+            "rumo_nariz": rumo_de(l.nariz, l.norte, l.leste),
+            "pitch_vel": pitch_de(l.v_sup, cima) if movendo else None,
+            "rumo_vel": rumo_de(l.v_sup, l.norte, l.leste) if movendo else None,
+        }
+        valores.update(diagnostico())
+        self._arquivo.write(",".join(_campo(valores.get(nome)) for nome in COLUNAS_REGISTRO) + "\n")
+
+    def fechar(self):
+        self._arquivo.close()
+
+
+def _campo(valor):
+    if valor is None:
+        return ""
+    if isinstance(valor, float):
+        return f"{valor:.3f}" if math.isfinite(valor) else ""
+    return str(valor)
+
+
 def conferir_altitude(corpo, altitude):
     """(aviso, mensagem) se a altitude pedida não serve, ou (None, None)."""
     minima = corpo.topo + ALTITUDE_MIN_AR if corpo.topo > 0.0 else ALTITUDE_MIN_VACUO
@@ -2013,11 +2151,12 @@ def recusar(fonte, guiagem, corpo, tela, aviso, mensagem):
         time.sleep(INTERVALO_TELA)
 
 
-def conduzir(fonte, guiagem, corpo, tela, repeticoes=1):
+def conduzir(fonte, guiagem, corpo, tela, repeticoes=1, registro=None):
     """O laço da subida a 20 Hz de jogo: ler, decidir, executar, mostrar. Devolve o código de saída.
 
     repeticoes > 1 roda vários passos de jogo por volta (o --demo, mais rápido
-    que o tempo real); o terminal e a tela ficam no tempo real.
+    que o tempo real); o terminal e a tela ficam no tempo real. Com um
+    RegistroVoo, cada passo vai para o log do voo.
     """
     fase = None
     aviso = None
@@ -2035,6 +2174,9 @@ def conduzir(fonte, guiagem, corpo, tela, repeticoes=1):
                 aviso = guiagem.aviso
                 if aviso:
                     print(f"AVISO: {TEXTOS_AVISO[aviso]}")
+            if registro is not None:
+                fim = guiagem.fase in (ORBITA, FALHA)
+                registro.gravar(l, guiagem, comando, corpo, fonte.diagnostico, forcar=fim)
             if guiagem.fase in (ORBITA, FALHA):
                 return encerrar(l, guiagem, corpo, tela)
             l = executar_mostrando(fonte, comando, l, guiagem, corpo, tela)
@@ -2067,7 +2209,7 @@ def encerrar(l, guiagem, corpo, tela):
     return NAO_CHEGOU
 
 
-def subir(conn, args, tela):
+def subir(conn, args, tela, registro=None):
     """Sobe a nave ativa do KSP. Devolve o código de saída."""
     try:
         nave = conn.space_center.active_vessel
@@ -2104,12 +2246,12 @@ def subir(conn, args, tela):
             f"Nave: {nave.name} ({corpo.nome})  empuxo/peso: {twr:.2f}  "
             f"órbita de {args.altitude / 1000:g} km, {pedido}"
         )
-        return conduzir(fonte, guiagem, corpo, tela)
+        return conduzir(fonte, guiagem, corpo, tela, registro=registro)
     finally:
         fonte.liberar()
 
 
-def subir_demo(args, tela):
+def subir_demo(args, tela, registro=None):
     """A mesma subida, com a NaveSimulada de Kerbin no lugar do kRPC e do jogo."""
     nave = NaveSimulada.kerbin()
     fonte = FonteSimulada(nave)
@@ -2130,7 +2272,7 @@ def subir_demo(args, tela):
     aviso, mensagem = conferir_altitude(KERBIN, args.altitude)
     if aviso is not None:
         return recusar(fonte, guiagem, KERBIN, tela, aviso, mensagem)
-    return conduzir(fonte, guiagem, KERBIN, tela, repeticoes=VELOCIDADE_DEMO)
+    return conduzir(fonte, guiagem, KERBIN, tela, repeticoes=VELOCIDADE_DEMO, registro=registro)
 
 
 def main():
@@ -2154,16 +2296,26 @@ def main():
         "--plano-do-alvo", action="store_true", help="órbita no plano do alvo escolhido no jogo (ignora --inclinacao)"
     )
     parser.add_argument("--demo", action="store_true", help="não conecta no KSP: sobe uma nave simulada de Kerbin")
+    parser.add_argument(
+        "--log",
+        metavar="ARQUIVO",
+        help="o log do voo, em CSV (padrão: logs/subida-AAAAMMDD-HHMMSS.csv, na raiz do repositório)",
+    )
+    parser.add_argument("--sem-log", action="store_true", help="não grava o log do voo")
     args = parser.parse_args()
 
     if hasattr(signal, "SIGBREAK"):
         signal.signal(signal.SIGBREAK, signal.default_int_handler)
 
     tela = TelaSubida(args.tela)
+    registro = None
+    if not args.sem_log:
+        registro = RegistroVoo(args.log or caminho_do_registro())
+        print(f"Log do voo: {registro.caminho}")
     try:
         if args.demo:
             try:
-                return subir_demo(args, tela)
+                return subir_demo(args, tela, registro)
             except KeyboardInterrupt:
                 print("\nInterrompido.")
                 return INTERROMPIDO
@@ -2173,7 +2325,7 @@ def main():
 
         conn = conectar_krpc(args.address, esperar=False)
         try:
-            return subir(conn, args, tela)
+            return subir(conn, args, tela, registro)
         except KeyboardInterrupt:
             print("\nInterrompido: motor cortado, o controle volta para o piloto.")
             return INTERROMPIDO
@@ -2184,6 +2336,8 @@ def main():
             conn.close()
     finally:
         tela.fechar()
+        if registro is not None:
+            registro.fechar()
 
 
 if __name__ == "__main__":

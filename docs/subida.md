@@ -28,6 +28,25 @@ A nave tem que estar parada no chão, com o primeiro estágio ainda por acender.
 
 **A página SUBIDA só aparece na mikromedia.** O simulador e o celular aceitam as linhas dela, mas mostram a navball. Depois de mudar o firmware, é preciso gravar o `mfd.hex` de novo, pelo Flash Magic ou pelo Pi ([docs/mikromedia.md](mikromedia.md#gravar-pelo-pi-sem-tirar-o-cabo)).
 
+### O log do voo
+
+Cada voo grava um CSV em `logs/subida-AAAAMMDD-HHMMSS.csv`, na raiz do repositório (no Pi, `~/cockpit/logs/`). A pasta fica fora do git. O script imprime o caminho na abertura (`Log do voo: ...`). `--log ARQUIVO` escolhe outro arquivo, e `--sem-log` não grava.
+
+Uma linha a cada 0,1 s de jogo, gravada na hora: dá para acompanhar o voo no Pi com `tail -f` e trazer para o PC com `scp USUARIO@192.168.50.2:cockpit/logs/subida-*.csv .`. Os ângulos são em graus, e `t` em segundos de jogo desde a primeira linha.
+
+| Colunas | O que são |
+|---|---|
+| `t`, `fase`, `alt_km`, `ap_km`, `pe_km`, `q_pa`, `massa_t`, `empuxo_kn` | A situação da nave; `empuxo_kn` é o disponível |
+| `acel`, `pitch_pedido`, `rumo_pedido`, `desvio` | O que a guiagem pede |
+| `pitch_nariz`, `rumo_nariz` | Para onde o nariz aponta de verdade |
+| `pitch_vel`, `rumo_vel` | O movimento em relação ao ar, que a CURVA segue |
+| `aoa`, `derrapagem` | O ângulo de ataque e o de derrapagem, do kRPC |
+| `giro_pitch`, `giro_yaw`, `giro_roll` | A velocidade de giro da nave nos eixos dela, em graus/s: é aqui que aparece o balanço |
+| `erro_pitch`, `erro_rumo` | Os erros do piloto automático do kRPC |
+| `kp_pitch`, `ki_pitch`, `kp_roll`, `ki_roll` | Os ganhos que o piloto automático ajustou sozinho |
+
+As colunas do giro, dos erros e dos ganhos só existem no jogo; no `--demo`, ficam vazias.
+
 ## As fases
 
 | Fase | O que acontece |
