@@ -178,8 +178,9 @@ Os scripts de voo que pilotam a nave sozinhos, um korry por script, na metade di
 - **Na ordem do voo:** três fileiras de cima para baixo, como a nave: subida (LANCAR), órbita (EXEC e ENCONTRO) e descida (POUSO e PRECISAO). O POUSO fica embaixo, o mais perto da mão.
 - **Segurar 5 s:** o korry só liga o script depois de 5 s apertado, e segurar de novo 5 s aborta: o script corta o motor e devolve a nave ao piloto. Soltar antes não faz nada. Assim não precisa de chave ARM, e um toque sem querer não entrega a nave. Enquanto conta, a tela multifunção abre a página do script e mostra quantos segundos faltam.
 - **A luz mostra o script, não o aperto:** apagado parado; **âmbar piscando** enquanto conta para ligar; **verde** com o script voando (piscando âmbar enquanto conta para abortar); **vermelho** por 10 s se o script foi abortado ou falhou. Quando a nave pousa, apaga, e a tela mostra `POUSADA`.
-- **Lugares vagos:** cinco korry com a legenda em cinza, esperando os próximos scripts do [roteiro](../README.md#scripts-de-voo). O korry ganha a legenda quando o script existir; o furo e os fios já ficam prontos.
-- **Sem tela:** a fase, a altura, a descida e a freada aparecem na página POUSO da tela multifunção ([docs/mfd.md](../docs/mfd.md#painel-de-scripts-e-a-página-do-pouso)).
+- **Lugares vagos:** quatro korry com a legenda em cinza, esperando os próximos scripts do [roteiro](../README.md#scripts-de-voo). O korry ganha a legenda quando o script existir; o furo e os fios já ficam prontos. O LANCAR já tem script: a [subida até a órbita](../docs/subida.md).
+- **Sem tela:** a fase, a altura, a descida e a freada aparecem na página POUSO da tela multifunção ([docs/mfd.md](../docs/mfd.md#painel-de-scripts-e-a-página-do-pouso)); a subida tem a página SUBIDA.
+- **A configuração da subida** (altitude, inclinação e o plano do alvo) é mexida por um encoder, num menu da página SUBIDA, como o do piloto automático. Por enquanto, ele fica na página de botões. **A decidir:** onde fica o encoder de verdade, porque os três que o cockpit tem já têm dono (piloto automático, alvo e Δv).
 - O desenho de 150 mm, quando os scripts tinham painel próprio, está em [`img/antigos/scripts.svg`](img/antigos/scripts.svg).
 
 ## Tempo

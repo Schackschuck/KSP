@@ -98,7 +98,7 @@ Os estágios da simulação vêm do jogo: os motores e o combustível que cada s
 
 ### O limite de pressão dinâmica
 
-Acima de 30 kPa, o motor vai baixando, até 40% em 50 kPa. Protege a nave sem mudar muito o perfil.
+Acima de 30 kPa, o motor vai baixando, até 40% em 42 kPa, e fica em 40% acima disso. Protege a nave sem mudar muito o perfil.
 
 ## Avisos
 
@@ -119,7 +119,7 @@ python scripts/subida.py --demo --plano-do-alvo
 ```
 
 - **Os testes** voam a guiagem numa nave simulada: um ponto de massa em volta de Kerbin ou da Mun, que giram, com atmosfera, arrasto, estágios e o nariz virando a no máximo 15°/s. Eles cobrem as contas, o giro escolhido, voos em várias inclinações e latitudes, o plano de um alvo com a janela e a falta de combustível.
-- **O `--demo`** faz a mesma nave simulada subir de Kerbin, 4 vezes mais rápido que o tempo real, mandando as linhas `SUB` para a ponte da tela. Com `--plano-do-alvo`, o alvo é um plano de mentira de 10°, com a janela a uns 20 min de jogo.
+- **O `--demo`** faz a mesma nave simulada subir de Kerbin, 4 vezes mais rápido que o tempo real, mandando as linhas `SUB` para a ponte da tela. Leva pouco mais de 1 min de relógio até a órbita. Com `--plano-do-alvo`, o alvo é um plano de mentira de 10°, com a janela a uns 20 min de jogo, pulados pelo time warp: leva 1,5 min, passa pelas fases `JANELA` e `PLANO`, e termina com 0,01° de erro de plano.
 - **Pela ponte da tela**, `python bridge/mfd.py --demo --porta <porta da mikromedia>` abre a página de botões, e segurar o LANCAR 5 s abre o `subida.py --demo` com os valores da página SUBIDA.
 
 ## Testar no jogo
