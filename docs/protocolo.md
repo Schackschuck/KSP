@@ -187,7 +187,7 @@ As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão 
 | `APL <HDG\|ALT\|VS> <0\|1\|2>` | Modo do piloto: `0` desligado, `1` ligado, `2` armado (o ALT subindo ou descendo até a altitude) | Luz do modo, verde com `1` ou `2` | Azul armado, verde ligado |
 | `APV <HDG\|ALT\|VS> <valor>` | O valor escolhido: rumo em graus (0 a 359), altitude em metros, velocidade vertical em décimos de m/s | — | O valor da linha |
 | `APC <HDG\|ALT\|VS> <0\|1>` | A linha do cursor, e `1` se ela está escolhida (girar muda o valor) | — | O cursor, ou a caixa âmbar no valor |
-| `PAG <NAV\|SAS\|AP\|POUSO>` | A página que a tela mostra. `POUSO` é a do [painel de scripts](#painel-de-scripts) | — | Troca a página |
+| `PAG <NAV\|SAS\|AP\|POUSO\|SUBIDA>` | A página que a tela mostra. `POUSO` e `SUBIDA` são as do [painel de scripts](#painel-de-scripts); a `SUBIDA` só a mikromedia desenha, e o simulador e o celular mostram a navball no lugar dela | — | Troca a página |
 
 - **A página é da ponte.** Apertar um modo, o SAS ou o RCS abre a página `SAS`; mexer no encoder abre a `AP`. Uns 10 s depois do último toque no painel, a ponte manda `PAG NAV`.
 - **O valor muda de 1 em 1** (1°, 10 m, 0,1 m/s) girando devagar, e de 10 em 10 girando rápido: com mais de um clique numa linha, ou menos de 80 ms desde a última.
@@ -207,7 +207,7 @@ Sem notícia do `fbw.py` por 1 s, a ponte manda `LEI OFF`, `TRAVA OFF`, `ESTOL 0
 
 ## Painel de scripts
 
-Linhas do painel de scripts ([desenho](../hardware/construcao.md#painel-de-scripts)): um korry por script, e por enquanto só o POUSO. Quem responde é a ponte da tela (`bridge/mfd.py`, com a lógica em `bridge/painel_scripts.py`), pelo mesmo caminho do painel de sistemas: enquanto o painel não existe, o korry fica na página de botões `bridge/celular/painel.html`, na porta 8001. Uso e testes em [docs/mfd.md](mfd.md#painel-de-scripts-e-a-página-do-pouso).
+Linhas do painel de scripts ([desenho](../hardware/construcao.md#painel-de-scripts)): um korry por script, por enquanto o POUSO e o LANCAR (a [subida até a órbita](subida.md)), e o encoder que configura a subida. Quem responde é a ponte da tela (`bridge/mfd.py`, com a lógica em `bridge/painel_scripts.py`), pelo mesmo caminho do painel de sistemas: enquanto o painel não existe, o korry fica na página de botões `bridge/celular/painel.html`, na porta 8001. Uso e testes em [docs/mfd.md](mfd.md#painel-de-scripts-e-a-página-do-pouso).
 
 ### Painel → ponte
 
@@ -215,14 +215,18 @@ Linhas do painel de scripts ([desenho](../hardware/construcao.md#painel-de-scrip
 |---|---|---|
 | `BTN POUSO 1` | O korry POUSO foi apertado | Começa a contar. Com 5 s apertado, a ponte abre o `scripts/pouso.py`; com o pouso voando, aborta |
 | `BTN POUSO 0` | O korry foi solto | Solto antes de 5 s, não faz nada. Depois dos 5 s, continuar apertado não conta de novo: vale só depois de soltar |
+| `BTN LANCAR 1`, `BTN LANCAR 0` | O korry LANCAR foi apertado e solto | Como o POUSO: segurado 5 s, a ponte abre o `scripts/subida.py` com os valores da configuração; com a subida voando, aborta. Apertar abre a página `SUBIDA` |
+| `ENC SUB <cliques>` | O encoder da subida girou | Cliques com sinal, horário positivo, como o `ENC AP`. Com a tela noutra página, o primeiro toque só abre a `SUBIDA` |
+| `BTN SUB 1`, `BTN SUB 0` | O encoder da subida foi apertado e solto | Soltar escolhe a linha do menu (girar muda o valor) ou sai dela |
 
 - **O tempo é da ponte**, como no aperto longo do encoder do piloto automático: o painel só manda o aperto e a soltura.
 - **Um script ativo por vez.** Com um script voando, segurar o korry de outro não faz nada.
 - Os lugares vagos do painel não mandam nada até ganharem um script.
+- **O menu da subida é da ponte**, como o do piloto automático: o painel só manda cliques e apertos. São três linhas, de cima para baixo: `ALT` (a altitude da órbita, em km, de 10 a 5000), `INC` (a inclinação, em graus, de 0 a 180) e `PLANO` (a órbita no plano do alvo escolhido no jogo, sim ou não). Girar devagar muda 1 km ou 1°; rápido, 10. Com o `PLANO` ligado, a inclinação vem do alvo. Os valores começam em 80 km, 0° e sem plano, e valem para a próxima vez que o LANCAR for segurado 5 s.
 
 ### Ponte → painel e tela
 
-Vai quando muda e também 1 vez por segundo, calculada 20 vezes por segundo, para o painel e para a tela.
+Vai quando muda e também 1 vez por segundo, calculada 20 vezes por segundo, para o painel e para a tela. A tabela mostra o `SCR POUSO`; o `SCR LANCAR` tem os mesmos estados, com `SUBIDA` no lugar de `POUSO` na tela (`PARA LANCAR`, e `EM ORBITA` no `FIM`).
 
 | Mensagem | Significado | No korry | Na tela |
 |---|---|---|---|
@@ -234,7 +238,18 @@ Vai quando muda e também 1 vez por segundo, calculada 20 vezes por segundo, par
 | `SCR POUSO ABORT` | Abortado pelo piloto. Por 10 s | Vermelho | `ABORTADO` |
 | `SCR POUSO FALHA` | O script parou sem pousar (sem nave, nave perdida, erro). Por 10 s | Vermelho | `FALHOU` |
 
-- **A página POUSO** abre na tela no primeiro aperto do korry, fica aberta enquanto o script voa e até 10 s depois do fim. Um toque no painel de sistemas no meio do pouso abre a página dele, que volta para a do pouso 10 s depois, e não para a navball.
+- **A página POUSO** abre na tela no primeiro aperto do korry, fica aberta enquanto o script voa e até 10 s depois do fim. Um toque no painel de sistemas no meio do pouso abre a página dele, que volta para a do pouso 10 s depois, e não para a navball. A página SUBIDA funciona igual com o LANCAR, e também abre ao mexer no encoder da subida.
+
+**A configuração da subida**, só para a tela, quando muda e 1 vez por segundo:
+
+| Mensagem | Valores | Na página SUBIDA |
+|---|---|---|
+| `SBV ALT <km>` | A altitude escolhida | `ALTITUDE` |
+| `SBV INC <graus>` | A inclinação escolhida | `INCLINACAO`, ou `DO ALVO` com o plano ligado |
+| `SBV PLANO <0\|1>` | `1`: a órbita no plano do alvo | `PLANO DO ALVO`: `SIM` ou `NAO` |
+| `SBC <ALT\|INC\|PLANO> <0\|1>` | A linha do cursor, e `1` se ela está escolhida (girar muda o valor) | A seta, ou a caixa âmbar no valor |
+
+O simulador e o celular aceitam e ignoram estas linhas, as `SUB` e o `SCR LANCAR`, sem responder `ERR`.
 - **O script roda num processo próprio**, o mesmo da linha de comando (`python scripts/pouso.py <IP do KSP> --tela 127.0.0.1`). Abortar manda o Ctrl+C (no Windows, o `CTRL_BREAK`, que o script transforma em Ctrl+C): o script corta o motor e devolve a nave antes de sair. Se ele não sair em 5 s, a ponte encerra o processo. Fechar a ponte aborta o script.
 - **O código de saída do script** diz o fim: `0` pousou (`FIM`), `130` interrompido, e qualquer outro, `FALHA`. O que o script escreve aparece no terminal da ponte, com `[pouso]` na frente.
 
@@ -255,3 +270,25 @@ O `scripts/pouso.py` manda por UDP para a porta **50100** da ponte da tela, 10 v
 | `POU INCL <graus>` | Ângulo entre o nariz e a vertical | `INCL` |
 | `POU AVISO <EMPUXO\|MOTOR\|NARIZ\|OFF>` | O aviso mais importante: empuxo insuficiente, nenhum motor ativo, nariz longe da vertical | O aviso em vermelho, piscando |
 | `POU OFF` | Só da ponte para a tela: o pouso não está mandando | Apaga os números e a nave |
+
+### Subida → ponte da tela
+
+O `scripts/subida.py` manda como o pouso: UDP para a porta **50100**, 10 vezes por segundo, um pacote só, uma linha por vez. A ponte confere cada linha e repassa para a tela; sem notícia por 1 s, manda `SUB OFF`. A subida também não recebe nada da ponte: os valores da configuração vão na linha de comando, e o aborto pelo Ctrl+C.
+
+| Mensagem | Valores | Na página SUBIDA |
+|---|---|---|
+| `SUB FASE <fase>` | `JANELA` (esperando a base passar pelo plano do alvo), `DECOLAGEM`, `GIRO`, `CURVA` (a curva de gravidade, no ar), `VACUO`, `COSTA` (motor desligado até o apoastro), `CIRCULARIZA`, `PLANO` (igualando o plano do alvo), `ORBITA`, `FALHA` | O indicador da fase: azul esperando (`JANELA`, `COSTA`), verde queimando e em órbita, vermelho na falha |
+| `SUB ALT <m>` | Altitude sobre o nível do mar | `ALT` |
+| `SUB VEL <décimos de m/s>` | Velocidade orbital (inercial) | `VEL` |
+| `SUB AP <m>` ou `SUB AP OFF` | Apoastro. `OFF` numa trajetória de escape | `AP` e a barra do apoastro |
+| `SUB PE <m>` ou `SUB PE OFF` | Periastro, negativo dentro do planeta | `PE` e a barra do periastro |
+| `SUB ALVO <m>` | A altitude pedida | A marca âmbar nas duas barras |
+| `SUB Q <Pa>` | Pressão dinâmica | `Q` |
+| `SUB INC <décimos de grau>` | A inclinação de agora | `INC` |
+| `SUB INCA <décimos de grau>` | A inclinação pedida (a do plano do alvo, com o plano ligado) | `INC`, depois da barra |
+| `SUB DV <m/s>` | O Δv gasto desde a decolagem | `DV` |
+| `SUB JAN <s>` ou `SUB JAN OFF` | Segundos até a janela de lançamento | `T- hh:mm:ss` na `JANELA` |
+| `SUB GIRO <décimos de grau>` ou `SUB GIRO OFF` | O giro escolhido pela simulação, no começo da curva | `GIRO` |
+| `SUB MOTOR <0 a 100>` | Acelerador, em % | `MOTOR` |
+| `SUB AVISO <aviso>` ou `SUB AVISO OFF` | O aviso mais importante: `COMBUSTIVEL` (acabou antes da órbita), `ALVO` (sem alvo para o plano, ou alvo noutro planeta), `ALTITUDE` (dentro do ar), `INCLINACAO` (menor que a latitude da base), `EMPUXO` (empuxo/peso baixo) | O aviso em vermelho, piscando |
+| `SUB OFF` | Só da ponte para a tela: a subida não está mandando | Volta para a configuração |
