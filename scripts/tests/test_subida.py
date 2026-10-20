@@ -18,10 +18,14 @@ import io
 import math
 import os
 import re
+import socket
 import sys
+import threading
+import time
 import types
 import unittest
 from dataclasses import dataclass
+from time import sleep as dormir
 from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -1129,6 +1133,9 @@ class CentroFalso:
         self.target_body = None
         self.warp_proibido = False
         self.warps = []
+        self.duracao_warp = 0.0
+        self.ut_em_warp = None
+        self.intervalos_de_warp = []
         self.ReferenceFrame = types.SimpleNamespace(create_hybrid=self.criar_hibrido)
         self.VesselSituation = types.SimpleNamespace(
             pre_launch="pre_launch", landed="landed", splashed="splashed", flying="flying"
@@ -1136,7 +1143,7 @@ class CentroFalso:
 
     @property
     def ut(self):
-        return self.jogo.sim.t
+        return self.jogo.sim.t if self.ut_em_warp is None else self.ut_em_warp
 
     @property
     def active_vessel(self):
@@ -1160,8 +1167,17 @@ class CentroFalso:
         if self.warp_proibido:
             raise RuntimeError("não dá para acelerar o tempo agora")
         self.warps.append(ut)
+        inicio = time.monotonic()
+        ut_inicial = self.jogo.sim.t
+        if self.duracao_warp > 0.0:
+            passos = 10
+            for i in range(1, passos + 1):
+                dormir(self.duracao_warp / passos)
+                self.ut_em_warp = ut_inicial + (ut - ut_inicial) * i / passos
         piloto = self.jogo.nave.auto_pilot
         self.jogo.sim.executar(Comando(0.0, piloto.pitch, piloto.heading, acelerar_ate=ut))
+        self.ut_em_warp = None
+        self.intervalos_de_warp.append((inicio, time.monotonic()))
 
 
 class JogoFalso:
@@ -1551,6 +1567,121 @@ class TestSubir(unittest.TestCase):
         self.assertTrue(jogo.nave.control.sas)
         self.assertFalse(jogo.nave.auto_pilot.engajado)
         self.assertTrue(all(f.removido for f in jogo.fluxos))
+
+
+class ReceptorUdp:
+    """Escuta numa porta livre do 127.0.0.1 e guarda cada pacote com o instante em que chegou."""
+
+    def __init__(self):
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.socket.bind(("127.0.0.1", 0))
+        self.socket.settimeout(0.05)
+        self.porta = self.socket.getsockname()[1]
+        self.pacotes = []
+        self._parar = threading.Event()
+        self._thread = threading.Thread(target=self._rodar, daemon=True)
+        self._thread.start()
+
+    def _rodar(self):
+        while not self._parar.is_set():
+            try:
+                dados, _ = self.socket.recvfrom(65535)
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            self.pacotes.append((time.monotonic(), dados.decode("ascii").split("\n")))
+
+    def fechar(self):
+        self._parar.set()
+        self._thread.join()
+        self.socket.close()
+
+
+class TestBatimentoNoWarp(unittest.TestCase):
+    def test_a_tela_recebe_linhas_durante_o_warp_com_a_janela_descendo(self):
+        jogo = JogoFalso()
+        jogo.space_center.duracao_warp = 0.5
+        n_alvo = plano_com_janela(jogo.sim, 7_200.0, 30.0)
+        fonte = subida.NaveKrpc(jogo, jogo.nave, jogo.corpo, subida.corpo_do_jogo(jogo.corpo))
+        guiagem = Guiagem(fonte.corpo, 80_000.0, 0.0, n_alvo=n_alvo, ler_estagios=fonte.estagios)
+        original = subida.NaveKrpc.executar
+
+        def executar(nave_krpc, comando):
+            original(nave_krpc, comando)
+            jogo.avancar(subida.INTERVALO)
+
+        threads_antes = threading.active_count()
+        receptor = ReceptorUdp()
+        tela = subida.TelaSubida(f"127.0.0.1:{receptor.porta}")
+        try:
+            with sem_espera():
+                with mock.patch.object(subida.NaveKrpc, "executar", executar):
+                    codigo = subida.conduzir(fonte, guiagem, fonte.corpo, tela)
+            dormir(0.2)
+        finally:
+            tela.fechar()
+            receptor.fechar()
+        self.assertEqual(codigo, subida.EM_ORBITA)
+        self.assertEqual(len(jogo.space_center.intervalos_de_warp), len(jogo.space_center.warps))
+        self.assertGreaterEqual(len(jogo.space_center.intervalos_de_warp), 2)
+
+        primeiro_inicio, primeiro_fim = jogo.space_center.intervalos_de_warp[0]
+        durante = [
+            valores_sub(linhas)
+            for instante, linhas in receptor.pacotes
+            if primeiro_inicio <= instante <= primeiro_fim
+        ]
+        self.assertGreaterEqual(len(durante), 3)
+        janelas = [int(v["JAN"]) for v in durante]
+        self.assertTrue(all(v["FASE"] == "JANELA" for v in durante))
+        self.assertEqual(janelas, sorted(janelas, reverse=True))
+        self.assertGreater(janelas[0] - janelas[-1], 1_000)
+        self.assertLess(janelas[-1], 7_200 - 1_000)
+
+        for intervalo in jogo.space_center.intervalos_de_warp[1:]:
+            enviados = [p for instante, p in receptor.pacotes if intervalo[0] <= instante <= intervalo[1]]
+            self.assertGreaterEqual(len(enviados), 3)
+
+        janela_toda = [int(valores_sub(linhas)["JAN"]) for _, linhas in receptor.pacotes if valores_sub(linhas)["FASE"] == "JANELA"]
+        self.assertEqual(janela_toda, sorted(janela_toda, reverse=True))
+        for _, linhas in receptor.pacotes:
+            self.assertTrue(all(len(linha) <= 31 and linha.isascii() for linha in linhas))
+        self.assertEqual(threading.active_count(), threads_antes)
+
+    def test_com_a_nave_simulada_o_warp_e_instantaneo_e_nao_deixa_thread_para_tras(self):
+        nave = NaveSimulada.kerbin()
+        n_alvo = plano_com_janela(nave, 1_200.0, 10.0)
+        guiagem = Guiagem(KERBIN, 80_000.0, 0.0, n_alvo=n_alvo, ler_estagios=nave.estagios)
+        tela = TelaFalsa()
+        threads_antes = threading.active_count()
+        with sem_espera():
+            codigo = subida.conduzir(subida.FonteSimulada(nave), guiagem, KERBIN, tela, repeticoes=4)
+        self.assertEqual(codigo, subida.EM_ORBITA)
+        self.assertEqual(threading.active_count(), threads_antes)
+        janelas = [int(valores_sub(p)["JAN"]) for p in tela.pacotes if valores_sub(p)["FASE"] == "JANELA"]
+        self.assertEqual(janelas, sorted(janelas, reverse=True))
+
+    def test_batimento_para_se_a_leitura_do_ut_falhar(self):
+        class FonteQueFalha:
+            def ut_agora(self):
+                raise RuntimeError("a conexão caiu")
+
+        nave = NaveSimulada.kerbin()
+        guiagem = Guiagem(KERBIN, 80_000.0, 0.0)
+        tela = TelaFalsa()
+        with subida.Batimento(FonteQueFalha(), guiagem, KERBIN, tela, nave.leitura()):
+            dormir(0.05)
+        self.assertEqual(tela.pacotes, [])
+
+    def test_sem_warp_nao_liga_a_thread(self):
+        nave = NaveSimulada.kerbin()
+        guiagem = Guiagem(KERBIN, 80_000.0, 0.0)
+        tela = TelaFalsa()
+        fonte = subida.FonteSimulada(nave)
+        with mock.patch.object(subida, "Batimento", side_effect=AssertionError("não devia ligar")):
+            l = fonte.ler()
+            self.assertIs(subida.executar_mostrando(fonte, Comando(), l, guiagem, KERBIN, tela), l)
 
 
 class TestMain(unittest.TestCase):

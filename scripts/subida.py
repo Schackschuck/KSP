@@ -63,7 +63,10 @@ não existe: sai na menor possível, com o aviso INCLINACAO.
 No cockpit, quem abre o script é a ponte da tela (bridge/mfd.py), quando o
 korry LANCAR fica apertado 5 s, com os valores escolhidos na página SUBIDA; o
 script manda o estado dele para a ponte por UDP (as linhas SUB de
-docs/protocolo.md).
+docs/protocolo.md), 10 vezes por segundo. O warp_to do kRPC bloqueia o laço, e
+sem notícia por 1 s a ponte apaga a página; por isso, durante um warp, uma
+thread de batimento (Batimento) continua mandando as linhas, com o UT da stream
+no lugar do da última leitura, sem fazer nenhuma chamada ao kRPC.
 
 Uso:
     python scripts/subida.py                      # KSP neste computador: 80 km, inclinação 0°
@@ -96,6 +99,7 @@ import os
 import signal
 import socket
 import sys
+import threading
 import time
 from dataclasses import dataclass, replace
 
@@ -1442,6 +1446,10 @@ class NaveKrpc:
     apagado e motor_abaixo vêm da lista de motores, relida a cada
     INTERVALO_MOTORES s porque muda com os estágios.
 
+    ut_agora() devolve o UT da stream, que o cliente do kRPC continua
+    atualizando enquanto o warp_to bloqueia; é a única leitura que a thread de
+    batimento faz, porque o cliente não é seguro entre threads.
+
     estagios() monta os trechos de queima a partir do estágio de agora
     (control.current_stage, lido depois da ignição): o trecho k tem os motores
     de part.stage >= k que ainda não foram largados (decouple_stage < k), e no
@@ -1518,6 +1526,10 @@ class NaveKrpc:
                 "Os eixos do kRPC não bateram com o referencial da guiagem: o leste lido não gira no "
                 "sentido do planeta em volta do polo. Não vou decolar com os eixos trocados."
             )
+
+    def ut_agora(self):
+        """O UT de agora, da stream, sem chamada ao kRPC."""
+        return self._streams["ut"]()
 
     def _atualizar_motores(self):
         motores = self._nave.parts.engines
@@ -1646,6 +1658,9 @@ class FonteSimulada:
     def ler(self):
         return self.nave.leitura()
 
+    def ut_agora(self):
+        return self.nave.t
+
     def executar(self, comando):
         self.nave.executar(comando)
         self.nave.avancar(INTERVALO)
@@ -1729,6 +1744,56 @@ def linhas_de_estado(l, guiagem, corpo):
     ]
 
 
+class Batimento:
+    """Manda as linhas SUB para a tela, a cada INTERVALO_TELA, enquanto o laço está parado num warp.
+
+    O warp_to do kRPC bloqueia o laço do main, e sem notícia por 1 s a ponte
+    apaga a página SUBIDA. Usado com `with`, liga uma thread que repete as
+    linhas da última Leitura com o `t` trocado pelo UT de fonte.ut_agora(),
+    de modo que a contagem da janela continua descendo na tela. A thread só lê
+    o estado da guiagem e não faz nenhuma chamada ao kRPC: o cliente não é
+    seguro entre threads. Qualquer erro dela apenas a encerra, porque a tela é
+    opcional.
+    """
+
+    def __init__(self, fonte, guiagem, corpo, tela, leitura):
+        self._fonte = fonte
+        self._guiagem = guiagem
+        self._corpo = corpo
+        self._tela = tela
+        self._leitura = leitura
+        self._parar = threading.Event()
+        self._thread = threading.Thread(target=self._rodar, daemon=True)
+
+    def __enter__(self):
+        self._thread.start()
+        return self
+
+    def __exit__(self, tipo, erro, rastro):
+        self._parar.set()
+        self._thread.join(timeout=1.0)
+
+    def _rodar(self):
+        while True:
+            try:
+                leitura = replace(self._leitura, t=self._fonte.ut_agora())
+                self._tela.enviar(linhas_de_estado(leitura, self._guiagem, self._corpo))
+            except Exception:
+                return
+            if self._parar.wait(INTERVALO_TELA):
+                return
+
+
+def executar_mostrando(fonte, comando, l, guiagem, corpo, tela):
+    """fonte.executar(comando), com o Batimento ligado se o comando pede warp; devolve a leitura em dia."""
+    if comando.acelerar_ate is None:
+        fonte.executar(comando)
+        return l
+    with Batimento(fonte, guiagem, corpo, tela, l):
+        fonte.executar(comando)
+    return replace(l, t=fonte.ut_agora())
+
+
 TEXTOS_AVISO = {
     AVISO_EMPUXO: "empuxo/peso baixo no chão: a nave pode não conseguir subir.",
     AVISO_ALTITUDE: "altitude pedida dentro do ar ou perto demais do chão.",
@@ -1796,7 +1861,7 @@ def conduzir(fonte, guiagem, corpo, tela, repeticoes=1):
                     print(f"AVISO: {TEXTOS_AVISO[aviso]}")
             if guiagem.fase in (ORBITA, FALHA):
                 return encerrar(l, guiagem, corpo, tela)
-            fonte.executar(comando)
+            l = executar_mostrando(fonte, comando, l, guiagem, corpo, tela)
         tela.enviar(linhas_de_estado(l, guiagem, corpo), agora=False)
         agora = time.monotonic()
         if agora >= proximo_status:
