@@ -12,13 +12,15 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 # A ponte fica na pasta de cima (bridge/).
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
+import mfd
 import painel_scripts
 import sistemas
-from mfd import CAMPOS_SUBIDA, Scripts
+from mfd import CAMPOS_SUBIDA, Scripts, Transmissor
 from painel_scripts import MOSTRA_FIM, SEGURAR, MenuSubida, PainelScripts, Processo
 from sistemas import RAPIDO, Sistemas
 
@@ -341,6 +343,32 @@ class TestPainelComMenu(unittest.TestCase):
         self.assertEqual(self.painel.tela()["SBC"], "SBC INC 0")
         self.assertEqual(self.painel.tela(), self.menu.linhas())
 
+    def test_com_a_subida_voando_o_encoder_nao_mexe_no_menu(self):
+        self.painel.tratar("BTN LANCAR 1", 0.0)
+        self.painel.atualizar(SEGURAR)
+        self.painel.tratar("BTN LANCAR 0", SEGURAR)
+        self.assertEqual(self.painel.ativo(), "LANCAR")
+        for linha in ("ENC SUB 1", "ENC SUB -3", "BTN SUB 1", "BTN SUB 0", "BTN SUB 1", "BTN SUB 0", "ENC SUB 1"):
+            self.assertEqual(self.painel.tratar(linha, 10.0, "SUBIDA"), "SUBIDA", linha)
+        self.assertEqual(self.menu.cursor, 0)
+        self.assertFalse(self.menu.editando)
+        self.assertEqual(self.menu.valores, {"ALT": 80, "INC": 0, "PLANO": 0})
+        self.assertEqual(self.painel.tratar("ENC SUB 1", 10.0, "NAV"), "SUBIDA")
+
+        self.lancar.terminar(subida.EM_ORBITA)
+        self.painel.atualizar(30.0)
+        self.assertIsNone(self.painel.ativo())
+        self.assertEqual(self.painel.tratar("ENC SUB 1", 31.0, "SUBIDA"), "SUBIDA")
+        self.assertEqual(self.menu.linha, "INC")
+
+    def test_com_o_pouso_voando_o_encoder_da_subida_mexe_no_menu(self):
+        self.painel.tratar("BTN POUSO 1", 0.0)
+        self.painel.atualizar(SEGURAR)
+        self.painel.tratar("BTN POUSO 0", SEGURAR)
+        self.assertEqual(self.painel.ativo(), "POUSO")
+        self.assertEqual(self.painel.tratar("ENC SUB 1", 10.0, "SUBIDA"), "SUBIDA")
+        self.assertEqual(self.menu.linha, "INC")
+
     def test_um_script_por_vez_com_os_dois_korry(self):
         self.painel.tratar("BTN LANCAR 1", 0.0)
         self.painel.atualizar(SEGURAR)
@@ -351,6 +379,103 @@ class TestPainelComMenu(unittest.TestCase):
 
     def test_os_dois_scripts_tem_luzes(self):
         self.assertEqual(self.painel.luzes(0.0), {"SCR POUSO": "SCR POUSO OFF", "SCR LANCAR": "SCR LANCAR OFF"})
+
+
+class LinhasFalsas:
+    """Faz o papel da tela e do painel na ponte: guarda o que recebe e entrega as linhas combinadas."""
+
+    def __init__(self):
+        self.recebidas = []
+        self.pendentes = []
+
+    def enviar(self, linha):
+        self.recebidas.append(linha)
+
+    def linhas(self):
+        entregues, self.pendentes = self.pendentes, []
+        return entregues
+
+    def com(self, prefixo):
+        return [linha for linha in self.recebidas if linha.startswith(prefixo)]
+
+
+class TestVoarComAPonteDaSubida(unittest.TestCase):
+    """O voar do mfd.py ligando o painel de scripts, o menu da subida, a tela e o painel."""
+
+    def setUp(self):
+        self.tela = LinhasFalsas()
+        self.painel = LinhasFalsas()
+        self.menu = MenuSubida()
+        self.lancar = ProcessoFalso()
+        self.scripts = PainelScripts({"POUSO": ProcessoFalso(), "LANCAR": self.lancar}, self.menu)
+
+    def voar(self, passos, tempo=10.0):
+        """passos: lista de (linhas do painel, condição): manda as linhas e só passa ao próximo passo quando a condição vale."""
+        limite = time.monotonic() + tempo
+        andamento = {"passo": 0, "enviado": False}
+
+        def continua_valida():
+            if time.monotonic() > limite or andamento["passo"] >= len(passos):
+                return False
+            linhas, condicao = passos[andamento["passo"]]
+            if not andamento["enviado"]:
+                self.painel.pendentes.extend(linhas)
+                andamento["enviado"] = True
+            elif condicao():
+                andamento["passo"] += 1
+                andamento["enviado"] = False
+            return True
+
+        with mock.patch.object(mfd, "Scripts", lambda: Scripts(porta=0)), mock.patch.object(mfd, "VERIFICA_NAVE", 0.0):
+            demo = mfd.Demo()
+            try:
+                mfd.voar(
+                    self.tela, Transmissor(self.tela), demo, demo, continua_valida,
+                    self.painel, Sistemas(None), self.scripts,
+                )
+            finally:
+                demo.fechar()
+        self.assertEqual(andamento["passo"], len(passos), "o voar não chegou ao fim dos passos")
+
+    def test_korry_lancar_abre_a_pagina_subida_e_as_linhas_vao_cada_uma_para_o_seu_lado(self):
+        self.voar([
+            ([], lambda: "SCR LANCAR OFF" in self.tela.recebidas and "SBC ALT 0" in self.tela.recebidas),
+            (["BTN LANCAR 1"], lambda: "PAG SUBIDA" in self.tela.recebidas and self.painel.com("SCR LANCAR LIGA")),
+        ])
+        self.assertLess(self.tela.recebidas.index("PAG NAV"), self.tela.recebidas.index("PAG SUBIDA"))
+        self.assertEqual(self.painel.com("PAG"), [])
+        for linha in ("SBV ALT 80", "SBV INC 0", "SBV PLANO 0", "SBC ALT 0"):
+            self.assertIn(linha, self.tela.recebidas)
+        self.assertEqual(self.painel.com("SBV"), [])
+        self.assertEqual(self.painel.com("SBC"), [])
+        self.assertIn("SCR LANCAR OFF", self.tela.recebidas)
+        self.assertIn("SCR LANCAR OFF", self.painel.recebidas)
+        self.assertTrue(self.tela.com("SCR LANCAR LIGA"))
+        self.assertTrue(self.painel.com("SCR LANCAR LIGA"))
+        self.assertIn("SUB OFF", self.tela.recebidas)
+        self.assertEqual(self.painel.com("SUB"), [])
+
+    def test_encoder_da_subida_primeiro_abre_a_pagina_e_depois_mexe_no_menu(self):
+        self.voar([
+            ([], lambda: "PAG NAV" in self.tela.recebidas),
+            (["ENC SUB 1"], lambda: "PAG SUBIDA" in self.tela.recebidas),
+            ([], lambda: self.menu.cursor == 0 and self.tela.com("SBC")[-1] == "SBC ALT 0"),
+            (["ENC SUB 1"], lambda: "SBC INC 0" in self.tela.recebidas),
+        ])
+        self.assertEqual(self.menu.linha, "INC")
+        self.assertEqual(self.tela.com("SBC")[0], "SBC ALT 0")
+        self.assertEqual(self.tela.com("SBC")[-1], "SBC INC 0")
+        self.assertEqual(self.menu.valores, {"ALT": 80, "INC": 0, "PLANO": 0})
+        self.assertEqual(self.painel.com("SBC"), [])
+
+    def test_a_tela_fora_da_subida_volta_a_fechar_o_menu(self):
+        self.voar([
+            (["ENC SUB 1"], lambda: "PAG SUBIDA" in self.tela.recebidas),
+            (["ENC SUB 1", "BTN SUB 1", "BTN SUB 0"], lambda: "SBC INC 1" in self.tela.recebidas),
+            (["BTN SAS_PRO 1"], lambda: "PAG SAS" in self.tela.recebidas and self.tela.com("SBC")[-1] == "SBC INC 0"),
+        ])
+        self.assertFalse(self.menu.editando)
+        self.assertEqual(self.menu.linha, "INC")
 
 
 class TestProcessoComArgumentos(unittest.TestCase):

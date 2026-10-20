@@ -241,6 +241,8 @@ class PainelScripts:
         Devolve None se ela não é deste painel; senão a página que a tela deve
         abrir, ou "" para nenhuma. pagina é a que a tela mostra agora: com ela
         fora da SUBIDA, o primeiro toque no encoder da subida só abre a página.
+        Com o LANCAR voando a tela mostra o voo, e o encoder da subida também
+        só pede a página, sem mexer no menu.
         """
         partes = linha.split()
         if len(partes) != 3:
@@ -264,7 +266,7 @@ class PainelScripts:
                 return None
         elif valor not in ("0", "1"):
             return None
-        if pagina == "SUBIDA":
+        if pagina == "SUBIDA" and "LANCAR" not in self._rodando:
             if tipo == "ENC":
                 self.menu.girar(cliques, agora)
             elif valor == "1":
