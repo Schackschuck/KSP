@@ -419,6 +419,43 @@ class TestGiro(unittest.TestCase):
         self.assertFalse(achou)
         self.assertEqual(giro, subida.GIRO_PADRAO_AR)
 
+    def test_circularizacao_simulada_e_uma_queima_finita(self):
+        r = KERBIN.raio + 75_000.0
+        ra = KERBIN.raio + 80_000.0
+        v_t = 1_500.0
+        v_a = v_t * r / ra
+        v_r = math.sqrt(v_a**2 + 2.0 * KERBIN.mu * (1.0 / r - 1.0 / ra) - v_t**2)
+        impulsiva = math.sqrt(KERBIN.mu / ra) - v_a
+        dv, _ = simular(KERBIN, self.estagios, EstadoSim(r, v_r, v_t), 0.0, 80_000.0, 1.0, 175.0)
+        self.assertGreater(dv, impulsiva + 1.0)
+        self.assertLess(dv, impulsiva * 1.3)
+
+    def test_desvio_deita_uma_subida_em_pe(self):
+        r = KERBIN.raio + 10_000.0
+        estado = EstadoSim(r, 400.0, 175.0 * r / KERBIN.raio + 40.0)
+        desvio = subida.escolher_desvio(KERBIN, self.estagios, estado, 80_000.0, 1.0, 175.0)
+        self.assertGreater(desvio, 0.0)
+        self.assertLessEqual(desvio, subida.DESVIO_MAX)
+
+        def custo(d):
+            return simular(KERBIN, self.estagios, estado, 0.0, 80_000.0, 1.0, 175.0, d)[0]
+
+        self.assertLess(custo(desvio), custo(0.0))
+
+    def test_estagios_restantes_descontam_o_que_ja_foi_gasto(self):
+        baixo, cima = self.estagios
+        m0 = baixo.massa_inicial
+        agora = subida.estagios_restantes(self.estagios, m0 - 1_000.0)
+        self.assertEqual(len(agora), 2)
+        self.assertAlmostEqual(agora[0].massa_inicial, m0 - 1_000.0)
+        self.assertAlmostEqual(agora[0].combustivel, baixo.combustivel - 1_000.0)
+        self.assertEqual(agora[1], cima)
+        depois = m0 - baixo.combustivel - baixo.seca_solta - 500.0
+        agora = subida.estagios_restantes(self.estagios, depois)
+        self.assertEqual(len(agora), 1)
+        self.assertAlmostEqual(agora[0].massa_inicial, depois)
+        self.assertAlmostEqual(agora[0].combustivel, cima.combustivel - 500.0)
+
     def test_sem_ar_a_faixa_e_a_do_vacuo(self):
         estagios = NaveSimulada.mun().estagios()
         estado = EstadoSim(MUN.raio + 300.0, 50.0, 9.0)
@@ -641,6 +678,20 @@ class TestVoos(unittest.TestCase):
         self.assertTrue(78_500.0 < r.pe < 81_500.0, r.pe)
         self.assertTrue(3_000.0 < r.dv < 4_200.0, r.dv)
 
+    def test_nave_que_vira_devagar_gasta_menos_com_a_malha_fechada(self):
+        resultados = {}
+        for fechada in (True, False):
+            with mock.patch.object(subida, "DESVIO_MAX", subida.DESVIO_MAX if fechada else 0.0):
+                nave = NaveSimulada.kerbin()
+                nave.giro_com_empuxo = 1.0
+                guiagem = Guiagem(KERBIN, 80_000.0, 0.0, ler_estagios=nave.estagios)
+                resultados[fechada] = voar(nave, guiagem)
+        fechada, aberta = resultados[True], resultados[False]
+        self.assertEqual(fechada.fase, ORBITA)
+        self.assertEqual(aberta.fase, ORBITA)
+        self.assertTrue(78_500.0 < fechada.pe < fechada.ap < 81_500.0, (fechada.pe, fechada.ap))
+        self.assertLess(fechada.dv, aberta.dv - 100.0)
+
     def test_desalinhado_o_motor_fica_baixo_para_virar(self):
         nave = NaveSimulada.kerbin(aceso=True)
         guiagem = Guiagem(KERBIN, 80_000.0, 0.0, ler_estagios=nave.estagios)
@@ -703,9 +754,11 @@ class TestVoos(unittest.TestCase):
         for altitude in (75_000.0, 200_000.0, 700_000.0):
             with self.subTest(altitude=altitude):
                 r = subir_de_kerbin(altitude, 0.0)
+                raio = KERBIN.raio + altitude
+                tolerancia = max(1_000.0, 8.0 * raio * subida.TOL_DV / math.sqrt(KERBIN.mu / raio))
                 self.assertEqual(r.fase, ORBITA)
-                self.assertAlmostEqual(r.ap, altitude, delta=1_000.0)
-                self.assertAlmostEqual(r.pe, altitude, delta=1_000.0)
+                self.assertAlmostEqual(r.ap, altitude, delta=tolerancia)
+                self.assertAlmostEqual(r.pe, altitude, delta=tolerancia)
 
     def test_plano_de_um_alvo_com_a_janela_umas_horas_a_frente(self):
         for atraso, sentido in ((7_200.0, 1), (7_200.0, -1), (5_000.0, 1)):
@@ -1758,7 +1811,7 @@ class TestMain(unittest.TestCase):
         self.assertIn("Em órbita", texto)
         self.assertIn("--> COSTA", texto)
         self.assertRegex(texto, r"--> GIRO a .*, giro de [0-9.]+°")
-        self.assertRegex(texto, r"pitch +[-0-9.]+  nariz +[-0-9.]+  rumo")
+        self.assertRegex(texto, r"pitch +[-0-9.]+  nariz +[-0-9.]+  desvio +[-0-9.]+  rumo")
 
     def test_demo_com_plano_do_alvo_passa_pela_janela_e_iguala_o_plano(self):
         codigo, texto = self.rodar("--demo", "--plano-do-alvo")

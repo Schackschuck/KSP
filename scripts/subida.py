@@ -24,10 +24,11 @@ Fases
  DECOLAGEM    sobe na vertical até ter ar (ou velocidade) para começar o giro
  GIRO         inclina o nariz do ângulo escolhido por simulação e espera o
               movimento acompanhar o nariz
- CURVA        no ar: o nariz segue o movimento em relação ao ar (sem ângulo de
-              ataque), só o rumo pode desviar um pouco, para ir ao plano
+ CURVA        no ar: o nariz segue o movimento em relação ao ar, com o desvio
+              replanejado (até DESVIO_MAX graus abaixo); o rumo pode desviar um
+              pouco, para ir ao plano
  VACUO        acima de parte da atmosfera (ou sem ar): o nariz segue o pró-grado
-              orbital
+              orbital, com o desvio replanejado
  COSTA        motor cortado no apoastro pedido; sobe até o apoastro, esperando
               com time warp, e acende de leve se o ar baixar o apoastro
  CIRCULARIZA  queima em malha fechada até a velocidade circular, no plano
@@ -37,13 +38,20 @@ Fases
 
 O giro
 ------
-O ângulo de inclinação inicial (o "giro") é o único parâmetro do perfil. Perto
+O ângulo de inclinação inicial (o "giro") começa a curva de gravidade. Perto
 do chão a guiagem simula a subida inteira, em 2D, no plano da órbita: gravidade,
 empuxo e Isp que mudam com a pressão, arrasto do ar (com a área medida em voo),
-troca de estágios, o limite de pressão dinâmica e o corte no apoastro, com o
-Δv de circularização no fim. Testa AMOSTRAS_GIRO valores na faixa e refina o
-melhor por seção áurea: fica o giro de menor Δv total. A simulação usa as mesmas
-funções de acelerador (acel_q, acel_corte) da guiagem.
+troca de estágios, o limite de pressão dinâmica, o corte no apoastro e a queima
+de circularização, finita. Testa AMOSTRAS_GIRO valores na faixa, em progressão
+geométrica, e refina o melhor por seção áurea: fica o giro de menor Δv total.
+A simulação usa as mesmas funções de acelerador (acel_q, acel_corte) da guiagem.
+
+A curva depois do giro é em malha fechada: na CURVA e no VACUO, a cada
+REPLANEJAR s, a guiagem simula de novo o resto da subida a partir do estado de
+agora e escolhe o desvio do nariz (graus abaixo do movimento, de -DESVIO_MAX a
+DESVIO_MAX) de menor Δv. Com empuxo/peso perto de 1, a curva passiva é sensível
+demais: o tempo que uma nave pesada leva para virar no giro deixava a subida
+bem mais em pé que a simulada.
 
 Rumo e plano
 ------------
@@ -53,12 +61,14 @@ rotação do planeta.
 
 Com o plano de um alvo, o plano é fixo no espaço, e o erro de posição que sobra
 da subida é corrigido pela fase PLANO. Sem alvo, o plano é refeito a cada passo,
-da decolagem até o fim da circularização: é o plano que passa pela posição de
-agora com a inclinação pedida (plano_pela_posicao), com o ramo para o norte ou
-para o sul escolhido pela velocidade. A rotação do planeta empurra a nave para
-fora do plano da decolagem, e assim ela não precisa voltar a ele: a inclinação
-final sai a menos de 0,1° da pedida. Inclinação menor que a latitude da base
-não existe: sai na menor possível, com o aviso INCLINACAO.
+da decolagem até o começo da circularização: é o plano que passa pela posição
+de agora com a inclinação pedida (plano_pela_posicao), com o ramo para o norte
+ou para o sul escolhido pela velocidade. A rotação do planeta empurra a nave
+para fora do plano da decolagem, e assim ela não precisa voltar a ele: a
+inclinação final sai a menos de 0,1° da pedida. Na circularização o plano fica
+parado: refeito perto da latitude máxima da órbita, ele mudava a cada passo, e
+a queima nunca zerava a diferença para o lado. Inclinação menor que a latitude
+da base não existe: sai na menor possível, com o aviso INCLINACAO.
 
 No cockpit, quem abre o script é a ponte da tela (bridge/mfd.py), quando o
 korry LANCAR fica apertado 5 s, com os valores escolhidos na página SUBIDA; o
@@ -113,6 +123,8 @@ GIRO_PADRAO_AR = 5.0
 GIRO_PADRAO_VACUO = 45.0
 GIRO_MAX_S = 20.0
 TOL_GIRO = 0.5
+DESVIO_MAX = 4.0
+REPLANEJAR = 5.0
 FRACAO_VACUO = 0.6
 DESVIO_AR = 3.0
 V_RUMO_MIN = 50.0
@@ -142,7 +154,8 @@ SUAVIZACAO = 0.2
 DT_MAX_DV = 1.0
 PASSO_SIM = 0.5
 T_MAX_SIM = 1200.0
-AMOSTRAS_GIRO = 12
+AMOSTRAS_GIRO = 16
+AMOSTRAS_DESVIO = 9
 ITERACOES_GIRO = 12
 AMOSTRAS_JANELA = 720
 ITERACOES_JANELA = 40
@@ -185,7 +198,7 @@ AVISO_ALTITUDE = "ALTITUDE"
 AVISO_INCLINACAO = "INCLINACAO"
 AVISO_ALVO = "ALVO"
 AVISO_COMBUSTIVEL = "COMBUSTIVEL"
-FASES_DO_PLANO = (DECOLAGEM, GIRO, CURVA, VACUO, COSTA, CIRCULARIZA)
+FASES_DO_PLANO = (DECOLAGEM, GIRO, CURVA, VACUO, COSTA)
 PRIORIDADE_AVISOS = (
     AVISO_COMBUSTIVEL,
     AVISO_ALVO,
@@ -566,8 +579,8 @@ def no_relativo(corpo, r, v, n_alvo):
     return menor / math.sqrt(corpo.mu / a**3), u
 
 
-def simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0):
-    """(dv, duracao) de uma subida simulada com o giro dado; (inf, inf) se for inviável.
+def simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0, desvio=0.0):
+    """(dv, duracao) de uma subida simulada com o giro e o desvio dados; (inf, inf) se for inviável.
 
     Em 2D, no plano da subida, em coordenadas polares inerciais: r, v_r
     (subida) e v_t (horizontal, ao longo de d). O ar gira com o planeta, então
@@ -583,15 +596,20 @@ def simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0):
     passos de PASSO_SIM. A atitude é a da guiagem: theta = 90 - giro até o
     movimento em relação ao ar alcançá-lo (ou passar GIRO_MAX_S), depois o
     movimento em relação ao ar abaixo de FRACAO_VACUO·topo, e o pró-grado
-    inercial acima (ou sempre, sem ar). O acelerador é
-    min(acel_q, acel_corte). Depois do corte (apoastro a TOL_AP do pedido) a
-    nave sobe sem motor, com arrasto, e acende com ACEL_COSTA ao longo do
-    pró-grado se o apoastro cair mais de TOL_COSTA; ao sair do ar soma-se a
-    circularização, sqrt(mu/ra) - h/ra, com h = r·v_t.
+    inercial acima (ou sempre, sem ar), os dois com o nariz desvio graus
+    abaixo, até o corte. O acelerador é min(acel_q, acel_corte). Depois do
+    corte (apoastro a TOL_AP do pedido) a nave sobe sem motor, com arrasto, e
+    acende com ACEL_COSTA ao longo do pró-grado se o apoastro cair mais de
+    TOL_COSTA. Fora do ar, segue sem motor até faltar metade da queima para o
+    apoastro e circulariza como a guiagem: a queima mira w, a diferença entre
+    a velocidade circular ali e a de agora, até |w| ficar abaixo de TOL_DV ou
+    voltar a crescer no fim. Uma queima longa sai mais cara que a conta
+    impulsiva, porque a nave perde altura e gasta empuxo segurando.
 
     Inviável: bater no chão, descer abaixo da altitude do início do giro antes
-    do corte, acabar o combustível antes do corte ou passar de T_MAX_SIM.
-    Devolve o Δv total (somando empuxo/massa·dt, como a guiagem) e o tempo.
+    do corte, acabar o combustível antes do corte ou na circularização, ou
+    passar de T_MAX_SIM. Devolve o Δv total (somando empuxo/massa·dt, como a
+    guiagem) e o tempo.
     """
     mu, raio, topo = corpo.mu, corpo.raio, corpo.topo
     r0 = estado.r
@@ -605,6 +623,8 @@ def simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0):
     cortou = False
     alcancou = False
     costa = False
+    queimando = False
+    w_min = math.inf
     dt = PASSO_SIM
     while t < T_MAX_SIM:
         alt = r - raio
@@ -614,10 +634,9 @@ def simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0):
         ap = ra - raio
         if not cortou and ap >= alvo_alt - TOL_AP:
             cortou = True
-        if cortou and alt >= topo:
-            if not math.isfinite(ra):
-                return math.inf, math.inf
-            return dv + math.sqrt(mu / ra) - r * v_t / ra, t
+        fora = cortou and alt >= topo
+        if fora and not queimando and not math.isfinite(ra):
+            return math.inf, math.inf
         if not cortou and alt < alt0:
             return math.inf, math.inf
 
@@ -632,7 +651,7 @@ def simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0):
             massa -= e.seca_solta + max(combustivel, 0.0)
             indice += 1
             combustivel = estagios[indice].combustivel
-        if esgotado and not cortou:
+        if esgotado and (not cortou or fora):
             return math.inf, math.inf
 
         rho = corpo.densidade(alt)
@@ -646,6 +665,23 @@ def simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0):
             acel = 0.0
         elif not cortou:
             acel = min(acel_q(q), acel_corte(ap, alvo_alt))
+        elif fora:
+            e = estagios[indice]
+            w_r, w_t = -v_r, math.sqrt(mu / r) - v_t
+            w = math.hypot(w_r, w_t)
+            empuxo_vac = empuxo_em(e, 0.0)
+            if not queimando:
+                dv_circ = math.sqrt(mu / ra) - r * v_t / ra
+                duracao = tempo_de_queima(dv_circ, massa, empuxo_vac, isp_em(e, 0.0))
+                if v_r <= 0.0 or tempo_ate_apoastro(corpo, (r, 0.0, 0.0), (v_r, v_t, 0.0)) <= duracao / 2.0:
+                    queimando = True
+            if queimando:
+                if w < TOL_DV or (w_min < W_PROXIMO and w > w_min + W_CRESCE):
+                    return dv, t
+                w_min = min(w_min, w)
+                acel = min(1.0, max(ACEL_MIN, w * massa / (empuxo_vac * TEMPO_FINAL)))
+            else:
+                acel = 0.0
         else:
             if ap < alvo_alt - TOL_COSTA:
                 costa = True
@@ -659,10 +695,14 @@ def simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0):
                 alcancou = True
         if not alcancou:
             theta = 90.0 - giro
-        elif cortou or topo <= 0.0 or alt >= FRACAO_VACUO * topo:
+        elif queimando:
+            theta = math.degrees(math.atan2(-v_r, math.sqrt(mu / r) - v_t))
+        elif cortou:
             theta = math.degrees(math.atan2(v_r, v_t))
+        elif topo <= 0.0 or alt >= FRACAO_VACUO * topo:
+            theta = math.degrees(math.atan2(v_r, v_t)) - desvio
         else:
-            theta = math.degrees(math.atan2(v_r, va_t))
+            theta = math.degrees(math.atan2(v_r, va_t)) - desvio
 
         empuxo = 0.0
         dm = 0.0
@@ -690,39 +730,29 @@ def simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0):
     return math.inf, math.inf
 
 
-def escolher_giro(corpo, estagios, estado, alvo_alt, area, v_ar0):
-    """(giro, achou): o giro de menor Δv total pela simulação.
+def minimizar(custo, xs, iteracoes):
+    """(x, custo(x)): o menor custo entre as amostras xs (em ordem), refinado; (None, inf) se nenhuma serve.
 
-    A faixa é GIRO_AR com ar e GIRO_VACUO sem. Testa AMOSTRAS_GIRO valores
-    igualmente espaçados e refina por seção áurea entre os vizinhos do melhor,
-    ITERACOES_GIRO vezes; o resultado nunca é pior que a melhor amostra. Se
-    nenhum valor chega em órbita, devolve o giro padrão e achou = False.
+    Testa as amostras e refina por seção áurea entre os vizinhos da melhor,
+    iteracoes vezes; o resultado nunca é pior que a melhor amostra.
     """
-    com_ar = corpo.topo > 0.0
-    baixo, alto = GIRO_AR if com_ar else GIRO_VACUO
-    padrao = GIRO_PADRAO_AR if com_ar else GIRO_PADRAO_VACUO
-
-    def custo(giro):
-        return simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0)[0]
-
-    passo = (alto - baixo) / (AMOSTRAS_GIRO - 1)
-    giros = [baixo + i * passo for i in range(AMOSTRAS_GIRO)]
-    custos = [custo(g) for g in giros]
-    k = min(range(AMOSTRAS_GIRO), key=custos.__getitem__)
+    amostras = len(xs)
+    custos = [custo(x) for x in xs]
+    k = min(range(amostras), key=custos.__getitem__)
     if math.isinf(custos[k]):
-        return padrao, False
+        return None, math.inf
 
-    melhor_giro, melhor_custo = giros[k], custos[k]
-    esquerda = giros[max(k - 1, 0)]
-    direita = giros[min(k + 1, AMOSTRAS_GIRO - 1)]
+    melhor_x, melhor_custo = xs[k], custos[k]
+    esquerda = xs[max(k - 1, 0)]
+    direita = xs[min(k + 1, amostras - 1)]
     razao = (math.sqrt(5.0) - 1.0) / 2.0
     c = direita - razao * (direita - esquerda)
     d = esquerda + razao * (direita - esquerda)
     f_c, f_d = custo(c), custo(d)
-    for _ in range(ITERACOES_GIRO):
-        for giro, valor in ((c, f_c), (d, f_d)):
+    for _ in range(iteracoes):
+        for x, valor in ((c, f_c), (d, f_d)):
             if valor < melhor_custo:
-                melhor_giro, melhor_custo = giro, valor
+                melhor_x, melhor_custo = x, valor
         if f_c <= f_d:
             direita, d, f_d = d, c, f_c
             c = direita - razao * (direita - esquerda)
@@ -731,10 +761,64 @@ def escolher_giro(corpo, estagios, estado, alvo_alt, area, v_ar0):
             esquerda, c, f_c = c, d, f_d
             d = esquerda + razao * (direita - esquerda)
             f_d = custo(d)
-    for giro, valor in ((c, f_c), (d, f_d)):
+    for x, valor in ((c, f_c), (d, f_d)):
         if valor < melhor_custo:
-            melhor_giro, melhor_custo = giro, valor
-    return melhor_giro, True
+            melhor_x, melhor_custo = x, valor
+    return melhor_x, melhor_custo
+
+
+def escolher_giro(corpo, estagios, estado, alvo_alt, area, v_ar0):
+    """(giro, achou): o giro de menor Δv total pela simulação.
+
+    A faixa é GIRO_AR com ar e GIRO_VACUO sem, com AMOSTRAS_GIRO amostras em
+    progressão geométrica e ITERACOES_GIRO refinamentos (minimizar). As
+    amostras ficam mais juntas nos giros pequenos: com empuxo/peso perto de 1,
+    só uma janela estreita de giros pequenos chega em órbita (abaixo dela a
+    subida fica em pé demais para circularizar, acima a trajetória desaba).
+    Se nenhum valor chega em órbita, devolve o giro padrão e achou = False.
+    """
+    com_ar = corpo.topo > 0.0
+    baixo, alto = GIRO_AR if com_ar else GIRO_VACUO
+    padrao = GIRO_PADRAO_AR if com_ar else GIRO_PADRAO_VACUO
+
+    def custo(giro):
+        return simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0)[0]
+
+    razao = (alto / baixo) ** (1.0 / (AMOSTRAS_GIRO - 1))
+    giros = [baixo * razao**i for i in range(AMOSTRAS_GIRO)]
+    giro, _ = minimizar(custo, giros, ITERACOES_GIRO)
+    if giro is None:
+        return padrao, False
+    return giro, True
+
+
+def escolher_desvio(corpo, estagios, estado, alvo_alt, area, v_ar0):
+    """O desvio do nariz (graus abaixo do movimento) de menor Δv até a órbita, ou None se nenhum serve.
+
+    Replaneja a subida a partir do estado de agora, com o movimento já
+    alcançado (giro 0), na faixa [-DESVIO_MAX, DESVIO_MAX]. É o que fecha a
+    malha da curva de gravidade: o desvio corrige o que a escolha do giro
+    errou, como o tempo que uma nave pesada leva para virar.
+    """
+
+    def custo(desvio):
+        return simular(corpo, estagios, estado, 0.0, alvo_alt, area, v_ar0, desvio)[0]
+
+    passo = 2.0 * DESVIO_MAX / (AMOSTRAS_DESVIO - 1)
+    desvios = [-DESVIO_MAX + i * passo for i in range(AMOSTRAS_DESVIO)]
+    desvio, _ = minimizar(custo, desvios, ITERACOES_GIRO)
+    return desvio
+
+
+def estagios_restantes(estagios, massa):
+    """Os estágios lidos antes, descontando a massa já gasta: larga os que acabaram e começa com a massa de agora."""
+    resto = list(estagios)
+    consumida = estagios[0].massa_inicial - massa
+    while len(resto) > 1 and consumida >= resto[0].combustivel + resto[0].seca_solta:
+        consumida -= resto[0].combustivel + resto[0].seca_solta
+        resto.pop(0)
+    primeiro = replace(resto[0], massa_inicial=massa, combustivel=max(0.0, resto[0].combustivel - max(consumida, 0.0)))
+    return [primeiro] + resto[1:]
 
 
 class Guiagem:
@@ -761,6 +845,9 @@ class Guiagem:
         self._ler_estagios = ler_estagios
         self.fase = DECOLAGEM
         self.giro = None
+        self.desvio = 0.0
+        self._estagios_giro = None
+        self._replanejar_em = -math.inf
         self.n = None
         self.inclinacao_alvo = inclinacao
         self.janela = None
@@ -948,12 +1035,28 @@ class Guiagem:
         if not estagios:
             self.giro = GIRO_PADRAO_AR if self.corpo.topo > 0.0 else GIRO_PADRAO_VACUO
             return
-        d = direcao_no_plano(self.n, l.r)
-        estado = EstadoSim(norma(l.r), ponto(l.v, self._cima), ponto(l.v, d))
-        v_ar0 = ponto(sub(l.v, l.v_sup), d)
+        self._estagios_giro = estagios
+        estado, v_ar0 = self._estado_sim(l)
         self.giro, achou = escolher_giro(self.corpo, estagios, estado, self.alvo_alt, self.area, v_ar0)
         if not achou:
             self._avisar(AVISO_COMBUSTIVEL)
+
+    def _estado_sim(self, l):
+        """(EstadoSim, v_ar0): o ponto de partida da simulação, no plano da órbita."""
+        d = direcao_no_plano(self.n, l.r)
+        estado = EstadoSim(norma(l.r), ponto(l.v, self._cima), ponto(l.v, d))
+        return estado, ponto(sub(l.v, l.v_sup), d)
+
+    def _replanejar(self, l):
+        """Escolhe de novo o desvio do nariz a cada REPLANEJAR s, a partir do estado de agora."""
+        if self._estagios_giro is None or l.t < self._replanejar_em:
+            return
+        self._replanejar_em = l.t + REPLANEJAR
+        estagios = estagios_restantes(self._estagios_giro, l.massa)
+        estado, v_ar0 = self._estado_sim(l)
+        desvio = escolher_desvio(self.corpo, estagios, estado, self.alvo_alt, self.area, v_ar0)
+        if desvio is not None:
+            self.desvio = desvio
 
     def _subir(self, l, pitch, rumo):
         """O motor das fases com a subida acesa; passa para COSTA ao chegar no apoastro pedido."""
@@ -974,7 +1077,8 @@ class Guiagem:
         if self._altitude >= FRACAO_VACUO * self.corpo.topo:
             self.fase = VACUO
             return None
-        pitch = pitch_de(l.v_sup, self._cima)
+        self._replanejar(l)
+        pitch = pitch_de(l.v_sup, self._cima) - self.desvio
         rumo = self._rumo_plano(l)
         if norma(horizontal(l.v_sup, self._cima)) > V_RUMO_MIN:
             rumo_chao = rumo_de(l.v_sup, l.norte, l.leste)
@@ -983,7 +1087,8 @@ class Guiagem:
         return self._subir(l, pitch, rumo)
 
     def _fase_vacuo(self, l):
-        return self._subir(l, pitch_de(l.v, self._cima), self._rumo_plano(l))
+        self._replanejar(l)
+        return self._subir(l, pitch_de(l.v, self._cima) - self.desvio, self._rumo_plano(l))
 
     def _w_circular(self, l):
         """O que falta de velocidade para a circular de agora, no plano n."""
@@ -1165,9 +1270,9 @@ class NaveSimulada:
     longo do nariz (com empuxo e Isp que mudam com a pressão), arrasto
     area·densidade·|v_sup|² contra a velocidade em relação ao ar (que gira com
     o planeta) e a massa caindo. O nariz gira para a direção pedida (pitch e
-    rumo no horizonte local) a no máximo GIRO_NARIZ_MAX graus por segundo, e a
-    giro_sem_empuxo graus por segundo com o motor apagado (0 é o foguete
-    grande que só vira pelo gimbal).
+    rumo no horizonte local) a no máximo giro_com_empuxo graus por segundo
+    (GIRO_NARIZ_MAX, se ninguém mudar), e a giro_sem_empuxo graus por segundo
+    com o motor apagado (0 é o foguete grande que só vira pelo gimbal).
 
     A nave começa parada no chão (pousada) na latitude e longitude da base, e
     fica presa a ele, girando com o planeta, até o empuxo para cima vencer o
@@ -1191,6 +1296,7 @@ class NaveSimulada:
         self._acelerador = 0.0
         self._pitch = 90.0
         self._rumo = 90.0
+        self.giro_com_empuxo = GIRO_NARIZ_MAX
         self.giro_sem_empuxo = GIRO_NARIZ_MAX
 
         polo = corpo.polo
@@ -1236,7 +1342,7 @@ class NaveSimulada:
         alvo = self._direcao(self._pitch, self._rumo)
         c = limitar(ponto(self.nariz, alvo), -1.0, 1.0)
         com_empuxo = self.aceso and self._acelerador > 0.0 and self.combustivel > 0.0
-        passo = math.radians(GIRO_NARIZ_MAX if com_empuxo else self.giro_sem_empuxo) * dt
+        passo = math.radians(self.giro_com_empuxo if com_empuxo else self.giro_sem_empuxo) * dt
         if math.acos(c) <= passo:
             self.nariz = alvo
             return
@@ -1852,7 +1958,8 @@ def status(l, guiagem, corpo, comando):
     return (
         f"{guiagem.fase:11} alt {(norma(l.r) - corpo.raio) / 1000:7.1f} km  ap {ap} km  pe {pe} km  "
         f"q {l.q:6.0f} Pa  inc {inclinacao_de(corpo, l.r, l.v):6.1f}  motor {guiagem.acelerador * 100:3.0f}%  "
-        f"pitch {comando.pitch:5.1f}  nariz {pitch_de(l.nariz, unit(l.r)):5.1f}  rumo {comando.rumo:5.1f}"
+        f"pitch {comando.pitch:5.1f}  nariz {pitch_de(l.nariz, unit(l.r)):5.1f}  desvio {guiagem.desvio:4.1f}  "
+        f"rumo {comando.rumo:5.1f}"
     )
 
 
