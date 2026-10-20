@@ -228,7 +228,13 @@ ARGS=192.168.50.1 --celular
 
 - `192.168.50.1` é o PC, pelo cabo.
 - `--celular`: a tela no navegador do celular, em `http://IP_DO_PI:8000`, e a página de botões em `:8001`. O `IP_DO_PI` aqui é o da Wi-Fi de casa, porque é nela que o celular está.
-- `--porta /dev/ttyUSB0`: a mikromedia, na USB do Pi, no lugar do `--celular`. O `ls /dev/ttyUSB*` mostra a porta.
+- `--porta`: a mikromedia, na USB do Pi, no lugar do `--celular`.
+  - O cabo vai na **PROG**, a mini-USB ao lado do chip FT232RL. A marcada **USB** só alimenta a placa, que fica em `SEM SINAL`.
+  - O `ls -l /dev/serial/by-id/` mostra a porta, como `usb-FTDI_FT232R_USB_UART_A800FBZD-if00-port0 -> ../../ttyUSB0`. Use o caminho inteiro do `by-id`, e não o `/dev/ttyUSB0`, que pode trocar de número quando outra placa USB-serial entra (o Nano, por exemplo):
+    ```
+    ARGS=192.168.50.1 --porta /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A800FBZD-if00-port0
+    ```
+  - Com o `--porta`, a tela do celular (a porta 8000) desliga. A página de botões (a 8001) continua.
 - Depois de mudar o arquivo: `sudo systemctl restart ksp-tela@USUARIO`.
 
 **Acompanhar e parar:**
@@ -263,6 +269,7 @@ sudo systemctl disable --now ksp-tela@USUARIO    # para de vez
 | `nmtui` → `nm-CRITICAL ... assertion '<dropped>' failed` | Defeito do próprio `nmtui` | Ignorar: a edição funciona |
 | `source ~/ksp/bin/activate` → `No such file or directory` | O venv e o projeto não foram instalados neste Pi, ou neste usuário | Itens 4 e 5 |
 | A ponte repete `recusou a conexão` | O KSP está fechado, ou o servidor do kRPC está desligado | Abrir o jogo: a ponte conecta sozinha em até 5 s |
+| A ponte conecta no jogo, mas a mikromedia fica em `SEM SINAL` | O serviço está com `--celular`, ou o cabo está na mini-USB marcada USB | Cabo na PROG e `--porta` com o caminho do `by-id` (item 9) |
 
 ## Manutenção
 
