@@ -118,16 +118,16 @@ Assim, não existe tabela de slots no firmware. O Mega avisa a ponte qual módul
 | [Ação executiva](construcao.md#ação-executiva) (STAGE, ABORT e os 6 scripts) | 8 | 14 | média | 1 | 1, 8 |
 | [Tempo](construcao.md#tempo) | 9 | 1 | média | 2 | 2, 8 |
 | [Sidestick](construcao.md#sidestick) (3 eixos analógicos) | 1 | 3 | pequena, slots 1 a 5 | 3 | 1, 2, 7 |
-| [Tela multifunção](construcao.md#tela-multifunção) (páginas e SILENCIAR) | 5 | 0 | pequena | 4 | 3, 7 |
+| [Tela multifunção](construcao.md#tela-multifunção) (encoder AJUSTE, SILENCIAR, luzes do piloto e ESTOL) | 4 | 4 | pequena | 4 | 3, 7 |
 | [Acelerador](construcao.md#acelerador) (alavanca analógica, trem, freios e luzes) | 3 | 3 | pequena, slots 1 a 5 | 5 | 1, 3, 7 |
-| [Recursos e EVA](construcao.md#recursos-e-eva) | 6 | 2 | pequena | 6 | 2, 3, 7 |
-| [Voo](construcao.md#painel-de-sistemas-de-controle) (sistemas de controle: SAS, RCS, FBW e piloto automático) | 17 | 31 | grande | 7 | 1, 2, 3, 7, 8 |
+| [EVA](construcao.md#eva) | 6 | 2 | pequena | 6 | 2, 3, 7 |
+| [Voo](construcao.md#painel-de-sistemas-de-controle) (sistemas de controle: SAS, RCS e FBW) | 14 | 27 | grande | 7 | 1, 2, 3, 7, 8 |
 | [Action groups](construcao.md#action-groups) (1 a 8 e as peças) | 12 | 4 | média | 8 | 4, 8 |
 | [Câmera](construcao.md#câmera) | 5 | 2 | pequena | 9 | 1, 4, 7 |
-| [Navegação](construcao.md#navegação) | 10 | 0 | média | 10 | 2, 4, 8 |
-| [Editor de manobras](construcao.md#painel-do-editor-de-manobras) | 16 | 3 | média | 12 | 3, 4, 8 |
+| [Navegação](construcao.md#navegação) | 8 | 0 | pequena | 10 | 2, 4, 7 |
+| [Editor de manobras](construcao.md#painel-do-editor-de-manobras) | 14 | 3 | média | 12 | 3, 4, 8 |
 
-São 11 módulos da [versão B do cockpit](construcao.md#cockpit-versão-b): 5 pequenos, 5 médios e 1 grande, e sobra 1 slot. O sidestick e o acelerador vão nos slots 1 a 5, os únicos com linhas analógicas: o sidestick usa as três (X, Y e torção), o acelerador uma. As 4 barras de recursos e a da EVA (50 LEDs) não passam pelo backplane: um MAX7219 ligado direto em 3 pinos do Mega acende todas. As seções da mesma placa podem ficar longe uma da outra no painel: os fios dos botões até a placa podem ter uns 30 cm.
+São 11 módulos da [versão B do cockpit](construcao.md#cockpit-versão-b): 6 pequenos, 4 médios e 1 grande, e sobra 1 slot. O sidestick e o acelerador vão nos slots 1 a 5, os únicos com linhas analógicas: o sidestick usa as três (X, Y e torção), o acelerador uma. As seções da mesma placa podem ficar longe uma da outra no painel: os fios dos botões até a placa podem ter uns 30 cm.
 
 Os números 3, 4, 6, 9 e 11 mudaram de seção com a versão B: antes eram os analógicos de rotação e translação, a telemetria, a EVA e a câmera. O firmware ainda não lê as etiquetas, então nada no código muda.
 

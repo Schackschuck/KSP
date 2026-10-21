@@ -3,7 +3,7 @@ var P = require("../pecas");
 
 var L = 125, F = 8;
 var lugar = {
-  action_groups: [0, 0], recursos_eva: [0, 1], acelerador: [0, 2],
+  action_groups: [0, 0], eva: [0, 1], acelerador: [0, 2],
   navegacao: [1, 0], tela: [2, 0], editor_manobras: [4, 0],
   acao_executiva: [1, 1], voo: [2, 1], tempo: [4, 1], camera: [5, 1], sidestick: [5, 2]
 };
