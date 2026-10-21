@@ -31,7 +31,8 @@ Fases
               orbital, com o desvio replanejado
  COSTA        motor cortado no apoastro pedido; sobe até o apoastro, esperando
               com time warp, e acende de leve se o ar baixar o apoastro
- CIRCULARIZA  queima em malha fechada até a velocidade circular, no plano
+ CIRCULARIZA  queima em malha fechada até a velocidade circular na altitude
+              pedida, no plano, centrada no apoastro
  PLANO        se pediu o plano de um alvo e sobrou erro: queima no nó
  ORBITA       fim bom
  FALHA        fim ruim (sem combustível, plano fora do alcance...)
@@ -142,6 +143,7 @@ ERRO_APONTAR = 5.0
 ERRO_VIRAR = 45.0
 ACEL_VIRAR = 0.1
 TEMPO_FINAL = 3.0
+TEMPO_ALTURA = 20.0
 TOL_DV = 0.3
 W_PROXIMO = 10.0
 W_CRESCE = 0.5
@@ -422,6 +424,40 @@ def tempo_de_queima(dv, massa, empuxo, isp):
     return (massa - m_fim) * ve / empuxo
 
 
+def tempo_de_queima_estagios(dv, estagios):
+    """Segundos para gastar dv (m/s) no vácuo, passando pelos estágios em ordem.
+
+    Uma queima que esvazia o estágio de agora continua no seguinte, com o
+    empuxo e o Isp dele: um núcleo quase vazio seguido de um estágio de cima
+    fraco leva muito mais tempo que a conta só com o estágio de agora. Se o dv
+    passa do que sobra, devolve o tempo de queimar tudo.
+    """
+    t = 0.0
+    for e in estagios:
+        empuxo, isp = empuxo_em(e, 0.0), isp_em(e, 0.0)
+        if empuxo <= 0.0 or e.combustivel <= 0.0:
+            continue
+        ve = isp * G0
+        disponivel = ve * math.log(e.massa_inicial / (e.massa_inicial - e.combustivel))
+        if dv <= disponivel:
+            return t + tempo_de_queima(dv, e.massa_inicial, empuxo, isp)
+        t += e.combustivel * ve / empuxo
+        dv -= disponivel
+    return t
+
+
+def subida_ate(distancia, tempo):
+    """A velocidade vertical (m/s) pedida a tempo s do fim da queima, a distancia m abaixo da altitude pedida.
+
+    É a reta até zero que cobre a distância no tempo que falta: 2·distancia/tempo.
+    Com menos de TEMPO_ALTURA, cai junto com o tempo, para a queima sempre
+    terminar sem velocidade vertical, mesmo sem ter chegado na altitude.
+    """
+    if tempo >= TEMPO_ALTURA:
+        return 2.0 * distancia / tempo
+    return 2.0 * distancia * tempo / TEMPO_ALTURA**2
+
+
 def acelerador_de_virada(erro):
     """O acelerador máximo com o nariz a erro graus da queima.
 
@@ -614,10 +650,12 @@ def simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0, desvio=0.0):
     corte (apoastro a TOL_AP do pedido) a nave sobe sem motor, com arrasto, e
     acende com ACEL_COSTA ao longo do pró-grado se o apoastro cair mais de
     TOL_COSTA. Fora do ar, segue sem motor até faltar metade da queima para o
-    apoastro e circulariza como a guiagem: a queima mira w, a diferença entre
-    a velocidade circular ali e a de agora, até |w| ficar abaixo de TOL_DV ou
-    voltar a crescer no fim. Uma queima longa sai mais cara que a conta
-    impulsiva, porque a nave perde altura e gasta empuxo segurando.
+    apoastro (contada pelos estágios que sobram) e circulariza como a
+    guiagem: a queima mira w, a diferença entre a velocidade circular ali,
+    com a subida que leva à altitude pedida no fim da queima, e a de agora,
+    até |w| ficar abaixo de TOL_DV ou voltar a crescer no fim. Uma queima
+    longa sai mais cara que a conta impulsiva, porque a nave gasta empuxo
+    segurando a altura.
 
     Inviável: bater no chão, descer abaixo da altitude do início do giro antes
     do corte, acabar o combustível antes do corte ou na circularização, ou
@@ -638,6 +676,7 @@ def simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0, desvio=0.0):
     costa = False
     queimando = False
     w_min = math.inf
+    w_r = w_t = 0.0
     dt = PASSO_SIM
     while t < T_MAX_SIM:
         alt = r - raio
@@ -680,15 +719,17 @@ def simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0, desvio=0.0):
             acel = min(acel_q(q), acel_corte(ap, alvo_alt))
         elif fora:
             e = estagios[indice]
-            w_r, w_t = -v_r, math.sqrt(mu / r) - v_t
-            w = math.hypot(w_r, w_t)
             empuxo_vac = empuxo_em(e, 0.0)
+            seguintes = [replace(e, massa_inicial=massa, combustivel=combustivel)] + estagios[indice + 1 :]
             if not queimando:
                 dv_circ = math.sqrt(mu / ra) - r * v_t / ra
-                duracao = tempo_de_queima(dv_circ, massa, empuxo_vac, isp_em(e, 0.0))
+                duracao = tempo_de_queima_estagios(dv_circ, seguintes)
                 if v_r <= 0.0 or tempo_ate_apoastro(corpo, (r, 0.0, 0.0), (v_r, v_t, 0.0)) <= duracao / 2.0:
                     queimando = True
             if queimando:
+                w_t = math.sqrt(mu / r) - v_t
+                w_r = subida_ate(raio + alvo_alt - r, tempo_de_queima_estagios(abs(w_t), seguintes)) - v_r
+                w = math.hypot(w_r, w_t)
                 if w < TOL_DV or (w_min < W_PROXIMO and w > w_min + W_CRESCE):
                     return dv, t
                 w_min = min(w_min, w)
@@ -709,7 +750,7 @@ def simular(corpo, estagios, estado, giro, alvo_alt, area, v_ar0, desvio=0.0):
         if not alcancou:
             theta = 90.0 - giro
         elif queimando:
-            theta = math.degrees(math.atan2(-v_r, math.sqrt(mu / r) - v_t))
+            theta = math.degrees(math.atan2(w_r, w_t))
         elif cortou:
             theta = math.degrees(math.atan2(v_r, v_t))
         elif topo <= 0.0 or alt >= FRACAO_VACUO * topo:
@@ -1104,15 +1145,31 @@ class Guiagem:
         return self._subir(l, pitch_de(l.v, self._cima) - self.desvio, self._rumo_plano(l))
 
     def _w_circular(self, l):
-        """O que falta de velocidade para a circular de agora, no plano n."""
-        v_circ = math.sqrt(self.corpo.mu / norma(l.r))
-        return sub(esc(v_circ, direcao_no_plano(self.n, l.r)), l.v)
+        """O que falta de velocidade para a circular de agora, no plano n, com a subida que leva à altitude pedida.
+
+        A velocidade vertical pedida é subida_ate(), com o tempo que falta de
+        queima: numa queima longa, que começa antes do apoastro e termina
+        depois, a nave chega na altitude pedida em vez de circularizar onde
+        estiver.
+        """
+        raio = norma(l.r)
+        d = direcao_no_plano(self.n, l.r)
+        v_circ = math.sqrt(self.corpo.mu / raio)
+        tempo = self._duracao(abs(v_circ - ponto(l.v, d)), l)
+        v_r = subida_ate(self.corpo.raio + self.alvo_alt - raio, tempo)
+        return sub(soma(esc(v_circ, d), esc(v_r, self._cima)), l.v)
 
     def _w_plano(self, l):
         """O que falta para a velocidade horizontal virar a do plano do alvo, sem mudar de tamanho."""
         v_h = horizontal(l.v, self._cima)
         alvo = esc(norma(v_h), direcao_no_plano(self._n_alvo, l.r))
         return sub(soma(esc(ponto(l.v, self._cima), self._cima), alvo), l.v)
+
+    def _duracao(self, dv, l):
+        """Segundos da queima de dv: pelos estágios lidos no giro, ou só pelo de agora sem eles."""
+        if self._estagios_giro is None:
+            return tempo_de_queima(dv, l.massa, l.empuxo, l.isp)
+        return tempo_de_queima_estagios(dv, estagios_restantes(self._estagios_giro, l.massa))
 
     def _aguardar(self, l, restante, w):
         """Comando de espera antes de uma queima: warp longe, nariz no pró-grado e depois na queima."""
@@ -1138,7 +1195,7 @@ class Guiagem:
             return Comando(0.0, pitch, rumo)
         v_ap = math.sqrt(corpo.mu * (2.0 / ra - 1.0 / a))
         dv = math.sqrt(corpo.mu / ra) - v_ap
-        duracao = tempo_de_queima(dv, l.massa, l.empuxo, l.isp)
+        duracao = self._duracao(dv, l)
         restante = tempo_ate_apoastro(corpo, l.r, l.v) - duracao / 2.0
         if restante <= 0.0:
             self._w_min = math.inf
@@ -1186,7 +1243,7 @@ class Guiagem:
             espera, _ = no_relativo(self.corpo, l.r, l.v, self._n_alvo)
             teta = math.radians(angulo(n_atual, self._n_alvo))
             dv = 2.0 * norma(horizontal(l.v, self._cima)) * math.sin(teta / 2.0)
-            duracao = tempo_de_queima(dv, l.massa, l.empuxo, l.isp)
+            duracao = self._duracao(dv, l)
             restante = espera - duracao / 2.0
             if restante > 0.0:
                 return self._aguardar(l, restante, self._w_plano(l))
