@@ -14,7 +14,7 @@ A referência são os painéis de avião, como o overhead do A320 e o MCP do Boe
 | Material | MDF ou acrílico de 3 mm, cortado e gravado a laser |
 | Cor | Cinza escuro fosco, `#30353a` nos desenhos, com borda `#15181b` e cantos arredondados de 2,5 mm |
 | Fixação | 4 parafusos M3 nos cantos, com o centro a 6 mm das bordas |
-| Título | O nome da seção, gravado em cima e centrado, com letras de 4 mm. Ex.: `EDITOR DE MANOBRAS`. A tela multifunção não tem título: a tela de 7" ocupa a altura toda |
+| Título | O nome da seção, gravado em cima e centrado, com letras de 4 mm. Ex.: `EDITOR DE MANOBRAS` |
 | Margem | Os grupos começam a 10 mm das bordas dos lados, para não bater nos parafusos |
 
 ## Grupos
@@ -65,7 +65,6 @@ Sempre as mesmas peças, no mesmo tamanho, para os painéis combinarem e as peç
 | [Korry](korry/README.md) | 21,9 × 21,9 mm, passo de 25,5 mm | 23 × 23 mm | Tudo que liga, desliga ou escolhe e tem um estado no jogo: a legenda acesa é o estado. Nos modos do SAS, a legenda é o marcador da navball, com a palavra embaixo |
 | Botão de 16 mm sem trava (R16-503) | anel Ø 20 mm, cabeça Ø 13 mm | Ø 16 mm, com um lado reto a 15 mm (furo em D) | Ações sem estado para mostrar: action groups, ANT e PROX, páginas da tela, FOTO |
 | LED de 5 mm no suporte de plástico com porca | anel Ø 9 mm | Ø 6,5 mm | Mostrar um estado sem gastar um botão: os modos do piloto automático (verde), o ESTOL (vermelho, piscando), o modo do sidestick (branco) |
-| Barra de 10 LEDs | 25,4 × 10,16 mm | 25,6 × 10,4 mm | Uma quantidade: o que resta de combustível, oxidante, monopropelente e eletricidade, e a mochila da EVA |
 | Encoder EC11 com knob de alumínio | knob Ø 30 mm | Ø 7 mm | Ajustar um valor. Horário soma, anti-horário tira, com um arco `-` / `+` gravado em volta |
 | Chave rotativa, 12 posições com batente | knob de ponteiro Ø 22 mm | Ø 10 mm | Escolher entre poucas opções fixas, com a legenda gravada em volta |
 | Tecla basculante KCD1 com mola para o centro | 21 × 15 mm | 19 × 13 mm | Mover para um lado ou outro, como o WARP. Segurando, repete |
@@ -89,7 +88,7 @@ Sempre as mesmas peças, no mesmo tamanho, para os painéis combinarem e as peç
 As regras que saíram dos desenhos:
 
 1. **Korry só onde a luz diz alguma coisa.** O que não tem estado no jogo para mostrar (os action groups, NOVO, APAGAR) é botão de 16 mm.
-2. **Um controle por coisa que se mexe junto.** O Δv nunca é mexido nos três eixos ao mesmo tempo, então é um encoder só, com korry para escolher o eixo.
+2. **Um controle por coisa que se mexe junto.** O Δv nunca é mexido nos três eixos ao mesmo tempo, então é um encoder só, com korry para escolher o eixo. E todo valor ajustado por encoder aparece na tela, então o cockpit tem um encoder só, o AJUSTE, ao lado da tela, que mexe na página aberta.
 3. **O controle se mexe como a coisa no jogo.** A tecla do TEMPO fica deitada: para a esquerda o nó volta na órbita, para a direita avança. ANT e PROX, embaixo, no mesmo sentido.
 4. **Mostrar o estado sem olhar a tela** quando der de graça: a posição do knob da chave rotativa mostra o passo.
 5. **O que se usa mais é maior ou fica mais à mão.**

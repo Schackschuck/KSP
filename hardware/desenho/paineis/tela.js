@@ -4,15 +4,25 @@ var path = require("path");
 var P = require("../pecas");
 
 module.exports = function () {
-  var t = P.t, L = 125, W = 2 * L, s = "", x0 = (W - 164.9) / 2, y0 = L / 2 - 42.96;
+  var C = P.C, t = P.t, L = 125, W = 2 * L, s = "", apoio = "#b9bfc5", tw = 57.6, th = 43.2, cy = 68;
   var img = "data:image/png;base64," + fs.readFileSync(path.join(__dirname, "..", "..", "..", "docs", "img", "mfd_simulador.png")).toString("base64");
-  s += '<rect x="' + x0 + '" y="9" width="164.9" height="106.96" rx="2" fill="#121518" stroke="#3a4046" stroke-width=".4"/>';
-  s += '<rect x="' + (W / 2 - 77.1) + '" y="' + y0 + '" width="154.21" height="85.92" fill="#050607"/>';
-  s += '<image x="' + (W / 2 - 57.25) + '" y="' + y0 + '" width="114.5" height="85.92" preserveAspectRatio="none" href="' + img + '"/>';
-  s += P.group(10, 17, 28, 63, "PAGINA") + P.botao(24, 34, "VOO") + P.botao(24, 61, "ORBITA");
-  s += P.group(212, 17, 28, 63, "PAGINA") + P.botao(226, 34, "DELTA-V") + P.botao(226, 61, "SUBIDA");
-  s += P.group(10, 86, 28, 33, "AVISOS") + P.grade(24, 102.5);
-  s += P.group(212, 86, 28, 33, "") + P.botao(226, 99, "") + t(226, 113.6, "SILENCIAR", 2.4);
-  return { w: W, h: L, corpo: P.panel(W, L, "", s),
-    rotulo: "Tela multifuncao, 250 por 125 mm: tela de 7 polegadas no meio, dois botoes de pagina de cada lado, o alto-falante dos avisos e SILENCIAR" };
+  s += P.group(10, 17, 70, 46, "PILOTO AUTO");
+  [["HDG", C.green], ["ALT", null], ["V/S", C.green]].forEach(function (m, i) {
+    var x = 24 + i * 21;
+    s += P.led5(x, 35, !!m[1], m[1] || C.green) + t(x, 46.5, m[0], 2.4);
+  });
+  s += t(45, 57, "LIGADO: SEGURAR O AJUSTE", 1.8, "middle", apoio);
+  s += P.group(10, 69, 70, 50, "AVISOS");
+  s += P.led5(20, 90, false, C.red) + t(20, 101.5, "ESTOL", 2.4, "middle", C.red);
+  s += P.grade(41, 92) + P.botao(65, 90, "SILENCIAR");
+  s += '<rect x="' + (W / 2 - 37) + '" y="' + (cy - 28) + '" width="74" height="56" rx="2.5" fill="#121518" stroke="#3a4046" stroke-width=".4"/>';
+  s += '<rect x="' + (W / 2 - tw / 2 - .6) + '" y="' + (cy - th / 2 - .6) + '" width="' + (tw + 1.2) + '" height="' + (th + 1.2) + '" fill="#050607"/>';
+  s += '<image x="' + (W / 2 - tw / 2) + '" y="' + (cy - th / 2) + '" width="' + tw + '" height="' + th + '" preserveAspectRatio="none" href="' + img + '"/>';
+  s += P.group(170, 17, 70, 102, "AJUSTE");
+  s += P.encoderArc(205, 56, 20.5) + P.encoder(205, 56, 15);
+  s += t(205, 88, "MEXE NA PAGINA ABERTA", 2.2);
+  s += t(205, 96, "GIRAR: MUDA O VALOR", 1.8, "middle", apoio) + t(205, 100.5, "APERTAR: ESCOLHE A LINHA", 1.8, "middle", apoio);
+  s += t(205, 105, "SEGURAR: LIGA O MODO", 1.8, "middle", apoio);
+  return { w: W, h: L, corpo: P.panel(W, L, "TELA", s),
+    rotulo: "Tela multifuncao, 250 por 125 mm: a mikromedia de 2,8 polegadas no meio, as luzes do piloto automatico, o ESTOL, o alto-falante, SILENCIAR e o encoder de ajuste" };
 };
