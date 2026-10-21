@@ -116,7 +116,7 @@ bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de 
                   o serviço do systemd que abre a ponte da tela quando o Pi liga (servico/)
 scripts/          scripts de voo (pouso, subida até a órbita, fly by wire...), que rodam com ou sem o cockpit; testes em scripts/tests/
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
-firmware/encoder/ Arduino Uno com um encoder e o botão dele (docs/encoder.md)
+firmware/encoder/ Arduino Uno com o encoder AJUSTE da tela (docs/encoder.md)
 firmware/passos/  sketches de aprendizado, um por passo da fase 1
 firmware/mfd/     mikromedia for ARM / LPC2148 (C, compilado com o LLVM pelo compilar.py): a tela multifunção
 hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa; ver hardware/README.md
@@ -198,9 +198,10 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 **A fazer na ponte, para a versão B** (o que cada controle faz e o comando do kRPC estão em [hardware/construcao.md](hardware/construcao.md#os-painéis)):
 
-- [ ] Definir no [protocolo](docs/protocolo.md) as mensagens dos painéis novos: tempo, navegação, action groups e peças, câmera, EVA, acelerador, sidestick e o encoder AJUSTE da tela.
+- [ ] Definir no [protocolo](docs/protocolo.md) as mensagens dos painéis novos: tempo, navegação, action groups e peças, câmera, EVA, acelerador e sidestick.
 - [ ] Tempo: WARP, PARAR, FISICO, ATE O NO, PAUSA, SALVAR, CARREGAR e REVERTER.
-- [ ] Encoder AJUSTE da tela: a ponte manda o giro e o aperto para a página aberta, como fazem hoje o `ENC AP`, o `ENC DV` e o `ENC SUB`.
+- [x] Encoder AJUSTE da tela: o firmware do Uno, mandando `ENC AJUSTE` e `BTN AJUSTE` ([docs/encoder.md](docs/encoder.md)).
+- [ ] Encoder AJUSTE da tela: a ponte lê o Uno e manda o giro e o aperto para a página aberta, como fazem hoje o `ENC AP`, o `ENC DV` e o `ENC SUB`.
 - [ ] Navegação: PROCURAR abre a página ALVO, e o AJUSTE escolhe o alvo; LIMPAR; REFERENCIA; trocar de nave.
 - [ ] Action groups 1 a 8 e os korry das peças (paraquedas, painéis solares, antenas, compartimento de carga), com a luz do estado.
 - [ ] Câmera: MAPA, IVA, MODO CAM, FOTO e ESCONDER.

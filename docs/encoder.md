@@ -1,6 +1,6 @@
-# Encoder no Uno
+# Encoder AJUSTE no Uno
 
-Um encoder EC11 com botão, ligado num Arduino Uno que fica na USB do Pi do cockpit. O firmware é o [`firmware/encoder/encoder.ino`](../firmware/encoder/encoder.ino): ele só manda os cliques e o botão, e quem decide o que eles fazem na tela é a ponte.
+O AJUSTE é o encoder único do [painel da tela](../hardware/construcao.md#tela-multifunção): ele mexe na página aberta (o piloto automático, o Δv do editor, o alvo e a subida). Até o módulo do painel da tela ficar pronto, ele é um EC11 com botão, ligado num Arduino Uno que fica na USB do Pi do cockpit. O firmware é o [`firmware/encoder/encoder.ino`](../firmware/encoder/encoder.ino): ele só manda os cliques e o botão, e quem decide o que eles fazem na tela é a ponte.
 
 ## Ligação
 
@@ -37,10 +37,10 @@ Protocolo v0, como o do painel ([protocolo](protocolo.md)): 115200 baud, uma men
 | Mensagem | Quando |
 |---|---|
 | `READY` | Ao ligar. Abrir a porta reinicia o Uno, que leva uns 2 s para voltar |
-| `ENC AP <cliques>` | O encoder girou: horário positivo. Girando rápido, vários cliques vão numa linha só (`ENC AP 3`) |
-| `BTN AP 1`, `BTN AP 0` | O botão foi apertado e solto, já sem trepidação (debounce de 20 ms) |
+| `ENC AJUSTE <cliques>` | O encoder girou: horário positivo. Girando rápido, vários cliques vão numa linha só (`ENC AJUSTE 3`) |
+| `BTN AJUSTE 1`, `BTN AJUSTE 0` | O botão foi apertado e solto, já sem trepidação (debounce de 20 ms) |
 
-- **São as linhas do encoder do piloto automático,** as mesmas que a página de botões do celular manda hoje para a ponte da tela ([painel de sistemas](protocolo.md#painel-de-sistemas-de-controle)). Para virar o encoder da subida, troque o `NOME` na primeira linha do sketch para `SUB`. O do editor de manobras seria o `DV`.
+- **A página é da ponte:** ela repassa o giro e o aperto para a página aberta, como fazem hoje o `ENC AP`, o `ENC DV` e o `ENC SUB` ([protocolo](protocolo.md#encoder-ajuste)). O nome vem do `NOME`, na primeira linha do sketch.
 - **O tempo do aperto longo é da ponte:** o Uno só manda o aperto e a soltura.
 - **O Uno não lê nada da ponte** e não tem LED.
 
@@ -63,4 +63,4 @@ No Pi, o Uno é a porta `/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_854
 
 Para sair, aperte `Ctrl+]`.
 
-**Ainda falta** a ponte da tela (`bridge/mfd.py`) abrir essa porta e tratar as linhas como as da página de botões.
+**Ainda falta** a ponte da tela (`bridge/mfd.py`) abrir essa porta e mandar o `ENC AJUSTE` e o `BTN AJUSTE` para a página aberta.

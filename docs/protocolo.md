@@ -156,6 +156,17 @@ O painel do editor ([hardware/construcao.md](../hardware/construcao.md#painel-do
 - **O eixo escolhido fica na ponte**, como o estado de qualquer sistema. O painel não sabe qual é; a ponte acende o LED do korry certo, pelo mesmo caminho dos outros LEDs.
 - **A página do celular** continua mandando `INC PRO`, `INC NRM` e `INC RAD` até ganhar os botões de eixo e o par `-`/`+` do encoder. A ponte aceita as duas formas.
 
+## Encoder AJUSTE
+
+O encoder único do painel da tela ([desenho](../hardware/construcao.md#tela-multifunção)), que mexe na página aberta. Por enquanto ele fica num Uno à parte, na USB do Pi ([encoder.md](encoder.md)). **O firmware já manda estas linhas; a ponte ainda não lê:**
+
+| Mensagem | Quando | Significado |
+|---|---|---|
+| `ENC AJUSTE <cliques>` | O encoder girou | Cliques com sinal, horário positivo. Vários cliques podem ir numa linha só |
+| `BTN AJUSTE 1`, `BTN AJUSTE 0` | O encoder foi apertado e solto | Uma vez por mudança, com debounce de 20 ms |
+
+- **A página é da ponte:** ela repassa o giro e o aperto para a página aberta, como `ENC AP` e `BTN AP` no piloto, `ENC DV` no editor e `ENC SUB` e `BTN SUB` na subida. O painel não sabe qual página está aberta.
+
 ## Painel de sistemas de controle
 
 Linhas do painel de sistemas de controle ([desenho](../hardware/construcao.md#painel-de-sistemas-de-controle)): os modos do SAS, SAS, RCS, FBW, trava de altitude e o encoder do [piloto automático](../README.md#piloto-automático-de-avião). Quem responde é a ponte da tela (`bridge/mfd.py`, com a lógica em `bridge/sistemas.py`), que já tem o jogo, a tela e o fly by wire. Enquanto o painel não existe, a página de botões `bridge/celular/painel.html` manda as mesmas linhas, pelo mesmo caminho da tela no celular (`POST /linha` e `GET /eventos`, na porta 8001), e manda `READY` ao abrir, para receber todas as luzes. Uso e testes em [docs/mfd.md](mfd.md#painel-de-sistemas-de-controle).

@@ -1,4 +1,4 @@
-const char NOME[] = "AP";
+const char NOME[] = "AJUSTE";
 
 const uint8_t PINO_A = 2;
 const uint8_t PINO_B = 3;
