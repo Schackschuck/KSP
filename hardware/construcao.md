@@ -132,7 +132,7 @@ Um por seção, todos desenhados com as peças reais. O que cada controle faz no
 ![Tela multifunção: o tablet Galaxy Tab S 8.4 atrás de uma janela que ocupa quase o painel duplo inteiro, com o contorno do tablet tracejado](img/tela.svg)
 
 - **Um tablet velho como tela:** o Samsung Galaxy Tab S 8.4 (SM-T705M), com Android 6.0.1, mostrando no Chrome, em tela cheia, a mesma página do celular ([docs/mfd.md](../docs/mfd.md#no-tablet-do-cockpit)). A tela é AMOLED, de 8,4" e 2560 × 1600, com toque.
-- **Ligado no Pi pela ancoragem USB:** o cabo faz uma rede entre o tablet e o Pi, e a página vem do Pi em HTTP. Não precisa de internet nem de Wi-Fi, e o mesmo cabo carrega o tablet.
+- **A página pela Wi-Fi de casa, e o tablet no próprio carregador:** a página vem do Pi em HTTP, e o tablet só precisa entrar na rede, sem internet. Numa USB do Pi ele não carrega: a Samsung puxa só uns 0,5 A numa porta de dados, menos do que a tela ligada gasta. No carregador original, puxa uns 2 A. Deixar uma tomada ou uma saída de 5 V 2 A dentro da caixa para ele.
 - **Atrás do painel:** a janela tem ~181 × 113 mm, o tamanho da imagem, e o tablet (212,8 × 125,6 × 6,6 mm, tracejado no desenho) fica atrás, num suporte impresso. Ele passa 0,3 mm da borda de cima e da de baixo do painel; os parafusos dos cantos ficam fora dele. Sem título: a janela ocupa a altura toda. Conferir no tablet onde a imagem fica em relação à borda antes de cortar a janela.
 - **Sem controles:** a página troca pelo toque ou sozinha, pelo painel mexido, e o encoder AJUSTE, as luzes do piloto e os avisos ficam logo embaixo, no [VOO](#painel-de-sistemas-de-controle). O painel da tela não tem módulo.
 - **Cuidados:** AMOLED marca com imagem parada por horas: brilho baixo, fundo escuro, como a página já é, e a tela apagando quando o jogo não está aberto. Ligado o tempo todo, uma bateria velha pode estufar: olhar a bateria antes de embutir e de tempos em tempos. Nas opções de desenvolvedor, ligar "Permanecer ativo".
@@ -295,7 +295,7 @@ A peça tem ficha própria em [korry/](korry/README.md): medidas, desenho, peça
 - **Sem abrir o joystick:** ele continua inteiro e pode voltar a ser usado em outros jogos.
 - **Leitura:** pelo `pygame`, que a ponte já usa, ou pelo `evdev`, direto no Linux. Decidir quando for escrever o código.
 - **Durante o desenvolvimento no PC:** com o joystick ligado no PC, o KSP também o lê. Deixar os eixos do joystick sem nada nas configurações de controle do KSP, senão os comandos chegam em dobro.
-- **O Pi 4 tem 4 portas USB:** o Mega, o tablet (pela ancoragem USB) e, por enquanto, o Uno do encoder AJUSTE ([docs/encoder.md](../docs/encoder.md)), e sobra uma.
+- **O Pi 4 tem 4 portas USB:** o Mega e, por enquanto, o Uno do encoder AJUSTE ([docs/encoder.md](../docs/encoder.md)), e sobram duas. O tablet não vai no Pi: fica no carregador e recebe a página pela Wi-Fi.
 
 ### Um joystick, três modos
 
