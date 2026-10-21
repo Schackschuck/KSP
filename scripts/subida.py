@@ -1627,6 +1627,55 @@ def _empuxo_e_isp(motores, pressao):
     return total, (total / vazao if vazao > 0.0 else 0.0)
 
 
+def ligar_piloto(conn, piloto, ligado):
+    """Liga ou desliga o piloto automático, com o servidor do kRPC que o jogo tiver.
+
+    O cliente 0.6 só tem a propriedade engaged (AutoPilot_set_Engaged), que
+    o servidor 0.5.4 não tem: nele, o piloto liga com AutoPilot_Engage e
+    desliga com AutoPilot_Disengage, chamados direto pelo cliente.
+    """
+    try:
+        piloto.engaged = ligado
+    except RuntimeError:
+        tipo = conn._types.class_type("SpaceCenter", "AutoPilot")
+        procedimento = "AutoPilot_Engage" if ligado else "AutoPilot_Disengage"
+        conn._invoke("SpaceCenter", procedimento, [piloto], ["self"], [tipo], None)
+
+
+def sinal_z(space_center, nave, nr, sup):
+    """+1 ou -1: o sinal que, multiplicado no z de todo vetor lido, deixa o referencial destro.
+
+    Usa o sinal de (r x v) . normal, com o normal que o jogo entrega para a
+    órbita. Depois confere que o leste lido gira no sentido certo em volta do
+    polo (0, 1, 0); se não, levanta ReferencialErrado.
+    """
+    r = nave.position(nr)
+    v = nave.velocity(nr)
+    normal = nave.flight(nr).normal
+    h = cruz(r, v)
+    if norma(h) == 0.0:
+        raise ReferencialErrado(
+            "Não consegui calibrar os eixos do kRPC: a nave está sem velocidade em relação ao centro do planeta."
+        )
+    alinhamento = ponto(unit(h), normal)
+    if abs(alinhamento) < 0.5:
+        raise ReferencialErrado(
+            f"Não consegui calibrar os eixos do kRPC: o normal da órbita não bate com r x v "
+            f"(cosseno {alinhamento:.2f})."
+        )
+    sinal = 1.0 if alinhamento > 0.0 else -1.0
+    leste = space_center.transform_direction((0.0, 0.0, 1.0), sup, nr)
+    leste = (leste[0], leste[1], sinal * leste[2])
+    r = (r[0], r[1], sinal * r[2])
+    polo = (0.0, 1.0, 0.0)
+    if ponto(cruz(polo, r), leste) <= 0.0:
+        raise ReferencialErrado(
+            "Os eixos do kRPC não bateram com o referencial da guiagem: o leste lido não gira no "
+            "sentido do planeta em volta do polo. Não vou decolar com os eixos trocados."
+        )
+    return sinal
+
+
 class NaveKrpc:
     """Lê a nave pelo kRPC, com streams, e monta a Leitura para a guiagem.
 
@@ -1671,8 +1720,7 @@ class NaveKrpc:
         )
         situacao = space_center.VesselSituation
         self._no_chao = (situacao.landed, situacao.pre_launch, situacao.splashed)
-        self._sinal_z = 1.0
-        self._calibrar()
+        self._sinal_z = sinal_z(space_center, nave, self._nr, self._sup)
 
         voo = nave.flight()
         stream = conn.add_stream
@@ -1704,31 +1752,6 @@ class NaveKrpc:
 
     def _corrigir(self, vetor):
         return (vetor[0], vetor[1], self._sinal_z * vetor[2])
-
-    def _calibrar(self):
-        nave = self._nave
-        r = nave.position(self._nr)
-        v = nave.velocity(self._nr)
-        normal = nave.flight(self._nr).normal
-        h = cruz(r, v)
-        if norma(h) == 0.0:
-            raise ReferencialErrado(
-                "Não consegui calibrar os eixos do kRPC: a nave está sem velocidade em relação ao centro do planeta."
-            )
-        alinhamento = ponto(unit(h), normal)
-        if abs(alinhamento) < 0.5:
-            raise ReferencialErrado(
-                f"Não consegui calibrar os eixos do kRPC: o normal da órbita não bate com r x v "
-                f"(cosseno {alinhamento:.2f})."
-            )
-        self._sinal_z = 1.0 if alinhamento > 0.0 else -1.0
-        leste = self._corrigir(self._space_center.transform_direction((0.0, 0.0, 1.0), self._sup, self._nr))
-        polo = (0.0, 1.0, 0.0)
-        if ponto(cruz(polo, self._corrigir(r)), leste) <= 0.0:
-            raise ReferencialErrado(
-                "Os eixos do kRPC não bateram com o referencial da guiagem: o leste lido não gira no "
-                "sentido do planeta em volta do polo. Não vou decolar com os eixos trocados."
-            )
 
     def ut_agora(self):
         """O UT de agora, da stream, sem chamada ao kRPC."""
@@ -1816,7 +1839,7 @@ class NaveKrpc:
             piloto.reference_frame = self._sup
             piloto.target_roll = math.nan
             self._soltar_superficies()
-            self._ligar_piloto(True)
+            ligar_piloto(self._conn, piloto, True)
             self._piloto_ligado = True
             self._criar_diagnostico()
         controle.throttle = comando.acelerador
@@ -1849,21 +1872,6 @@ class NaveKrpc:
             except Exception:
                 pass
         self._superficies = []
-
-    def _ligar_piloto(self, ligado):
-        """Liga ou desliga o piloto automático, com o servidor do kRPC que o jogo tiver.
-
-        O cliente 0.6 só tem a propriedade engaged (AutoPilot_set_Engaged), que
-        o servidor 0.5.4 não tem: nele, o piloto liga com AutoPilot_Engage e
-        desliga com AutoPilot_Disengage, chamados direto pelo cliente.
-        """
-        piloto = self._nave.auto_pilot
-        try:
-            piloto.engaged = ligado
-        except RuntimeError:
-            tipo = self._conn._types.class_type("SpaceCenter", "AutoPilot")
-            procedimento = "AutoPilot_Engage" if ligado else "AutoPilot_Disengage"
-            self._conn._invoke("SpaceCenter", procedimento, [piloto], ["self"], [tipo], None)
 
     def _acelerar(self, ut):
         """Time warp até o UT pedido; bloqueia até chegar. Sem o warp, a espera fica em tempo real."""
@@ -1937,7 +1945,7 @@ class NaveKrpc:
         controle = self._nave.control
         for acao in (
             lambda: setattr(controle, "throttle", 0.0),
-            lambda: self._ligar_piloto(False),
+            lambda: ligar_piloto(self._conn, self._nave.auto_pilot, False),
             lambda: setattr(controle, "sas", True),
             self._devolver_rcs,
             self._devolver_superficies,
