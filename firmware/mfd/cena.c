@@ -324,8 +324,9 @@ static void atualizar_modo(int pedido, uint32_t agora)
 static void preparar_conica(void)
 {
     int32_t ap = cn.d.ap > 900000000 ? 900000000 : cn.d.ap;
+    int32_t pe = cn.d.pe > 900000000 ? 900000000 : cn.d.pe;
     cn.ra = cn.d.raio + ap;
-    cn.rp = cn.d.raio + cn.d.pe;
+    cn.rp = cn.d.raio + pe;
     if (cn.rp < 1)
         cn.rp = 1;
     cn.conica = cn.d.ap_ok && cn.d.pe_ok && cn.rp <= cn.ra;
