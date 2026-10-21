@@ -201,7 +201,7 @@ As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão 
 | `APL <HDG\|ALT\|VS> <0\|1\|2>` | Modo do piloto: `0` desligado, `1` ligado, `2` armado (o ALT subindo ou descendo até a altitude) | Luz do modo, verde com `1` ou `2` | Azul armado, verde ligado |
 | `APV <HDG\|ALT\|VS> <valor>` | O valor escolhido: rumo em graus (0 a 359), altitude em metros, velocidade vertical em décimos de m/s | — | O valor da linha |
 | `APC <HDG\|ALT\|VS> <0\|1>` | A linha do cursor, e `1` se ela está escolhida (girar muda o valor) | — | O cursor, ou a caixa âmbar no valor |
-| `PAG <NAV\|SAS\|AP\|POUSO\|SUBIDA>` | A página que a tela mostra. `POUSO` e `SUBIDA` são as do [painel de scripts](#painel-de-scripts); a `SUBIDA` só a mikromedia desenha, e o simulador e o celular mostram a navball no lugar dela | — | Troca a página |
+| `PAG <NAV\|SAS\|AP\|POUSO\|SUBIDA>` | A página que a tela mostra. `POUSO` e `SUBIDA` são as do [painel de scripts](#painel-de-scripts); a `SUBIDA`, a mikromedia e o celular desenham, e o simulador mostra a navball no lugar dela | — | Troca a página |
 
 - **A página é da ponte.** Apertar um modo, o SAS ou o RCS abre a página `SAS`; mexer no encoder abre a `AP`. Uns 10 s depois do último toque no painel, a ponte manda `PAG NAV`.
 - **O valor muda de 1 em 1** (1°, 10 m, 0,1 m/s) girando devagar, e de 10 em 10 girando rápido: com mais de um clique numa linha, ou menos de 80 ms desde a última.
@@ -267,7 +267,7 @@ Vai quando muda e também 1 vez por segundo, calculada 20 vezes por segundo, par
 | `SBV PLANO <0\|1>` | `1`: a órbita no plano do alvo | `PLANO DO ALVO`: `SIM` ou `NAO` |
 | `SBC <ALT\|INC\|PLANO> <0\|1>` | A linha do cursor, e `1` se ela está escolhida (girar muda o valor) | A seta, ou a caixa âmbar no valor |
 
-O simulador e o celular aceitam e ignoram estas linhas, as `SUB` e o `SCR LANCAR`, sem responder `ERR`.
+O simulador aceita e ignora estas linhas, as `SUB` e o `SCR LANCAR`, sem responder `ERR`. A mikromedia e o celular desenham a página com elas.
 
 ### Pouso → ponte da tela
 

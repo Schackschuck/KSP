@@ -244,13 +244,13 @@ No cockpit, a tela é um tablet velho, o Samsung Galaxy Tab S 8.4 (SM-T705M, And
 Para não apagar: nas opções de desenvolvedor, ligar **Permanecer ativo**. A tela é AMOLED e marca com imagem parada por horas: brilho baixo e a tela apagando quando o jogo não está aberto.
 
 - [ ] Testar no Tab S: a página pela Wi-Fi de casa, em tela cheia, com o toque e no carregador.
-- [ ] A página SUBIDA no navegador, que hoje só existe na mikromedia.
+- [x] A página SUBIDA no navegador: o menu e o voo, com o desenho, como na mikromedia.
 
 ## Painel de scripts e a página do pouso
 
 O [painel de scripts](../hardware/construcao.md#painel-de-scripts) tem um korry por script de voo; por enquanto, o POUSO, que dispara o [`scripts/pouso.py`](../scripts/pouso.py), e o LANCAR, que dispara a [subida até a órbita](subida.md) ([`scripts/subida.py`](../scripts/subida.py)). Eles ficam na mesma página de botões do painel de sistemas (porta **8001**), embaixo, com os lugares vagos dos próximos scripts.
 
-**O LANCAR e a página SUBIDA** funcionam como o POUSO, com uma diferença: antes de lançar, a altitude, a inclinação e o plano do alvo são escolhidos num menu da página SUBIDA, mexido pelo encoder "CONFIGURAR SUBIDA" da página de botões (como o do piloto automático: girar move o cursor, apertar escolhe a linha, girar muda o valor). Segurar o LANCAR 5 s abre o script com esses valores, e a página passa a mostrar o voo: os números e um desenho do KSC, da trajetória e da órbita, com dois zooms ([docs/subida.md](subida.md#como-usar)). **A página SUBIDA só existe na mikromedia:** o simulador e o celular aceitam as linhas dela e continuam mostrando a navball. Como usar e testar: [docs/subida.md](subida.md).
+**O LANCAR e a página SUBIDA** funcionam como o POUSO, com uma diferença: antes de lançar, a altitude, a inclinação e o plano do alvo são escolhidos num menu da página SUBIDA, mexido pelo encoder "CONFIGURAR SUBIDA" da página de botões (como o do piloto automático: girar move o cursor, apertar escolhe a linha, girar muda o valor). Segurar o LANCAR 5 s abre o script com esses valores, e a página passa a mostrar o voo: os números e um desenho do KSC, da trajetória e da órbita, com dois zooms ([docs/subida.md](subida.md#como-usar)). **A página SUBIDA existe na mikromedia e no navegador (o celular e o tablet):** o simulador aceita as linhas dela e continua mostrando a navball. Como usar e testar: [docs/subida.md](subida.md).
 
 - **Segurar o POUSO 5 s** abre o pouso. O korry pisca âmbar enquanto conta, e a tela abre a página POUSO com `SEGURE 3 S / PARA POUSAR`. Soltar antes não faz nada.
 - Com o pouso voando, o korry fica **verde** e a página acompanha a descida. **Segurar de novo 5 s aborta:** o script corta o motor e devolve a nave; o korry fica **vermelho** por 10 s.

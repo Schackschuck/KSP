@@ -48,8 +48,8 @@ ele voa. Com --demo, o pouso é o de uma nave simulada (pouso.py --demo).
 O korry LANCAR faz o mesmo com o scripts/subida.py, que leva a nave do chão até
 a órbita; a altitude, a inclinação e o plano do alvo vêm do menu da subida,
 que o encoder da subida mexe (ENC SUB e BTN SUB). A tela mostra a página
-SUBIDA, com o menu e depois o voo, mas só a mikromedia a desenha: o simulador
-e o celular aceitam as linhas e mostram a navball. Com --demo, a subida é a de
+SUBIDA, com o menu e depois o voo, na mikromedia e no celular; o simulador
+aceita as linhas e mostra a navball. Com --demo, a subida é a de
 um foguete simulado (subida.py --demo).
 
 Com o KSP, a ponte espera o jogo abrir e reconecta sozinha quando ele fecha e

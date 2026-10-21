@@ -210,7 +210,8 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - [ ] Acelerador pela alavanca; TREM, FREIOS e LUZES em korry.
 - [ ] Sidestick: os 3 eixos pelo Mega, e o botão trocando o modo, com as luzes.
 - [ ] EVA, quando houver o kRPC 0.7: andar e voar pelo manche, JATO, LUZ, SAIR, EMBARCAR, AGARRAR e SOLTAR.
-- [ ] Tela no tablet: levar a página SUBIDA, que hoje só existe na mikromedia, para a página do navegador, e testar no Tab S pela Wi-Fi, em tela cheia.
+- [x] Tela no tablet: a página SUBIDA no navegador, com o menu e o desenho do voo, como na mikromedia.
+- [ ] Testar a tela no Tab S pela Wi-Fi, em tela cheia.
 - [ ] Páginas novas na tela: ORBITA, DELTA-V, SUBIDA, ALVO, TEMPO, EVA e RECURSOS (combustível, oxidante, monopropelente e eletricidade, no lugar das barras de LED).
 
 **Pronto quando:** dá para lançar e colocar um foguete em órbita usando só o painel.
@@ -282,7 +283,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de flash, 32 KB de RAM), tela 320x240 com touch resistivo, microSD, saída de áudio e carregador de Li-Po. Aqui o firmware é escrito **sem framework**: C, registradores, script de linker e código de inicialização próprios.
 
-**Status: rodando na placa, com o jogo.** O firmware em `firmware/mfd/` faz na placa o que o simulador faz no PC: navball, números, botões de toque e as páginas SAS, AP e POUSO, no protocolo em texto. A página SUBIDA ([subida até a órbita](#subida-até-a-órbita)) existe só na placa: o simulador e o celular mostram a navball no lugar dela. Ligada no Pi pela PROG, com a ponte da tela aberta pelo serviço, a placa mostra a navball ao vivo, lisa, e o toque funciona no jogo. O controlador da tela é o `0047`, o HX8347-D. Falta o áudio. Gravar e ligar: [docs/mikromedia.md](docs/mikromedia.md). A tela também roda no simulador do PC e no navegador do celular: [docs/mfd.md](docs/mfd.md).
+**Status: rodando na placa, com o jogo.** O firmware em `firmware/mfd/` faz na placa o que o simulador faz no PC: navball, números, botões de toque e as páginas SAS, AP e POUSO, no protocolo em texto. A página SUBIDA ([subida até a órbita](#subida-até-a-órbita)) existe na placa e no navegador; o simulador mostra a navball no lugar dela. Ligada no Pi pela PROG, com a ponte da tela aberta pelo serviço, a placa mostra a navball ao vivo, lisa, e o toque funciona no jogo. O controlador da tela é o `0047`, o HX8347-D. Falta o áudio. Gravar e ligar: [docs/mikromedia.md](docs/mikromedia.md). A tela também roda no simulador do PC e no navegador do celular: [docs/mfd.md](docs/mfd.md).
 
 - **Placa:** duas mini-USB. A **USB** vai direto no LPC2148, e a **PROG** tem um conversor USB-serial **FT232RL**, por onde o PC conversa com a placa e o Flash Magic grava o firmware. No cockpit, o Pi liga na PROG; a USB só alimenta a placa, porque o firmware não usa ela. A tela é um módulo MI0283QT2 (320x240, barramento de 16 bits), com touch resistivo lido pelo ADC. Pinos em [docs/mikromedia.md](docs/mikromedia.md#como-o-firmware-funciona).
 - **Ferramentas:** LLVM (clang, ld.lld e llvm-objcopy), chamado pelo `firmware/mfd/compilar.py`; o `mfd.hex` já vem compilado. Gravação pelo bootloader serial de fábrica do LPC2148, pela PROG, com o Flash Magic.
@@ -420,8 +421,8 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
 
 - [x] `scripts/subida.py`: a guiagem, a simulação do giro, a janela, o kRPC, o `--demo` e as linhas `SUB`; testes em `scripts/tests/test_subida.py`, numa nave simulada em Kerbin e na Mun.
 - [x] Ponte da tela: o korry LANCAR, o menu da subida (`ENC SUB`, `BTN SUB`) e a página SUBIDA; na página de botões, o LANCAR e um encoder para a configuração.
-- [x] A página SUBIDA na mikromedia: a configuração e o voo. O simulador e o celular mostram a navball no lugar dela.
-- [ ] O desenho do voo na página SUBIDA: o KSC na decolagem, a parábola na subida e a órbita na circularização, com dois zooms. Falta gravar na placa e ver num lançamento. Depois, a visão oblíqua do planeta na órbita.
+- [x] A página SUBIDA na mikromedia e no navegador (o celular e o tablet): a configuração e o voo. O simulador mostra a navball no lugar dela.
+- [ ] O desenho do voo na página SUBIDA: o KSC na decolagem, a parábola na subida e a órbita na circularização, com dois zooms. No navegador, testado com o `--demo`; na placa, falta gravar. Falta ver num lançamento. Depois, a visão oblíqua do planeta na órbita.
 - [ ] Testar no jogo ([roteiro](docs/subida.md#testar-no-jogo)): primeiro 80 km e 0°, depois a inclinação, o plano de um alvo e a Mun.
 - [x] A configuração pelo encoder AJUSTE, no Uno, com a página SUBIDA aberta ([docs/encoder.md](docs/encoder.md#na-ponte-da-tela)).
 - [ ] Depois: a guiagem do vácuo (PEG), mais eficiente que seguir o pró-grado.

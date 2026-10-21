@@ -34,7 +34,7 @@ A nave tem que estar parada no chão, com o primeiro estágio ainda por acender.
 
 O desenho não está em escala: a altitude é esticada 3 vezes, para a órbita não ficar colada no planeta. Os números de verdade estão em cima. Kerbin aparece visto de cima do polo, como uma órbita equatorial é vista: o gelo no meio, os continentes e o mar em volta, e o KSC no litoral, com o mar a leste. A Mun é cinza com crateras, e Minmus, verde-claro. O script manda o que o desenho precisa nas linhas `SUB ANOM`, `RAIO`, `TOPO` e `CORPO` ([protocolo](protocolo.md#subida--ponte-da-tela)).
 
-**A página SUBIDA só aparece na mikromedia.** O simulador e o celular aceitam as linhas dela, mas mostram a navball. Depois de mudar o firmware, é preciso gravar o `mfd.hex` de novo, pelo Flash Magic ou pelo Pi ([docs/mikromedia.md](mikromedia.md#gravar-pelo-pi-sem-tirar-o-cabo)).
+**A página SUBIDA aparece na mikromedia e no navegador** (o celular e o tablet do cockpit, em `bridge/celular/index.html`). O simulador aceita as linhas dela, mas mostra a navball. Depois de mudar o firmware, é preciso gravar o `mfd.hex` de novo, pelo Flash Magic ou pelo Pi ([docs/mikromedia.md](mikromedia.md#gravar-pelo-pi-sem-tirar-o-cabo)).
 
 ### O log do voo
 

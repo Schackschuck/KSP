@@ -195,7 +195,7 @@ def _inteiro(texto):
 
 
 def _linha_da_subida(nome, partes, numeros):
-    """Confere uma linha SUB, SBV ou SBC da página SUBIDA, que só a mikromedia desenha."""
+    """Confere uma linha SUB, SBV ou SBC da página SUBIDA, que o simulador não desenha."""
     if nome == "SUB":
         if partes == ["OFF"]:
             return True
