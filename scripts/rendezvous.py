@@ -569,6 +569,7 @@ class Guiagem:
         self._v_depois = (0.0, 0.0, 0.0)
         self._w_espera = (0.0, 0.0, 0.0)
         self._correcoes = None
+        self._plano_feito = False
         self._velocidade_pronta = False
         self._t_aproxima = None
         self._fases = {
@@ -771,6 +772,8 @@ class Guiagem:
         self._definir_no(l.t + espera, _w_plano(r_no, v_no, n_alvo), v_no)
 
     def _fase_plano(self, l):
+        if self._plano_feito:
+            return self._planejar(l)
         n_alvo = _plano_do_alvo(l.alvo)
         if not self._queimando:
             espera, _ = no_relativo(self.planeta, l.r, l.v, n_alvo)
@@ -782,7 +785,8 @@ class Guiagem:
         comando = self._queimar(l, _w_plano(l.r, l.v, n_alvo), TOL_DV)
         if comando is None:
             self._fim_do_no()
-            return self._planejar(l)
+            self._plano_feito = True
+            return Comando(0.0, self._direcao)
         return comando
 
     def _queimar_no(self, l):
@@ -1484,6 +1488,23 @@ def _esperar_enter(fonte, mensagem):
         pass
 
 
+def _prever_depois_do_plano(l, guiagem, planeta):
+    """Imprime a transferência prevista a partir da órbita depois da queima do plano, feita como instantânea no nó."""
+    t_no, dv_plano = guiagem._no
+    r_no, v_no = propagar(planeta.mu, l.r, l.v, t_no - l.t)
+    inicio = time.monotonic()
+    tr = planejar_transferencia(planeta, Estado(t_no, r_no, soma(v_no, dv_plano)), l.alvo, t_no, guiagem.voltas_max)
+    duracao = time.monotonic() - inicio
+    if tr is None:
+        print("Previsão: depois do plano, nenhuma transferência dentro das restrições.")
+        return
+    print(
+        f"Previsão depois do plano: transferência de {norma(tr.dv1):.1f} m/s em {_texto_t(tr.t1 - l.t)}, "
+        f"encontro em {_texto_duracao(tr.tm - l.t)}, velocidade relativa {tr.v_rel:.1f} m/s; "
+        f"Dv previsto com o plano: {norma(dv_plano) + tr.dv_total:.1f} m/s (busca em {duracao:.1f} s)"
+    )
+
+
 def so_planejar(fonte, guiagem, planeta):
     """Planeja, mostra o nó no jogo, imprime o plano (e o que o kRPC prevê) e espera o Enter. Não liga o piloto automático.
 
@@ -1509,6 +1530,7 @@ def so_planejar(fonte, guiagem, planeta):
                 f"A órbita da nave não está no plano do alvo: o primeiro nó é o do plano, de {guiagem.dv_proxima:.1f} m/s "
                 f"em {_texto_t(guiagem.proxima_queima - l.t)}. A transferência é planejada depois dele."
             )
+            _prever_depois_do_plano(l, guiagem, planeta)
         _esperar_enter(fonte, "Enter para apagar o nó e sair")
         return CHEGOU
     for linha in linhas_do_plano(l, guiagem):

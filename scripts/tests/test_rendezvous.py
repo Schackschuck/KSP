@@ -539,6 +539,20 @@ class TestVoos(unittest.TestCase):
         self.conferir(voo, 80.0)
         self.assertEqual(voo.fases[0], PLANO)
 
+    def test_motor_cortado_antes_de_planejar_a_transferencia(self):
+        n_alvo = rotacionar(POLO, (1.0, 0.0, 0.0), math.radians(0.5))
+        nave = montar(circular(KERBIN, 158_000.0, 100.0), circular(KERBIN, 158_000.0, 150.0, normal=n_alvo))
+        guiagem = Guiagem(KERBIN, D_FINAL, 6)
+        anterior = None
+        while guiagem.transferencia is None:
+            comando = guiagem.passo(nave.leitura())
+            self.assertNotEqual(guiagem.fase, FALHA)
+            if guiagem.transferencia is None:
+                anterior = comando
+                nave.executar(comando)
+                nave.avancar(0.05)
+        self.assertEqual(anterior.acelerador, 0.0)
+
     def test_nariz_que_vira_devagar(self):
         nave = montar(HOJE_NAVE, HOJE_ALVO)
         nave.giro_max = 1.0
