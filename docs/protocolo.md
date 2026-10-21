@@ -1,6 +1,6 @@
 # Protocolo serial v0 (texto)
 
-Protocolo entre o computador de bordo (a ponte, `bridge/ponte.py`) e as placas (hoje, o Mega com `firmware/painel/painel.ino`). Os nomes (`STAGE`, `SAS`, `GEAR`...) vêm das tabelas `ENTRADAS` e `LEDS` do firmware e dos dicionários `BOTOES` e `SISTEMAS` da ponte; um controle novo entra nos dois lados. É texto puro, para dar para testar e depurar pelo Serial Monitor. A tela multifunção usa o mesmo formato, com mensagens próprias: ver [a última seção](#tela-multifunção-mikromedia). A versão binária (v1, com COBS e CRC) vem na fase 5.
+Protocolo entre o computador de bordo (a ponte, `bridge/ponte.py`) e as placas (hoje, o Mega com `firmware/painel/painel.ino` e o Uno do encoder com `firmware/encoder/encoder.ino`, em [encoder.md](encoder.md)). Os nomes (`STAGE`, `SAS`, `GEAR`...) vêm das tabelas `ENTRADAS` e `LEDS` do firmware e dos dicionários `BOTOES` e `SISTEMAS` da ponte; um controle novo entra nos dois lados. É texto puro, para dar para testar e depurar pelo Serial Monitor. A tela multifunção usa o mesmo formato, com mensagens próprias: ver [a última seção](#tela-multifunção-mikromedia). A versão binária (v1, com COBS e CRC) vem na fase 5.
 
 ## Camada física e enquadramento
 
@@ -155,6 +155,17 @@ O painel do editor ([hardware/construcao.md](../hardware/construcao.md#painel-do
 
 - **O eixo escolhido fica na ponte**, como o estado de qualquer sistema. O painel não sabe qual é; a ponte acende o LED do korry certo, pelo mesmo caminho dos outros LEDs.
 - **A página do celular** continua mandando `INC PRO`, `INC NRM` e `INC RAD` até ganhar os botões de eixo e o par `-`/`+` do encoder. A ponte aceita as duas formas.
+
+## Encoder AJUSTE
+
+O encoder único do painel da tela ([desenho](../hardware/construcao.md#tela-multifunção)), que mexe na página aberta. Por enquanto ele fica num Uno à parte, na USB do Pi ([encoder.md](encoder.md)). **O firmware já manda estas linhas; a ponte ainda não lê:**
+
+| Mensagem | Quando | Significado |
+|---|---|---|
+| `ENC AJUSTE <cliques>` | O encoder girou | Cliques com sinal, horário positivo. Vários cliques podem ir numa linha só |
+| `BTN AJUSTE 1`, `BTN AJUSTE 0` | O encoder foi apertado e solto | Uma vez por mudança, com debounce de 20 ms |
+
+- **A página é da ponte:** ela repassa o giro e o aperto para a página aberta, como `ENC AP` e `BTN AP` no piloto, `ENC DV` no editor e `ENC SUB` e `BTN SUB` na subida. O painel não sabe qual página está aberta.
 
 ## Painel de sistemas de controle
 
