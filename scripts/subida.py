@@ -1699,6 +1699,7 @@ class NaveKrpc:
         self._piloto_ligado = False
         self._sem_warp = False
         self._superficies = []
+        self._rcs_antes = None
         self._diagnostico = {}
 
     def _corrigir(self, vetor):
@@ -1810,6 +1811,7 @@ class NaveKrpc:
         piloto = nave.auto_pilot
         if not self._piloto_ligado:
             controle.sas = False
+            self._rcs_antes = controle.rcs
             controle.rcs = True
             piloto.reference_frame = self._sup
             piloto.target_roll = math.nan
@@ -1921,13 +1923,23 @@ class NaveKrpc:
             except Exception:
                 pass
 
+    def _devolver_rcs(self):
+        if self._rcs_antes is not None:
+            self._nave.control.rcs = self._rcs_antes
+
     def liberar(self):
-        """Motor em 0, piloto automático desligado, SAS ligado, aletas de volta e streams removidas, cada um por si."""
+        """Motor em 0, piloto automático desligado, SAS ligado, RCS e aletas como estavam e streams removidas, cada um por si.
+
+        O RCS volta como estava antes do voo: ligado junto com o SAS, ele
+        solta pulsos o tempo todo para segurar a atitude, gasta monopropelente
+        e mexe um pouco na órbita.
+        """
         controle = self._nave.control
         for acao in (
             lambda: setattr(controle, "throttle", 0.0),
             lambda: self._ligar_piloto(False),
             lambda: setattr(controle, "sas", True),
+            self._devolver_rcs,
             self._devolver_superficies,
             self._remover_streams,
         ):

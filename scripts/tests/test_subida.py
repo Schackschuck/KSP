@@ -1550,6 +1550,17 @@ class TestNaveKrpc(unittest.TestCase):
         self.assertTrue(jogo.sim.aceso)
         self.assertEqual(jogo.procedimentos, [])
 
+    def test_no_fim_o_rcs_volta_como_estava(self):
+        for antes in (False, True):
+            with self.subTest(antes=antes):
+                jogo, fonte = self.criar()
+                jogo.nave.control.rcs = antes
+                fonte.executar(Comando(acelerador=1.0))
+                self.assertTrue(jogo.nave.control.rcs)
+                fonte.liberar()
+                self.assertEqual(jogo.nave.control.rcs, antes)
+                self.assertTrue(jogo.nave.control.sas)
+
     def test_piloto_automatico_com_o_servidor_0_5(self):
         jogo, fonte = self.criar()
         jogo.nave.auto_pilot.servidor_antigo = True
