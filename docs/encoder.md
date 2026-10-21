@@ -40,13 +40,13 @@ Protocolo v0, como o do painel ([protocolo](protocolo.md)): 115200 baud, uma men
 | `ENC AJUSTE <cliques>` | O encoder girou: horário positivo. Girando rápido, vários cliques vão numa linha só (`ENC AJUSTE 3`) |
 | `BTN AJUSTE 1`, `BTN AJUSTE 0` | O botão foi apertado e solto, já sem trepidação (debounce de 20 ms) |
 
-- **A página é da ponte:** ela repassa o giro e o aperto para a página aberta, como fazem hoje o `ENC AP`, o `ENC DV` e o `ENC SUB` ([protocolo](protocolo.md#encoder-ajuste)). O nome vem do `NOME`, na primeira linha do sketch.
+- **A página é da ponte:** ela repassa o giro e o aperto para a página aberta, como `ENC SUB` na SUBIDA e `ENC AP` nas outras ([Na ponte da tela](#na-ponte-da-tela), [protocolo](protocolo.md#encoder-ajuste)). O nome vem do `NOME`, na primeira linha do sketch.
 - **O tempo do aperto longo é da ponte:** o Uno só manda o aperto e a soltura.
 - **O Uno não lê nada da ponte** e não tem LED.
 
 ## Gravar
 
-**Pelo Pi**, sem tirar o Uno de lá. O Pi tem o `avrdude` (`sudo apt install avrdude`), e a ponte da tela não atrapalha, porque usa outra porta.
+**Pelo Pi**, sem tirar o Uno de lá. O Pi tem o `avrdude` (`sudo apt install avrdude`). Com o `--encoder`, a ponte da tela ocupa a porta do Uno: pare o serviço antes de gravar (`sudo systemctl stop ksp-tela@USUARIO`) e ligue de novo depois (`start`).
 
 1. No PC, no Git Bash, a partir da pasta do repositório, compile o `.hex` com o `arduino-cli` que vem com a Arduino IDE:
    ```bash
@@ -72,6 +72,27 @@ No Pi, o Uno é a porta `/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_854
 ~/ksp/bin/python -m serial.tools.miniterm /dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_854383639383512060A1-if00 115200
 ```
 
-Para sair, aperte `Ctrl+]`.
+Para sair, aperte `Ctrl+]`. Com a ponte da tela aberta, a porta está ocupada: pare o serviço antes (`sudo systemctl stop ksp-tela@USUARIO`).
 
-**Ainda falta** a ponte da tela (`bridge/mfd.py`) abrir essa porta e mandar o `ENC AJUSTE` e o `BTN AJUSTE` para a página aberta.
+## Na ponte da tela
+
+A ponte da tela (`bridge/mfd.py`) lê o Uno com o `--encoder`, no Pi pelo serviço ([setup-pi.md](setup-pi.md)):
+
+```
+ARGS=192.168.50.1 --celular --encoder /dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_854383639383512060A1-if00
+```
+
+No PC, com o Uno na USB dele: `python bridge/mfd.py --demo --encoder COM8` (a porta que a Arduino IDE mostra).
+
+**Para onde vai o giro e o aperto** ([`bridge/ajuste.py`](../bridge/ajuste.py)):
+
+| Página aberta na tela | O AJUSTE faz o papel de | O que ele mexe |
+|---|---|---|
+| SUBIDA | `ENC SUB` e `BTN SUB` | O menu da subida: altitude, inclinação e o plano do alvo. Para abrir a SUBIDA, um toque curto no LANCAR (segurar 5 s lança). Com a subida voando, só mantém a página aberta |
+| Qualquer outra | `ENC AP` e `BTN AP` | O menu do piloto automático: o primeiro giro abre a página do piloto, e segurar 1 s liga o modo da linha |
+
+- **O aperto e a soltura vão para o mesmo lugar**, mesmo se a página mudar no meio. Assim o aperto longo do piloto não se perde.
+- **A página fecha sozinha:** uns 10 s depois do último giro ou aperto, a tela volta para a navball (ou para a página do script voando). Depois disso, o AJUSTE volta a mexer no piloto: para mexer na subida de novo, outro toque curto no LANCAR.
+- **O Uno pode sair e voltar:** se a porta cair ou não abrir, a ponte segue sem ele e tenta de novo a cada 5 s.
+- **A página de botões continua valendo:** o encoder do piloto e o da subida dela mandam `ENC AP` e `ENC SUB` direto, junto com o Uno.
+- O Δv do editor e o alvo entram aqui quando a ponte da tela tiver as páginas deles.
