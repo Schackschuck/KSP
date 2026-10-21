@@ -16,7 +16,7 @@ Tudo direto nos pinos do Uno, sem resistor: o firmware usa o pull-up interno.
 | Botão: um dos 2 do outro lado | 4 |
 | Botão: o outro | GND |
 
-**Módulo KY-040:** 5 pinos numa fileira.
+**Módulo KY-040, ou uma plaquinha própria com pull-ups de 4,7 kΩ:** 5 pinos numa fileira. Os resistores vão do A, do B e do botão para o +, e o comum do encoder vai no GND. Ao contrário, com o comum no +, a lógica inverte.
 
 | Pino do módulo | Uno |
 |---|---|
@@ -46,12 +46,23 @@ Protocolo v0, como o do painel ([protocolo](protocolo.md)): 115200 baud, uma men
 
 ## Gravar
 
-O Pi não tem o `avrdude`, então a gravação é pelo PC:
+**Pelo Pi**, sem tirar o Uno de lá. O Pi tem o `avrdude` (`sudo apt install avrdude`), e a ponte da tela não atrapalha, porque usa outra porta.
 
-1. Tire o Uno da USB do Pi e ligue no PC.
-2. Na Arduino IDE, escolha a placa **Arduino Uno** e a porta dele, e grave o `firmware/encoder/encoder.ino`.
-3. Teste pelo Serial Monitor, em 115200 baud: aparece `READY`. Girar e apertar mostram as linhas da tabela.
-4. Ligue o Uno de volta no Pi.
+1. No PC, no Git Bash, a partir da pasta do repositório, compile o `.hex` com o `arduino-cli` que vem com a Arduino IDE:
+   ```bash
+   "$LOCALAPPDATA/Programs/Arduino IDE/resources/app/lib/backend/resources/arduino-cli.exe" compile --fqbn arduino:avr:uno --output-dir "$TEMP/encoder" firmware/encoder
+   ```
+2. Copie o `.hex` para o Pi:
+   ```bash
+   scp "$TEMP/encoder/encoder.ino.hex" admin@192.168.50.2:/tmp/
+   ```
+3. Grave:
+   ```bash
+   ssh admin@192.168.50.2 "avrdude -p atmega328p -c arduino -P /dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_854383639383512060A1-if00 -b 115200 -U flash:w:/tmp/encoder.ino.hex:i"
+   ```
+   No fim, o `avrdude` lê de volta e confere: `bytes of flash verified`.
+
+**Pelo PC**, com o Uno na USB dele: na Arduino IDE, escolha a placa **Arduino Uno** e a porta, e grave o `firmware/encoder/encoder.ino`. O Serial Monitor, em 115200 baud, mostra o `READY` e as linhas da tabela.
 
 ## Testar no Pi
 
