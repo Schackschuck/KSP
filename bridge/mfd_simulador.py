@@ -164,8 +164,11 @@ FINS_POUSO = {"FIM": ("POUSADA", VERDE), "ABORT": ("ABORTADO", AVISO), "FALHA": 
 AVISOS_POUSO = {"EMPUXO": "EMPUXO INSUFICIENTE", "MOTOR": "SEM MOTOR ATIVO", "NARIZ": "NARIZ LONGE DA VERTICAL"}
 CAMPOS_POUSO = ("FASE", "ALT", "VV", "MOTOR", "TWR", "FREADA", "IGN", "SAS", "INCL", "AVISO")
 CAMPOS_POUSO_TEXTO = ("FASE", "SAS", "AVISO")
-CAMPOS_SUBIDA = ("FASE", "ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR", "AVISO")
-CAMPOS_SUBIDA_TEXTO = ("FASE", "AVISO")
+CAMPOS_SUBIDA = (
+    "FASE", "ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR",
+    "ANOM", "RAIO", "TOPO", "CORPO", "AVISO",
+)
+CAMPOS_SUBIDA_TEXTO = ("FASE", "AVISO", "CORPO")
 LINHAS_MENU_SUBIDA = ("ALT", "INC", "PLANO")
 SCRIPTS = ("POUSO", "LANCAR")
 
@@ -192,7 +195,7 @@ def _inteiro(texto):
 
 
 def _linha_da_subida(nome, partes, numeros):
-    """Confere uma linha SUB, SBV ou SBC da página SUBIDA, que só a mikromedia desenha."""
+    """Confere uma linha SUB, SBV ou SBC da página SUBIDA, que o simulador não desenha."""
     if nome == "SUB":
         if partes == ["OFF"]:
             return True

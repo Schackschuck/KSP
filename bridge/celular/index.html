@@ -96,11 +96,50 @@ const FINS_POUSO = { FIM: ["POUSADA", "verde"], ABORT: ["ABORTADO", "aviso"], FA
 const AVISOS_POUSO = { EMPUXO: "EMPUXO INSUFICIENTE", MOTOR: "SEM MOTOR ATIVO", NARIZ: "NARIZ LONGE DA VERTICAL" };
 const CAMPOS_POUSO = ["FASE", "ALT", "VV", "MOTOR", "TWR", "FREADA", "IGN", "SAS", "INCL", "AVISO"];
 const CAMPOS_POUSO_TEXTO = ["FASE", "SAS", "AVISO"];
-const CAMPOS_SUBIDA = ["FASE", "ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR", "AVISO"];
-const CAMPOS_SUBIDA_TEXTO = ["FASE", "AVISO"];
+const CAMPOS_SUBIDA = ["FASE", "ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR", "ANOM", "RAIO", "TOPO", "CORPO", "AVISO"];
+const CAMPOS_SUBIDA_TEXTO = ["FASE", "AVISO", "CORPO"];
 const LINHAS_MENU_SUBIDA = ["ALT", "INC", "PLANO"];
 const SCRIPTS = ["POUSO", "LANCAR"];
 const pousoVazio = () => Object.fromEntries(CAMPOS_POUSO.map((c) => [c, null]));
+const subidaVazia = () => Object.fromEntries(CAMPOS_SUBIDA.map((c) => [c, null]));
+
+const ROTULOS_MENU_SUBIDA = { ALT: "ALTITUDE", INC: "INCLINACAO", PLANO: "PLANO DO ALVO" };
+const FASES_SUBIDA = {
+  JANELA: "azul", DECOLAGEM: "verde", GIRO: "verde", CURVA: "verde", VACUO: "verde",
+  COSTA: "azul", CIRCULARIZA: "verde", PLANO: "verde", ORBITA: "verde", FALHA: "aviso",
+};
+const FINS_SUBIDA = { FIM: ["EM ORBITA", "verde"], ABORT: ["ABORTADO", "aviso"], FALHA: ["FALHOU", "aviso"] };
+const AVISOS_SUBIDA = {
+  EMPUXO: "EMPUXO/PESO BAIXO", ALTITUDE: "ALTITUDE ABAIXO DO AR", INCLINACAO: "INCLINACAO FORA DO ALCANCE",
+  ALVO: "SEM ALVO PARA O PLANO", COMBUSTIVEL: "SEM COMBUSTIVEL",
+};
+
+const CENA = { x: 160, y: 130, topo: 70, fundo: 190, exagero: 3, zoom: 1500, longe: 2500, limite: 1e6 };
+const MODOS_CENA = {
+  GIRO: "TRAJ", CURVA: "TRAJ", VACUO: "TRAJ", COSTA: "TRAJ",
+  CIRCULARIZA: "ORB", PLANO: "ORB", ORBITA: "ORB", FALHA: "MANTER",
+};
+const COR_CENA = {
+  ceu: "#0d1733", estrela: "#c8d0e0", mar: "#1c4f8f", terra: "#2e6f3c", gelo: "#dbe6ef",
+  mun: "#8a8f96", manchaMun: "#646970", minmus: "#8ccdb2", manchaMinmus: "#bae8d2", outro: "#787a82",
+  vab: "#7c879c", vabTeto: "#5c667c", vabPorta: "#2e3850", vabListra: "#3c4862", vabAnexo: "#6b7589",
+  torre: "#6e7c96", tanque: "#8a94a8", plataforma: "#4a5058",
+};
+const CONTINENTES = [
+  [88.5, 168, [[168, 0.7], [155, 0.5], [135, 0.56], [115, 0.42], [98, 0.6]]],
+  [205, 262, [[262, 0.66], [245, 0.5], [225, 0.58], [208, 0.7]]],
+  [300, 335, [[335, 0.7], [318, 0.55], [303, 0.72]]],
+];
+const ILHAS = [[40, 0.78, 0.05], [22, 0.86, 0.035], [280, 0.8, 0.04]];
+const GELO = [0.3, 0.26, 0.31, 0.27, 0.32, 0.28, 0.3, 0.25, 0.31, 0.27, 0.3, 0.26];
+const MARES_MUN = [
+  [[30, 0.5], [60, 0.35], [90, 0.5], [80, 0.75], [45, 0.8], [25, 0.65]],
+  [[200, 0.45], [230, 0.3], [260, 0.45], [250, 0.7], [220, 0.75], [195, 0.62]],
+];
+const CRATERAS_MUN = [[120, 0.8, 0.09], [160, 0.55, 0.06], [20, 0.25, 0.07], [290, 0.7, 0.08], [330, 0.4, 0.05], [70, 0.15, 0.04]];
+const PLANOS_MINMUS = [[50, 0.6, 0.18], [170, 0.5, 0.15], [270, 0.65, 0.17], [330, 0.25, 0.12]];
+const BRACOS = [[-15, -12, -10, -20], [-10, -12, -15, -20], [-15, -26, -10, -34], [-10, -26, -15, -34], [-15, -40, -10, -48], [-10, -40, -15, -48]];
+const ESTRELAS = [[30, 86], [70, 140], [120, 78], [200, 96], [250, 76], [290, 130], [310, 90], [15, 170], [180, 150], [95, 110], [230, 176], [60, 100]];
 
 // Navball: os mesmos valores de bridge/navball.py.
 const CEU = [40, 105, 200], CHAO = [150, 70, 25];
@@ -140,9 +179,15 @@ const estado = {
   estol: false,                                        // alpha floor do fly by wire: toca o alarme
   scr: ["OFF", null],                                  // korry POUSO: [estado, segundos que faltam segurando]
   pouso: pousoVazio(),                                 // o que o scripts/pouso.py manda (POU)
+  lancar: ["OFF", null],
+  subida: subidaVazia(),
+  menuSubida: { ALT: null, INC: null, PLANO: null },
+  cursorSubida: ["ALT", false],
   ultimaValida: -Infinity,
   toque: [null, -Infinity],
 };
+
+const cena = { modo: null, antes: null, desde: 0 };
 
 function inteiro(texto) {
   return /^[+-]?[0-9]+$/.test(texto) ? parseInt(texto, 10) : null;
@@ -150,13 +195,30 @@ function inteiro(texto) {
 
 function linhaDaSubida(nome, partes, numeros) {
   if (nome === "SUB") {
-    if (partes.length === 1) return partes[0] === "OFF";
+    if (partes.length === 1 && partes[0] === "OFF") {
+      estado.subida = subidaVazia();
+      cena.modo = null;
+      return true;
+    }
     if (partes.length !== 2) return false;
-    if (CAMPOS_SUBIDA_TEXTO.includes(partes[0])) return true;
-    return CAMPOS_SUBIDA.includes(partes[0]) && (numeros[1] !== null || partes[1] === "OFF");
+    const [campo, valor] = partes;
+    if (CAMPOS_SUBIDA_TEXTO.includes(campo)) {
+      estado.subida[campo] = valor === "OFF" ? null : valor;
+      return true;
+    }
+    if (!CAMPOS_SUBIDA.includes(campo) || (numeros[1] === null && valor !== "OFF")) return false;
+    estado.subida[campo] = numeros[1];
+    return true;
   }
-  if (nome === "SBV") return partes.length === 2 && LINHAS_MENU_SUBIDA.includes(partes[0]) && numeros[1] !== null;
-  return nome === "SBC" && partes.length === 2 && LINHAS_MENU_SUBIDA.includes(partes[0]) && ["0", "1"].includes(partes[1]);
+  if (nome === "SBV" && partes.length === 2 && LINHAS_MENU_SUBIDA.includes(partes[0]) && numeros[1] !== null) {
+    estado.menuSubida[partes[0]] = numeros[1];
+    return true;
+  }
+  if (nome === "SBC" && partes.length === 2 && LINHAS_MENU_SUBIDA.includes(partes[0]) && ["0", "1"].includes(partes[1])) {
+    estado.cursorSubida = [partes[0], partes[1] === "1"];
+    return true;
+  }
+  return false;
 }
 
 function interpretar(mensagem) {
@@ -183,7 +245,7 @@ function interpretar(mensagem) {
   } else if ((nome === "SAS" || nome === "RCS") && partes.length === 1 && (partes[0] === "0" || partes[0] === "1")) {
     estado.estados[nome] = partes[0] === "1";
   } else if (nome === "PAG" && partes.length === 1 && ["NAV", "SAS", "AP", "POUSO", "SUBIDA"].includes(partes[0])) {
-    estado.pagina = partes[0] === "SUBIDA" ? "NAV" : partes[0];
+    estado.pagina = partes[0];
   } else if (nome === "SASM" && off) {
     estado.sas.modo = estado.sas.cor = null;
   } else if (nome === "SASM" && partes.length === 2 && ["A", "V"].includes(partes[1])) {
@@ -197,9 +259,9 @@ function interpretar(mensagem) {
   } else if (nome === "APC" && partes.length === 2 && partes[0] in estado.ap && ["0", "1"].includes(partes[1])) {
     estado.cursor = [partes[0], partes[1] === "1"];
   } else if (nome === "SCR" && partes.length === 2 && SCRIPTS.includes(partes[0]) && ["OFF", "ATIVO", "FIM", "ABORT", "FALHA"].includes(partes[1])) {
-    if (partes[0] === "POUSO") estado.scr = [partes[1], null];
+    estado[partes[0] === "POUSO" ? "scr" : "lancar"] = [partes[1], null];
   } else if (nome === "SCR" && partes.length === 3 && SCRIPTS.includes(partes[0]) && ["LIGA", "DESL"].includes(partes[1]) && numeros[2] !== null) {
-    if (partes[0] === "POUSO") estado.scr = [partes[1], numeros[2]];
+    estado[partes[0] === "POUSO" ? "scr" : "lancar"] = [partes[1], numeros[2]];
   } else if (linhaDaSubida(nome, partes, numeros)) {
     return true;
   } else if (nome === "POU" && off) {
@@ -690,6 +752,12 @@ function valorAp(nome, valor) {
   return `${valor >= 0 ? "+" : "-"}${(Math.abs(valor) / 10).toFixed(1)} M/S`;
 }
 
+function cursorDaLinha(y, escolhida) {
+  linha(COR.texto, 1, [12, y - 6], [20, y], [12, y + 6]);
+  if (!escolhida) retangulo({ x: 24, y: y - 17, w: 286, h: 34 }, null, COR.texto, 1, 4);
+  else retangulo({ x: 176, y: y - 15, w: 130, h: 30 }, null, COR.ambar, 2, 3);
+}
+
 function desenharPaginaAp() {
   textoCentro("PILOTO AUTOMATICO", COR.rotulo, 160, 12, 14);
   linha(COR.borda, 1, [12, 24], [308, 24]);
@@ -698,11 +766,7 @@ function desenharPaginaAp() {
     const y = 46 + i * 44;
     const [modo, valor] = estado.ap[nome];
     const [rotulo, cor] = ESTADO_AP[modo];
-    if (nome === linhaCursor) {
-      linha(COR.texto, 1, [12, y - 6], [20, y], [12, y + 6]);
-      if (!escolhida) retangulo({ x: 24, y: y - 17, w: 286, h: 34 }, null, COR.texto, 1, 4);
-      else retangulo({ x: 176, y: y - 15, w: 130, h: 30 }, null, COR.ambar, 2, 3);
-    }
+    if (nome === linhaCursor) cursorDaLinha(y, escolhida);
     texto(NOMES_AP[nome], COR.texto, 32, y, "left", "middle", 16);
     texto(rotulo, COR[cor], 80, y, "left", "middle", 11);
     texto(valorAp(nome, valor), nome === linhaCursor && escolhida ? COR.ambar : COR.texto, 300, y, "right", "middle", 20);
@@ -714,6 +778,22 @@ function desenharPaginaAp() {
   texto(estado.trava === null ? "SEM TRAVA" : `TRAVA ${estado.trava} M`, estado.trava === null ? COR.apagado : COR.verde, 304, 200, "right", "middle", 14);
   const dica = escolhida ? "GIRAR: VALOR  APERTAR: SAI" : "GIRAR: LINHA  APERTAR: ESCOLHE";
   textoCentro(dica, COR.rotulo, 160, 226, 11);
+}
+
+function caixaSegurar(scr, faltam, paraAbrir) {
+  if (scr !== "LIGA" && scr !== "DESL") return;
+  retangulo({ x: 90, y: 80, w: 140, h: 56 }, COR.fundo, COR.ambar, 2, 6);
+  textoCentro(`SEGURE ${faltam} S`, COR.ambar, 160, 100, 20);
+  textoCentro(scr === "LIGA" ? paraAbrir : "PARA ABORTAR", COR.ambar, 160, 122, 11);
+}
+
+function indicadorDeFase(fase, cor, fimDaLinha) {
+  circulo(26, 212, 16, null, cor, 2);
+  circulo(26, 212, 7, null, cor, 2);
+  circulo(26, 212, 2, cor, null);
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) linha(cor, 2, [26 + 11 * dx, 212 + 11 * dy], [26 + 19 * dx, 212 + 19 * dy]);
+  texto(fase, cor, 48, 203);
+  linha(cor, 1, [46, 222.5], [fimDaLinha, 222.5]);
 }
 
 function naveDePouso(x, pe, motor, trem) {
@@ -777,11 +857,7 @@ function desenharPaginaPouso(agora) {
   if (p.AVISO in AVISOS_POUSO && Math.floor(agora / 500) % 2 === 0) textoCentro(AVISOS_POUSO[p.AVISO], COR.aviso, 160, 56, 11);
 
   // Segurando o korry: quantos segundos faltam
-  if (scr === "LIGA" || scr === "DESL") {
-    retangulo({ x: 90, y: 80, w: 140, h: 56 }, COR.fundo, COR.ambar, 2, 6);
-    textoCentro(`SEGURE ${faltam} S`, COR.ambar, 160, 100, 20);
-    textoCentro(scr === "LIGA" ? "PARA POUSAR" : "PARA ABORTAR", COR.ambar, 160, 122, 11);
-  }
+  caixaSegurar(scr, faltam, "PARA POUSAR");
 
   // Indicador da fase, embaixo à esquerda
   let fase, cor;
@@ -790,13 +866,7 @@ function desenharPaginaPouso(agora) {
   else if (p.FASE in FASES_POUSO) [fase, cor] = FASES_POUSO[p.FASE];
   else if (scr === "ATIVO" || scr === "DESL") [fase, cor] = ["LIGANDO", "azul"];
   else [fase, cor] = ["PARADO", "apagado"];
-  cor = COR[cor];
-  circulo(26, 212, 16, null, cor, 2);
-  circulo(26, 212, 7, null, cor, 2);
-  circulo(26, 212, 2, cor, null);
-  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) linha(cor, 2, [26 + 11 * dx, 212 + 11 * dy], [26 + 19 * dx, 212 + 19 * dy]);
-  texto(fase, cor, 48, 203);
-  linha(cor, 1, [46, 222.5], [118, 222.5]);
+  indicadorDeFase(fase, COR[cor], 118);
 
   // Freada: quanto do empuxo ela precisa agora; o motor acende na marca
   const barra = { x: 212, y: 220, w: 100, h: 8 };
@@ -815,6 +885,311 @@ function desenharPaginaPouso(agora) {
   }
 }
 
+function limitar(v, minimo, maximo) {
+  return Math.max(minimo, Math.min(maximo, v));
+}
+
+function poligono(xy, cor) {
+  ctx.beginPath();
+  ctx.moveTo(xy[0][0], xy[0][1]);
+  for (const [x, y] of xy.slice(1)) ctx.lineTo(x, y);
+  ctx.closePath();
+  ctx.fillStyle = cor;
+  ctx.fill();
+}
+
+function tracado(xy, cor, largura, traco = []) {
+  if (xy.length < 2) return;
+  ctx.setLineDash(traco);
+  linha(cor, largura, ...xy);
+  ctx.setLineDash([]);
+}
+
+function comPose([x, y], [ux, uy], fator, sobe, desenho) {
+  ctx.save();
+  ctx.transform(-uy * fator, ux * fator, -ux * fator, -uy * fator, x, y);
+  ctx.translate(0, -sobe);
+  desenho((largura) => Math.max(largura, 1 / fator));
+  ctx.restore();
+}
+
+function desenharKsc(chao, cima, fator) {
+  comPose(chao, cima, fator, 0, (largura) => {
+    poligono([[-26, 0], [-19, -5], [19, -5], [26, 0]], COR_CENA.plataforma);
+    linha(COR_CENA.torre, largura(2), [-15, -5], [-15, -58]);
+    linha(COR_CENA.torre, largura(2), [-10, -5], [-10, -58]);
+    for (const [x0, y0, x1, y1] of BRACOS) linha(COR_CENA.torre, largura(1), [x0, y0], [x1, y1]);
+    linha(COR_CENA.torre, largura(2), [-10, -42], [-4, -42]);
+    linha(COR_CENA.torre, largura(1), [26, 0], [28, -26]);
+    linha(COR_CENA.torre, largura(1), [34, 0], [32, -26]);
+    circulo(30, -31, 6, COR_CENA.tanque, null);
+    retangulo({ x: -112, y: -70, w: 56, h: 70 }, COR_CENA.vab, null);
+    retangulo({ x: -114, y: -74, w: 60, h: 5 }, COR_CENA.vabTeto, null);
+    retangulo({ x: -97, y: -62, w: 24, h: 62 }, COR_CENA.vabPorta, null);
+    for (const y of [-48, -34, -20]) linha(COR_CENA.vabListra, largura(1), [-97, y], [-73, y]);
+    retangulo({ x: -56, y: -30, w: 18, h: 30 }, COR_CENA.vabAnexo, null);
+    linha(COR_CENA.vabTeto, largura(1), [-64, -74], [-64, -86]);
+  });
+}
+
+function desenharFoguete(nave, eixo, fator, sobe, motor) {
+  comPose(nave, eixo, fator, sobe, (largura) => {
+    if (motor > 0) {
+      const l = 6 + 16 * Math.min(motor, 100) / 100;
+      poligono([[-3, 2], [3, 2], [0, 2 + l]], COR_POUSO.chama);
+      poligono([[-1, 2], [1, 2], [0, 2 + l * 0.55]], COR_POUSO.chamaMeio);
+    }
+    retangulo({ x: -2, y: 0, w: 4, h: 2 }, COR.apagado, null);
+    retangulo({ x: -4, y: -34, w: 8, h: 34 }, COR_POUSO.corpo, null);
+    linha(COR.apagado, largura(1), [-4, -22], [4, -22]);
+    poligono([[-4, -34], [4, -34], [0, -46]], COR_POUSO.corpo);
+    poligono([[-4, -10], [-4, 0], [-9, 2]], COR.apagado);
+    poligono([[4, -10], [4, 0], [9, 2]], COR.apagado);
+  });
+}
+
+function marcaDaCena([x, y], [ux, uy], cor) {
+  linha(cor, 2, [x - 4 * ux, y - 4 * uy], [x + 4 * ux, y + 4 * uy]);
+}
+
+function rotuloDaCena(t, [x, y], ux) {
+  const topo = limitar(y - 5.5, CENA.topo, CENA.fundo - 11);
+  if (ux >= 0) texto(t, COR.texto, x + 8, topo, "left", "top", 11);
+  else texto(t, COR.texto, x - 8, topo, "right", "top", 11);
+}
+
+function desenharCenaSubida(agora) {
+  const s = estado.subida;
+  if (!(s.RAIO > 0)) {
+    cena.modo = null;
+    return;
+  }
+  const raio = limitar(s.RAIO, 1000, 1e8);
+  const alvo = limitar(s.ALVO || 0, 10000, 2.5e8);
+  const topo = limitar(s.TOPO || 0, 0, 1e7);
+  const alt = s.ALT || 0;
+  const apOk = s.AP !== null, peOk = s.PE !== null;
+  const ap = apOk ? Math.min(s.AP, 9e8) : 0, pe = peOk ? Math.min(s.PE, 9e8) : 0;
+  const nu = ((((s.ANOM === null ? 1800 : s.ANOM) % 3600) + 3600) % 3600) / 10;
+  const ra = raio + ap, rp = Math.max(1, raio + pe);
+  const conica = apOk && peOk && rp <= ra;
+  const e = conica ? (ra - rp) / (ra + rp) : 0, p = conica ? 2 * ra * rp / (ra + rp) : 0;
+  const raioConica = (v) => {
+    const den = 1 + e * Math.cos(v * RAD);
+    return den < 1e-3 ? Infinity : p / den;
+  };
+  const exibido = (r) => raio + CENA.exagero * (r - raio);
+  let nuChao = 0;
+  if (conica && rp < raio) nuChao = ra < raio ? 180 : Math.acos(limitar((p / raio - 1) / e, -1, 1)) * GRAUS;
+
+  let pedido = MODOS_CENA[s.FASE] || "PAD";
+  if (pedido === "MANTER") pedido = cena.modo || "PAD";
+  if (cena.modo === null) {
+    cena.modo = cena.antes = pedido;
+    cena.desde = agora - CENA.zoom;
+  } else if (pedido !== cena.modo) {
+    cena.antes = cena.modo;
+    cena.modo = pedido;
+    cena.desde = agora;
+  }
+  const t = limitar((agora - cena.desde) / CENA.zoom, 0, 1);
+  const b = t * t * (3 - 2 * t);
+  const cameraDo = (modo) => {
+    if (modo === "PAD") return { s: 96 / Math.max(340, CENA.exagero * limitar(alt, 0, 1e6) * 1.35 + 140), gy: 174, ref: nu };
+    if (modo === "TRAJ") return { s: 84 / (CENA.exagero * alvo), gy: 160, ref: 180 };
+    const escala = 88 / (2 * 1.04 * (raio + CENA.exagero * Math.min(apOk && ap > alvo ? ap : alvo, 2.5e8)));
+    return { s: escala, gy: CENA.y - raio * escala, ref: nu };
+  };
+  let cam = cameraDo(cena.modo);
+  if (cena.antes !== cena.modo && b < 1) {
+    const c0 = cameraDo(cena.antes);
+    cam = {
+      s: Math.exp(Math.log(c0.s) + (Math.log(cam.s) - Math.log(c0.s)) * b),
+      gy: c0.gy + (cam.gy - c0.gy) * b,
+      ref: c0.ref + (cam.ref - c0.ref) * b,
+    };
+  }
+  const pesoPad = cena.modo === "PAD" ? 1 : cena.antes === "PAD" ? 1 - b : 0;
+  const pesoTraj = cena.modo === "TRAJ" ? (cena.antes === "TRAJ" ? 1 : b) : cena.antes === "TRAJ" ? 1 - b : 0;
+
+  const tela = (rd, phi) => [
+    CENA.x + limitar(rd * Math.cos(phi * RAD) * cam.s, -CENA.limite, CENA.limite),
+    cam.gy - limitar((rd * Math.sin(phi * RAD) - raio) * cam.s, -CENA.limite, CENA.limite),
+  ];
+  const fora = (phi) => [Math.cos(phi * RAD), -Math.sin(phi * RAD)];
+  const angulo = (v) => 90 + cam.ref - v;
+  const longe = ([x, y]) => Math.abs(x - CENA.x) > CENA.longe || Math.abs(y - CENA.y) > CENA.longe;
+  const arco = (de, ate, pontos) => {
+    const xy = [];
+    for (let k = 0; k <= pontos; k++) {
+      const v = de + (ate - de) * k / pontos;
+      const rd = exibido(raioConica(v));
+      if (isFinite(rd) && rd >= 0.6 * raio) xy.push(tela(rd, angulo(v)));
+    }
+    return xy;
+  };
+  const naSuperficie = (phi, fracao) => tela(raio * fracao, phi);
+  const cy = cam.gy + raio * cam.s;
+  const rPlaneta = raio * cam.s;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, CENA.topo, LARGURA, CENA.fundo - CENA.topo + 1);
+  ctx.clip();
+  for (const [x, y] of ESTRELAS) circulo(x, y, 0.8, COR_CENA.estrela, null);
+  if (topo > 0) circulo(CENA.x, cy, exibido(raio + topo) * cam.s, COR_CENA.ceu, null);
+  if (pesoPad < 0.5) {
+    ctx.setLineDash([3, 4]);
+    circulo(CENA.x, cy, exibido(raio + alvo) * cam.s, null, COR.ambar, 1);
+    ctx.setLineDash([]);
+    if (conica && cena.modo === "ORB") {
+      tracado(arco(0, 360, 96), COR.verde, 2);
+    } else if (conica) {
+      const de = nuChao > 0 ? nuChao - 2 : 0, ate = nuChao > 0 ? 360 - nuChao + 2 : 360;
+      const v = limitar(nu, de, ate);
+      tracado(arco(v, ate, 60), COR.traco, 1, [4, 3]);
+      tracado(arco(de, v, 40), COR.verde, 2);
+    }
+  }
+
+  const corpo = s.CORPO;
+  circulo(CENA.x, cy, rPlaneta, { KERBIN: COR_CENA.mar, MUN: COR_CENA.mun, MINMUS: COR_CENA.minmus }[corpo] || COR_CENA.outro, null);
+  if (corpo === "KERBIN") {
+    for (const [leste, oeste, dentro] of CONTINENTES) {
+      ctx.beginPath();
+      ctx.arc(CENA.x, cy, rPlaneta, -leste * RAD, -oeste * RAD, true);
+      for (const [phi, f] of dentro) ctx.lineTo(...naSuperficie(phi, f));
+      ctx.closePath();
+      ctx.fillStyle = COR_CENA.terra;
+      ctx.fill();
+    }
+    for (const [phi, f, r] of ILHAS) circulo(...naSuperficie(phi, f), rPlaneta * r, COR_CENA.terra, null);
+    poligono(GELO.map((f, i) => naSuperficie(i * 30, f)), COR_CENA.gelo);
+  } else if (corpo === "MUN") {
+    for (const mar of MARES_MUN) poligono(mar.map(([phi, f]) => naSuperficie(phi, f)), COR_CENA.manchaMun);
+    for (const [phi, f, r] of CRATERAS_MUN) circulo(...naSuperficie(phi, f), rPlaneta * r, null, COR_CENA.manchaMun, 1);
+  } else if (corpo === "MINMUS") {
+    for (const [phi, f, r] of PLANOS_MINMUS) circulo(...naSuperficie(phi, f), rPlaneta * r, COR_CENA.manchaMinmus, null);
+  }
+
+  const phiNave = angulo(nu);
+  const nave = tela(exibido(raio + limitar(alt, 0, 9e8)), phiNave);
+  const chao = tela(raio, phiNave);
+  const cima = fora(phiNave);
+  let tangente = [-cima[1], cima[0]];
+  if (conica) {
+    const a = tela(exibido(raioConica(nu - 0.5)), phiNave + 0.5);
+    const d = tela(exibido(raioConica(nu + 0.5)), phiNave - 0.5);
+    const n = Math.hypot(d[0] - a[0], d[1] - a[1]);
+    if (n > 0 && isFinite(n)) tangente = [(d[0] - a[0]) / n, (d[1] - a[1]) / n];
+  }
+  const ex = tangente[0] * (1 - pesoPad) + cima[0] * pesoPad, ey = tangente[1] * (1 - pesoPad) + cima[1] * pesoPad;
+  const ne = Math.hypot(ex, ey);
+  const eixo = ne > 0 ? [ex / ne, ey / ne] : [0, -1];
+  const fator = 3 * cam.s;
+
+  if (corpo === "KERBIN" && pesoPad >= 0.5 && fator >= 11 / 256 && !longe(chao)) desenharKsc(chao, cima, fator);
+
+  if (pesoPad < 0.5) {
+    if (conica) {
+      const pAp = tela(exibido(ra), angulo(180)), uAp = fora(angulo(180));
+      if (!longe(pAp)) {
+        marcaDaCena(pAp, uAp, COR.ambar);
+        const t = `AP ${formatarDistancia(s.AP)}`;
+        if (cena.modo === "ORB") rotuloDaCena(t, pAp, uAp[0]);
+        else textoCentro(t, COR.texto, pAp[0], pAp[1] - 17.5 < CENA.topo ? pAp[1] + 13 : pAp[1] - 12, 11);
+      }
+      if (cena.modo === "ORB" && pe > 0) {
+        const pPe = tela(exibido(rp), angulo(0)), uPe = fora(angulo(0));
+        if (!longe(pPe)) {
+          marcaDaCena(pPe, uPe, COR.rotulo);
+          rotuloDaCena(`PE ${formatarDistancia(s.PE)}`, pPe, uPe[0]);
+        }
+      }
+    }
+    const rAlvo = exibido(raio + alvo) * cam.s, dx = 296 - CENA.x;
+    if (pesoTraj >= 0.5 && rAlvo > dx) texto(`ALVO ${formatarDistancia(alvo)}`, COR.ambar, 304, cy - Math.sqrt(rAlvo * rAlvo - dx * dx) - 4, "right", "bottom", 11);
+  }
+
+  if (!longe(nave)) desenharFoguete(nave, eixo, limitar(fator, 83 / 256, 2), 5 * pesoPad, s.MOTOR || 0);
+  ctx.restore();
+}
+
+function subidaVoando() {
+  const scr = estado.lancar[0];
+  if (scr === "ATIVO" || scr === "DESL") return true;
+  return scr in FINS_SUBIDA && CAMPOS_SUBIDA.some((c) => estado.subida[c] !== null);
+}
+
+function valorMenuSubida(nome) {
+  const m = estado.menuSubida;
+  if (nome === "INC" && m.PLANO) return "DO ALVO";
+  if (m[nome] === null) return "---";
+  if (nome === "ALT") return `${m[nome]} KM`;
+  if (nome === "INC") return `${m[nome]} GR`;
+  return m[nome] ? "SIM" : "NAO";
+}
+
+function desenharConfiguracaoSubida() {
+  textoCentro("SUBIDA ATE A ORBITA", COR.rotulo, 160, 12, 14);
+  linha(COR.borda, 1, [12, 24], [308, 24]);
+  const [linhaCursor, escolhida] = estado.cursorSubida;
+  LINHAS_MENU_SUBIDA.forEach((nome, i) => {
+    const y = 46 + i * 44;
+    const noCursor = nome === linhaCursor;
+    if (noCursor) cursorDaLinha(y, escolhida);
+    texto(ROTULOS_MENU_SUBIDA[nome], COR.texto, 32, y, "left", "middle", 16);
+    texto(valorMenuSubida(nome), noCursor && escolhida ? COR.ambar : COR.texto, 300, y, "right", "middle", 20);
+  });
+  linha(COR.borda, 1, [12, 184], [308, 184]);
+  const [resultado, cor] = FINS_SUBIDA[estado.lancar[0]] || ["PRONTO", "texto"];
+  texto(resultado, COR[cor], 16, 192);
+  texto("SEGURE LANCAR 5 S", COR.rotulo, 304, 192, "right");
+  textoCentro(escolhida ? "GIRAR: VALOR  APERTAR: SAI" : "GIRAR: LINHA  APERTAR: ESCOLHE", COR.rotulo, 160, 226, 11);
+}
+
+function grausSubida(v) {
+  return v === null ? "---" : (v / 10).toFixed(1);
+}
+
+function desenharVooSubida(agora) {
+  const s = estado.subida;
+  desenharCenaSubida(agora);
+  [
+    ["ALT", formatarDistancia(s.ALT)],
+    ["VEL", formatarVelocidade(s.VEL)],
+    ["Q", s.Q === null ? "---" : `${(s.Q / 1000).toFixed(1)} kPa`],
+    ["DV", s.DV === null ? "---" : `${s.DV} m/s`],
+  ].forEach(([rotulo, valor], i) => {
+    texto(rotulo, COR.rotulo, 8, 6 + i * 15);
+    texto(valor, COR.verde, 44, 6 + i * 15);
+  });
+  const inc = s.INC === null && s.INCA === null ? "---" : `${grausSubida(s.INC)}/${grausSubida(s.INCA)}`;
+  [["AP", formatarDistancia(s.AP)], ["PE", formatarDistancia(s.PE)], ["INC", inc]].forEach(([rotulo, valor], i) => {
+    texto(rotulo, COR.rotulo, 176, 6 + i * 15);
+    texto(valor, COR.verde, 312, 6 + i * 15, "right");
+  });
+  if (s.AVISO in AVISOS_SUBIDA && Math.floor(agora / 500) % 2 === 0) textoCentro(AVISOS_SUBIDA[s.AVISO], COR.aviso, 160, 68, 11);
+
+  const scr = estado.lancar[0];
+  let fase, cor;
+  if (scr in FINS_SUBIDA) [fase, cor] = FINS_SUBIDA[scr];
+  else if (s.FASE in FASES_SUBIDA) [fase, cor] = [s.FASE, FASES_SUBIDA[s.FASE]];
+  else [fase, cor] = ["LIGANDO", "azul"];
+  indicadorDeFase(fase, COR[cor], 140);
+  let baixo = "";
+  if (s.FASE === "JANELA" && s.JAN !== null) baixo = formatarTempo(s.JAN);
+  else if ((s.FASE === "GIRO" || s.FASE === "CURVA") && s.GIRO !== null) baixo = `GIRO ${grausSubida(s.GIRO)} GR`;
+  else if (s.MOTOR !== null) baixo = `MOTOR ${s.MOTOR}%`;
+  texto(baixo, COR.texto, 48, 225, "left", "top", 11);
+}
+
+function desenharPaginaSubida(agora) {
+  if (subidaVoando()) desenharVooSubida(agora);
+  else desenharConfiguracaoSubida();
+  caixaSegurar(estado.lancar[0], estado.lancar[1], "PARA LANCAR");
+}
+
 function desenhar(agora) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = COR.fundo;
@@ -825,6 +1200,7 @@ function desenhar(agora) {
   if (comSinal && estado.pagina === "SAS") { desenharPaginaSas(); return; }
   if (comSinal && estado.pagina === "AP") { desenharPaginaAp(); return; }
   if (comSinal && estado.pagina === "POUSO") { desenharPaginaPouso(agora); return; }
+  if (comSinal && estado.pagina === "SUBIDA") { desenharPaginaSubida(agora); return; }
   desenharAro();
   desenharNavball(comSinal);
   desenharCaixas(comSinal, agora);

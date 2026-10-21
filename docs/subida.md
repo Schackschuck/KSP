@@ -26,7 +26,15 @@ A nave tem que estar parada no chão, com o primeiro estágio ainda por acender.
 4. Segure o LANCAR 5 s. O korry pisca âmbar contando, fica verde com o script voando, e a página passa a mostrar o voo. Segurar de novo 5 s aborta.
 5. No fim, a página mostra `EM ORBITA`, `ABORTADO` ou `FALHOU` por 10 s.
 
-**A página SUBIDA só aparece na mikromedia.** O simulador e o celular aceitam as linhas dela, mas mostram a navball. Depois de mudar o firmware, é preciso gravar o `mfd.hex` de novo, pelo Flash Magic ou pelo Pi ([docs/mikromedia.md](mikromedia.md#gravar-pelo-pi-sem-tirar-o-cabo)).
+**O desenho do voo.** No meio da página, entre os números de cima e a fase embaixo, a tela desenha o voo. É um desenho só (o planeta, a atmosfera, a trajetória e o círculo tracejado do alvo) visto por uma câmera que abre em dois zooms de 1,5 s:
+
+- **Na decolagem**, a câmera fica no KSC: o VAB, a torre da plataforma, a caixa d'água e o foguete, com a chama pelo acelerador. Quando o foguete sobe, ela abre aos poucos para ele não sair da tela.
+- **No giro**, o primeiro zoom: o KSC some, o chão vira a curva do planeta e aparece a trajetória prevista, uma parábola. O trecho verde é o já voado, o tracejado o que falta, e a marca âmbar é o apoastro. A parábola cresce até o círculo do alvo.
+- **Na circularização**, o segundo zoom: o planeta inteiro, e a parábola, que já era um pedaço da órbita, vira a elipse. O periastro sobe até a órbita fechar no círculo do alvo.
+
+O desenho não está em escala: a altitude é esticada 3 vezes, para a órbita não ficar colada no planeta. Os números de verdade estão em cima. Kerbin aparece visto de cima do polo, como uma órbita equatorial é vista: o gelo no meio, os continentes e o mar em volta, e o KSC no litoral, com o mar a leste. A Mun é cinza com crateras, e Minmus, verde-claro. O script manda o que o desenho precisa nas linhas `SUB ANOM`, `RAIO`, `TOPO` e `CORPO` ([protocolo](protocolo.md#subida--ponte-da-tela)).
+
+**A página SUBIDA aparece na mikromedia e no navegador** (o celular e o tablet do cockpit, em `bridge/celular/index.html`). O simulador aceita as linhas dela, mas mostra a navball. Depois de mudar o firmware, é preciso gravar o `mfd.hex` de novo, pelo Flash Magic ou pelo Pi ([docs/mikromedia.md](mikromedia.md#gravar-pelo-pi-sem-tirar-o-cabo)).
 
 ### O log do voo
 

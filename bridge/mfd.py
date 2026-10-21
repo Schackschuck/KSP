@@ -48,8 +48,8 @@ ele voa. Com --demo, o pouso é o de uma nave simulada (pouso.py --demo).
 O korry LANCAR faz o mesmo com o scripts/subida.py, que leva a nave do chão até
 a órbita; a altitude, a inclinação e o plano do alvo vêm do menu da subida,
 que o encoder da subida mexe (ENC SUB e BTN SUB). A tela mostra a página
-SUBIDA, com o menu e depois o voo, mas só a mikromedia a desenha: o simulador
-e o celular aceitam as linhas e mostram a navball. Com --demo, a subida é a de
+SUBIDA, com o menu e depois o voo, na mikromedia e no celular; o simulador
+aceita as linhas e mostra a navball. Com --demo, a subida é a de
 um foguete simulado (subida.py --demo).
 
 Com o KSP, a ponte espera o jogo abrir e reconecta sozinha quando ele fecha e
@@ -124,6 +124,8 @@ CAMPOS_SUBIDA = {
     "ALT": int, "VEL": int, "Q": int, "INC": int, "INCA": int, "DV": int, "MOTOR": int, "ALVO": int,
     "AP": (int, "OFF"), "PE": (int, "OFF"), "JAN": (int, "OFF"), "GIRO": (int, "OFF"),
     "AVISO": ("EMPUXO", "ALTITUDE", "INCLINACAO", "ALVO", "COMBUSTIVEL", "OFF"),
+    "ANOM": int, "RAIO": int, "TOPO": int,
+    "CORPO": lambda valor: 0 < len(valor) <= 12 and valor.isascii() and valor.isalnum() and valor == valor.upper(),
 }
 
 # Perto do chão, a altitude passa a ser a do radar (acima do chão, ou do mar).
@@ -424,6 +426,8 @@ def _campo_valido(campos, campo, valor):
         return False
     if aceitos is int:
         return _inteiro(valor) is not None
+    if callable(aceitos):
+        return aceitos(valor)
     return valor in aceitos or (int in aceitos and _inteiro(valor) is not None)
 
 
@@ -477,7 +481,7 @@ class Scripts:
                 dados, endereco = self._socket.recvfrom(MAX_PACOTE)
             except OSError:
                 return  # nada na fila (ou, no Windows, um aviso de pacote perdido)
-            linhas = [linha.strip() for linha in dados.decode("ascii", errors="replace").split("\n") if linha.strip()]
+            linhas = [linha.strip() for linha in dados.decode("ascii", errors="backslashreplace").split("\n") if linha.strip()]
             if not all(linha.startswith(("POU ", "SUB ")) for linha in linhas):
                 self._endereco = endereco   # só o fbw.py recebe resposta
             for linha in linhas:

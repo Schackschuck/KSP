@@ -32,6 +32,7 @@ FONTES = [
     "relogio.c",
     "texto.c",
     "tabelas.c",
+    "cena.c",
     "suporte.c",
 ]
 ALVO = ["--target=armv4t-none-eabi", "-mcpu=arm7tdmi", "-marm", "-mfloat-abi=soft"]

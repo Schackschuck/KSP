@@ -629,12 +629,22 @@ class TestLinhasDaSubida(unittest.TestCase):
         self.assertEqual(estado["SUB AP"], "SUB AP OFF")
         self.assertEqual(estado["SUB PE"], "SUB PE -123456")
 
+    def test_campos_do_desenho_passam(self):
+        pacote = ["SUB ANOM 1799", "SUB RAIO 60000", "SUB TOPO 0", "SUB CORPO MINMUS"]
+        self.enviar.sendto("\n".join(pacote).encode("ascii"), ("127.0.0.1", self.porta))
+        self.assertTrue(self.esperar(lambda: "SUB CORPO" in self.ponte.estado_subida()))
+        estado = self.ponte.estado_subida()
+        self.assertEqual(sorted(estado.values()), sorted(pacote))
+
     def test_linha_errada_e_descartada(self):
         pacote = [
             "SUB FASE VOANDO", "SUB ALT muito", "SUB OFF", "SUB ALT", "SUB ALT 1 2", "SUB XIS 1",
             "SUB MOTOR OFF", "SUB AVISO NADA", "SUB AP 1.5",
+            "SUB ANOM x", "SUB RAIO OFF", "SUB TOPO 1.5", "SUB CORPO", "SUB CORPO kerbin",
+            "SUB CORPO KERBIN1234567", "SUB CORPO KER-BIN",
         ]
         self.enviar.sendto("\n".join(pacote).encode("ascii"), ("127.0.0.1", self.porta))
+        self.enviar.sendto(b"SUB CORPO K\xc9RBIN", ("127.0.0.1", self.porta))
         time.sleep(0.1)
         self.assertEqual(self.ponte.estado_subida(), {"SUB": "SUB OFF"})
 

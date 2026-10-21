@@ -1,4 +1,5 @@
 #include "mfd.h"
+#include "cena.h"
 #include "desenho.h"
 #include "navball.h"
 #include "serial.h"
@@ -65,7 +66,7 @@
 enum { M_PRO, M_NRM, M_RDL, M_TGT, M_MNV, M_FBW, MARCADORES };
 enum { N_VEL, N_AP, N_PE, N_TAP, N_TPE, N_DIST, N_VV, N_ACEL, NUMEROS };
 enum { P_ALT, P_VV, P_MOTOR, P_TWR, P_FREADA, P_IGN, P_INCL, CAMPOS_POUSO };
-enum { S_ALT, S_VEL, S_AP, S_PE, S_ALVO, S_Q, S_INC, S_INCA, S_DV, S_JAN, S_GIRO, S_MOTOR, CAMPOS_SUBIDA };
+enum { S_ALT, S_VEL, S_AP, S_PE, S_ALVO, S_Q, S_INC, S_INCA, S_DV, S_JAN, S_GIRO, S_MOTOR, S_ANOM, S_RAIO, S_TOPO, CAMPOS_SUBIDA };
 enum { C_ALT, C_INC, C_PLANO, CAMPOS_CONFIG };
 enum { FS_JANELA, FS_DECOLAGEM, FS_GIRO, FS_CURVA, FS_VACUO, FS_COSTA, FS_CIRCULARIZA, FS_PLANO, FS_ORBITA, FS_FALHA, FASES_SUBIDA };
 enum { SCRIPT_POUSO, SCRIPT_LANCAR, SCRIPTS };
@@ -83,7 +84,7 @@ typedef struct {
 static const char *const nomes_marcadores[MARCADORES] = {"PRO", "NRM", "RDL", "TGT", "MNV", "FBW"};
 static const char *const nomes_numeros[NUMEROS] = {"VEL", "AP", "PE", "TAP", "TPE", "DIST", "VV", "ACEL"};
 static const char *const nomes_pouso[CAMPOS_POUSO] = {"ALT", "VV", "MOTOR", "TWR", "FREADA", "IGN", "INCL"};
-static const char *const nomes_subida[CAMPOS_SUBIDA] = {"ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR"};
+static const char *const nomes_subida[CAMPOS_SUBIDA] = {"ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR", "ANOM", "RAIO", "TOPO"};
 static const char *const nomes_config[CAMPOS_CONFIG] = {"ALT", "INC", "PLANO"};
 static const char *const nomes_fases_subida[FASES_SUBIDA] = {"JANELA", "DECOLAGEM", "GIRO", "CURVA", "VACUO", "COSTA", "CIRCULARIZA", "PLANO", "ORBITA", "FALHA"};
 static const char *const nomes_avisos_subida[5] = {"EMPUXO", "ALTITUDE", "INCLINACAO", "ALVO", "COMBUSTIVEL"};
@@ -129,7 +130,7 @@ static struct {
     int scr_lancar, lancar_faltam;
     char fase[12], sas_pouso[12], aviso[12];
     Numero pouso[CAMPOS_POUSO];
-    char fase_subida[16], aviso_subida[16];
+    char fase_subida[16], aviso_subida[16], corpo_subida[16];
     Numero subida[CAMPOS_SUBIDA];
     Numero config[CAMPOS_CONFIG];
     int cursor_subida, escolhida_subida;
@@ -279,13 +280,16 @@ static int interpretar(char *linha)
         e.cursor_subida = config;
         e.escolhida_subida = partes[1][0] == '1';
     } else if (igual(nome, "SUB") && off) {
-        e.fase_subida[0] = e.aviso_subida[0] = 0;
+        e.fase_subida[0] = e.aviso_subida[0] = e.corpo_subida[0] = 0;
+        cena_esquecer();
         for (int i = 0; i < CAMPOS_SUBIDA; i++)
             e.subida[i].valido = 0;
     } else if (igual(nome, "SUB") && n == 2 && igual(partes[0], "FASE")) {
         copiar(e.fase_subida, partes[1], sizeof(e.fase_subida));
     } else if (igual(nome, "SUB") && n == 2 && igual(partes[0], "AVISO")) {
         copiar(e.aviso_subida, partes[1], sizeof(e.aviso_subida));
+    } else if (igual(nome, "SUB") && n == 2 && igual(partes[0], "CORPO")) {
+        copiar(e.corpo_subida, partes[1], sizeof(e.corpo_subida));
     } else if (igual(nome, "SUB") && n == 2 && campo >= 0 && (ok[1] || igual(partes[1], "OFF"))) {
         e.subida[campo].valido = ok[1];
         e.subida[campo].valor = ok[1] ? numeros[1] : 0;
@@ -1106,37 +1110,36 @@ static void desenhar_configuracao_subida(void)
     texto(e.escolhida_subida ? "GIRAR: VALOR  APERTAR: SAI" : "GIRAR: LINHA  APERTAR: ESCOLHE", ROTULO, &fonte_pequena, CENTRO, 160, 226);
 }
 
-static int posicao_barra(int32_t valor, int32_t alvo, int largura)
+static int modo_da_cena(int fase)
 {
-    while (alvo > 4000000) {
-        alvo >>= 1;
-        valor >>= 1;
-    }
-    int32_t maximo = alvo + alvo / 5;
-    if (valor < 0)
-        valor = 0;
-    if (valor > maximo)
-        valor = maximo;
-    return valor * largura / maximo;
+    if (fase == FS_GIRO || fase == FS_CURVA || fase == FS_VACUO || fase == FS_COSTA)
+        return CENA_TRAJ;
+    if (fase == FS_CIRCULARIZA || fase == FS_PLANO || fase == FS_ORBITA)
+        return CENA_ORB;
+    if (fase == FS_FALHA)
+        return CENA_MANTER;
+    return CENA_PAD;
 }
 
-static void barra_orbita(const char *rotulo, int y, const Numero *valor, int escape)
+static void desenhar_cena_subida(void)
 {
-    const Numero *alvo = &e.subida[S_ALVO];
-    int pedido = alvo->valido && alvo->valor > 0;
-    texto(rotulo, ROTULO, &fonte_pequena, CANTO, 16, y);
-    preencher(16, y + 14, 288, 10, ARO);
-    if (pedido && valor->valido) {
-        uint16_t cor = valor->valor >= alvo->valor - alvo->valor / 50 ? VERDE : AZUL;
-        preencher(16, y + 14, posicao_barra(valor->valor, alvo->valor, 288), 10, cor);
-    } else if (escape) {
-        preencher(16, y + 14, 288, 10, AVISO);
-    }
-    retangulo(16, y + 14, 288, 10, BORDA, 1, 0);
-    if (pedido) {
-        int x = 16 + posicao_barra(alvo->valor, alvo->valor, 288);
-        linha(x, y + 11, x, y + 26, AMBAR, 2);
-    }
+    static const char *const corpos[3] = {"KERBIN", "MUN", "MINMUS"};
+    Numero *s = e.subida;
+    DadosCena d;
+    d.raio = s[S_RAIO].valido ? s[S_RAIO].valor : 0;
+    d.topo = s[S_TOPO].valido ? s[S_TOPO].valor : 0;
+    d.alvo = s[S_ALVO].valido ? s[S_ALVO].valor : 0;
+    d.alt = s[S_ALT].valido ? s[S_ALT].valor : 0;
+    d.ap = s[S_AP].valor;
+    d.pe = s[S_PE].valor;
+    d.ap_ok = s[S_AP].valido;
+    d.pe_ok = s[S_PE].valido;
+    d.anom = s[S_ANOM].valido ? s[S_ANOM].valor : 1800;
+    d.motor = s[S_MOTOR].valido ? s[S_MOTOR].valor : 0;
+    d.modo = modo_da_cena(indice_de(e.fase_subida, nomes_fases_subida, FASES_SUBIDA));
+    int corpo = indice_de(e.corpo_subida, corpos, 3);
+    d.corpo = corpo >= 0 ? corpo : CORPO_OUTRO;
+    cena_desenhar(&d, agora_quadro);
 }
 
 static void desenhar_voo_subida(void)
@@ -1145,6 +1148,7 @@ static void desenhar_voo_subida(void)
     char alt[20], vel[20], pressao[20], dv[20], ap[20], pe[20], inc[28], buf[24];
     char *p;
 
+    desenhar_cena_subida();
     formatar_distancia(alt, s[S_ALT].valido, s[S_ALT].valor);
     formatar_velocidade(vel, s[S_VEL].valido, s[S_VEL].valor);
     if (s[S_Q].valido) {
@@ -1185,9 +1189,6 @@ static void desenhar_voo_subida(void)
     int aviso = indice_de(e.aviso_subida, nomes_avisos_subida, 5);
     if (aviso >= 0 && (agora_quadro / 500u) % 2u == 0)
         texto(textos_avisos_subida[aviso], AVISO, &fonte_pequena, CENTRO, 160, 68);
-
-    barra_orbita("APOASTRO", 100, &s[S_AP], !s[S_AP].valido && s[S_PE].valido);
-    barra_orbita("PERIASTRO", 148, &s[S_PE], 0);
 
     int f = indice_de(e.fase_subida, nomes_fases_subida, FASES_SUBIDA);
     const char *fase;

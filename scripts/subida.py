@@ -2014,13 +2014,33 @@ def inclinacao_de(corpo, r, v):
     return math.degrees(math.acos(limitar(ponto(n, corpo.polo), -1.0, 1.0)))
 
 
+def anomalia_verdadeira(corpo, r, v):
+    """A anomalia verdadeira, em graus de 0 a 360: 0 no periastro, 180 no apoastro, abaixo de 180 subindo.
+
+    Sai de tan ν = √(p/μ)·(r·v) / (p − |r|), com p = h²/μ, que vale também
+    perto de uma órbita circular (onde o periastro quase não existe e
+    qualquer ângulo serve).
+    """
+    h = norma(cruz(r, v))
+    p = h * h / corpo.mu
+    return math.degrees(math.atan2(math.sqrt(p / corpo.mu) * ponto(r, v), p - norma(r))) % 360.0
+
+
+def nome_do_corpo(corpo):
+    """O nome do planeta para a tela: só letras e dígitos, em maiúsculas, com até 12 caracteres."""
+    nome = "".join(c for c in corpo.nome.upper() if c.isascii() and c.isalnum())
+    return nome[:12] or "OUTRO"
+
+
 def linhas_de_estado(l, guiagem, corpo):
     """O estado da subida nas linhas SUB do protocolo da tela (docs/protocolo.md).
 
-    Todas em ASCII e com no máximo 31 caracteres. Altitude, apoastro e
-    periastro em metros; velocidade, inclinação e giro em décimos; pressão
-    dinâmica em Pa; Δv em m/s; janela em segundos; motor em %. OFF onde o
-    valor não existe (escape, fora da janela, giro ainda não escolhido).
+    Todas em ASCII e com no máximo 31 caracteres. Altitude, apoastro,
+    periastro, raio do planeta e topo da atmosfera em metros; velocidade,
+    inclinação, giro e anomalia verdadeira em décimos; pressão dinâmica em
+    Pa; Δv em m/s; janela em segundos; motor em %. OFF onde o valor não
+    existe (escape, fora da janela, giro ainda não escolhido). A anomalia, o
+    raio, o topo e o nome do planeta são para o desenho da trajetória.
     """
     _, _, ra, rp = elementos(corpo, l.r, l.v)
     ap = _inteiro(ra - corpo.raio) if math.isfinite(ra) else "OFF"
@@ -2043,6 +2063,10 @@ def linhas_de_estado(l, guiagem, corpo):
         f"SUB JAN {janela}",
         f"SUB GIRO {giro}",
         f"SUB MOTOR {_inteiro(100 * limitar(guiagem.acelerador, 0.0, 1.0))}",
+        f"SUB ANOM {_inteiro(anomalia_verdadeira(corpo, l.r, l.v) * 10) % 3600}",
+        f"SUB RAIO {_inteiro(corpo.raio)}",
+        f"SUB TOPO {_inteiro(corpo.topo)}",
+        f"SUB CORPO {nome_do_corpo(corpo)}",
         f"SUB AVISO {guiagem.aviso or 'OFF'}",
     ]
 
