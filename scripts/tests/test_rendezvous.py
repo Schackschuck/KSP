@@ -5,12 +5,18 @@ Uso, a partir da raiz do repositório:
     python scripts/tests/test_rendezvous.py -v    # uma linha por teste
 """
 
+import argparse
+import contextlib
+import io
 import math
 import os
+import re
 import sys
 import time
+import types
 import unittest
 from dataclasses import dataclass
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
@@ -714,6 +720,1033 @@ class TestGuiagemPassoAPasso(unittest.TestCase):
         self.assertEqual(nos[0], (g.transferencia.t1, g.transferencia.dv1))
         for anterior, seguinte in zip(nos, nos[1:]):
             self.assertNotEqual(anterior, seguinte)
+
+
+NR = "nr"
+SUP = "sup"
+SEM_CONICAS = "o jogo não deixa criar nós agora"
+
+
+class FluxoFalso:
+    def __init__(self, funcao, argumentos):
+        self.funcao = funcao
+        self.argumentos = argumentos
+        self.removido = False
+
+    def __call__(self):
+        return self.funcao(*self.argumentos)
+
+    def remove(self):
+        self.removido = True
+
+
+class NoFalso:
+    """Um nó de manobra do jogo, com a base de prograde, normal e radial calculada à parte da guiagem."""
+
+    def __init__(self, jogo, ut, prograde, normal, radial):
+        self.jogo = jogo
+        self.ut = ut
+        self.prograde = prograde
+        self.normal = normal
+        self.radial = radial
+        self.removido = False
+        sim = jogo.sim
+        self._r, self._v = propagar(MU, sim.r, sim.v, ut - sim.t)
+        p = unit(self._v)
+        n = unit(cruz(self._r, self._v))
+        fora = unit(sub(self._r, esc(ponto(self._r, p), p)))
+        self._dv = soma(soma(esc(prograde, p), esc(normal, n)), esc(radial, fora))
+        self._alvo = sim.alvo()
+
+    def remove(self):
+        if not self.removido:
+            self.jogo.nave.control.nodes.remove(self)
+        self.removido = True
+
+    def burn_vector(self, referencia):
+        return self.jogo.eixos(self._dv)
+
+    @property
+    def orbit(self):
+        depois = Estado(self.ut, self._r, soma(self._v, self._dv))
+
+        def menor(outra):
+            return menor_distancia(MU, depois, self._alvo, self.ut, self.ut + 15 * 2207.0)
+
+        return types.SimpleNamespace(
+            distance_at_closest_approach=lambda outra: menor(outra)[0],
+            time_of_closest_approach=lambda outra: menor(outra)[1],
+        )
+
+
+class RecursosFalsos:
+    def __init__(self, nomes):
+        self.nomes = nomes
+
+    def has_resource(self, nome):
+        return nome in self.nomes
+
+
+class PecaFalsa:
+    def __init__(self, decouple_stage, dry_mass, recursos, combustivel=lambda: 0.0):
+        self.decouple_stage = decouple_stage
+        self.dry_mass = dry_mass
+        self.resources = RecursosFalsos(recursos)
+        self._combustivel = combustivel
+
+    @property
+    def mass(self):
+        return self.dry_mass + self._combustivel()
+
+
+class MotorFalso:
+    def __init__(self, peca, propellant_names, active=True):
+        self.part = peca
+        self.propellant_names = propellant_names
+        self.active = active
+
+
+class SuperficieFalsa:
+    def __init__(self, roll=True):
+        self.pitch_enabled = True
+        self.yaw_enabled = True
+        self.roll_enabled = roll
+
+
+class PartesFalsas:
+    def __init__(self, jogo):
+        sim = jogo.sim
+        combustiveis = ["LiquidFuel", "Oxidizer"]
+        self.tanque = PecaFalsa(1, 1_000.0, combustiveis, lambda: sim.combustivel)
+        self.peca_motor = PecaFalsa(1, 500.0, [])
+        self.tanque_mono = PecaFalsa(1, 100.0, ["MonoPropellant"], lambda: 200.0)
+        self.carga = PecaFalsa(2, 200.0, ["LiquidFuel"], lambda: 600.0)
+        self.peca_motor_de_cima = PecaFalsa(2, 300.0, [])
+        self.motor = MotorFalso(self.peca_motor, combustiveis)
+        self.motor_de_cima = MotorFalso(self.peca_motor_de_cima, ["LiquidFuel"], active=False)
+        self.engines = [self.motor, self.motor_de_cima]
+        self.all = [self.tanque, self.peca_motor, self.tanque_mono, self.carga, self.peca_motor_de_cima]
+        self.control_surfaces = [SuperficieFalsa(), SuperficieFalsa(roll=False)]
+
+
+class ControleFalso:
+    def __init__(self, jogo):
+        self.jogo = jogo
+        self.sas = True
+        self.rcs = False
+        self.throttle = 0.0
+        self.nodes = []
+
+    def add_node(self, ut, prograde=0.0, normal=0.0, radial=0.0):
+        if self.jogo.nao_cria_no:
+            raise RuntimeError(SEM_CONICAS)
+        no = NoFalso(self.jogo, ut, prograde, normal, radial)
+        self.nodes.append(no)
+        self.jogo.nos_criados.append(no)
+        return no
+
+
+class PilotoFalso:
+    def __init__(self):
+        self.reference_frame = None
+        self.engajado = False
+        self.quebrado = False
+        self.servidor_antigo = False
+        self.target_roll = 0.0
+        self.target_direction = None
+
+    @property
+    def engaged(self):
+        return self.engajado
+
+    @engaged.setter
+    def engaged(self, valor):
+        if self.quebrado:
+            raise RuntimeError("a nave não existe mais")
+        if self.servidor_antigo:
+            raise RuntimeError('Procedure "AutoPilot_set_Engaged" not found, in service "SpaceCenter"')
+        self.engajado = valor
+
+
+class VooFalso:
+    def __init__(self, jogo, estado):
+        self.jogo = jogo
+        self.estado = estado
+
+    @property
+    def velocity(self):
+        return self.jogo.eixos(self.estado()[1])
+
+    @property
+    def normal(self):
+        r, v = self.estado()
+        return self.jogo.eixos(unit(cruz(r, v)))
+
+
+class NaveFalsa:
+    name = "AEAS - SmalLifter"
+
+    def __init__(self, jogo):
+        self.jogo = jogo
+        self.orbit = types.SimpleNamespace(body=jogo.corpo)
+        self.surface_reference_frame = SUP
+        self.control = ControleFalso(jogo)
+        self.auto_pilot = PilotoFalso()
+        self.parts = PartesFalsas(jogo)
+
+    def position(self, referencia):
+        return self.jogo.eixos(self.jogo.sim.r)
+
+    def direction(self, referencia):
+        return self.jogo.eixos(self.jogo.sim.nariz)
+
+    def flight(self, referencia=None):
+        sim = self.jogo.sim
+        return VooFalso(self.jogo, lambda: (sim.r, sim.v))
+
+    def velocity(self, referencia):
+        return self.jogo.eixos(self.jogo.sim.v)
+
+    @property
+    def mass(self):
+        return self.jogo.sim.massa
+
+    @property
+    def available_thrust(self):
+        sim = self.jogo.sim
+        return sim.empuxo if sim.combustivel > 0.0 else 0.0
+
+    @property
+    def specific_impulse(self):
+        sim = self.jogo.sim
+        return sim.isp if sim.combustivel > 0.0 else 0.0
+
+
+class AlvoFalso:
+    def __init__(self, jogo, nome="Estação um"):
+        self.jogo = jogo
+        self.name = nome
+        self.orbit = types.SimpleNamespace(body=jogo.corpo)
+        self.destruido = False
+
+    def _estado(self):
+        if self.destruido:
+            raise RuntimeError("o objeto não existe mais")
+        alvo = self.jogo.sim.alvo()
+        return alvo.r, alvo.v
+
+    def position(self, referencia):
+        return self.jogo.eixos(self._estado()[0])
+
+    def flight(self, referencia=None):
+        return VooFalso(self.jogo, self._estado)
+
+
+class CorpoFalso:
+    name = "Kerbin"
+    gravitational_parameter = KERBIN.mu
+    equatorial_radius = KERBIN.raio
+    has_atmosphere = True
+    atmosphere_depth = KERBIN.topo
+    sphere_of_influence = KERBIN.soi
+    non_rotating_reference_frame = NR
+
+
+class CentroFalso:
+    def __init__(self, jogo):
+        self.jogo = jogo
+        self.target_vessel = None
+        self.target_body = None
+        self.warp_proibido = False
+        self.warps = []
+
+    @property
+    def ut(self):
+        return self.jogo.sim.t
+
+    @property
+    def active_vessel(self):
+        return self.jogo.nave
+
+    def transform_direction(self, direcao, de, para):
+        assert de == SUP and para == NR and tuple(direcao) == (0.0, 0.0, 1.0)
+        leste = unit(cruz(POLO, self.jogo.sim.r))
+        if self.jogo.leste_errado:
+            leste = esc(-1.0, leste)
+        return self.jogo.eixos(leste)
+
+    def warp_to(self, ut):
+        if self.warp_proibido:
+            raise RuntimeError("não dá para acelerar o tempo agora")
+        self.warps.append(ut)
+        self.jogo.sim.executar(Comando(0.0, None, acelerar_ate=ut))
+
+
+class JogoFalso:
+    """Um KSP de mentira em volta de uma NaveOrbital, com os eixos canhotos do kRPC (z trocado)."""
+
+    def __init__(self, nave=HOJE_NAVE, alvo=HOJE_ALVO, canhoto=True, leste_errado=False, combustivel=COMBUSTIVEL_MODULO):
+        self.sim = montar(nave, alvo, combustivel)
+        self.canhoto = canhoto
+        self.leste_errado = leste_errado
+        self.fluxos = []
+        self.procedimentos = []
+        self.nos_criados = []
+        self.nao_cria_no = False
+        self.fechada = False
+        self._types = types.SimpleNamespace(class_type=lambda servico, classe: (servico, classe))
+        self.corpo = CorpoFalso()
+        self.space_center = CentroFalso(self)
+        self.nave = NaveFalsa(self)
+        self.alvo = AlvoFalso(self)
+        self.space_center.target_vessel = self.alvo
+
+    def eixos(self, vetor):
+        if self.canhoto:
+            return (vetor[0], vetor[1], -vetor[2])
+        return tuple(vetor)
+
+    def add_stream(self, funcao, *argumentos):
+        fluxo = FluxoFalso(funcao, argumentos)
+        self.fluxos.append(fluxo)
+        return fluxo
+
+    def close(self):
+        self.fechada = True
+
+    def _invoke(self, servico, procedimento, argumentos, nomes, tipos, retorno):
+        piloto = argumentos[0]
+        if piloto.quebrado:
+            raise RuntimeError("a nave não existe mais")
+        self.procedimentos.append((servico, procedimento, tipos[0]))
+        piloto.engajado = procedimento == "AutoPilot_Engage"
+
+    def avancar(self, dt):
+        controle = self.nave.control
+        direcao = self.nave.auto_pilot.target_direction
+        self.sim.executar(Comando(controle.throttle, None if direcao is None else self.eixos(direcao)))
+        self.sim.avancar(dt)
+
+
+@contextlib.contextmanager
+def sem_espera():
+    """Tira as esperas de tempo real e o terminal interativo, e guarda o que o script imprime."""
+    with contextlib.ExitStack() as pilha:
+        pilha.enter_context(mock.patch.object(rendezvous.time, "sleep"))
+        pilha.enter_context(mock.patch.object(rendezvous, "INTERVALO_COMBUSTIVEL", 0.0))
+        pilha.enter_context(mock.patch.object(sys, "stdin", io.StringIO()))
+        saida = pilha.enter_context(contextlib.redirect_stdout(io.StringIO()))
+        yield saida
+
+
+def com_fisica(jogo, depois=None):
+    """Faz cada NaveKrpc.executar andar o jogo falso por INTERVALO s, como o jogo de verdade faria."""
+    original = rendezvous.NaveKrpc.executar
+
+    def executar(fonte, comando):
+        original(fonte, comando)
+        jogo.avancar(rendezvous.INTERVALO)
+        if depois is not None:
+            depois()
+
+    return mock.patch.object(rendezvous.NaveKrpc, "executar", executar)
+
+
+def argumentos(**extras):
+    base = dict(distancia=D_FINAL, voltas_max=6, so_planejar=False)
+    base.update(extras)
+    return argparse.Namespace(**base)
+
+
+class TestNaveKrpc(unittest.TestCase):
+    def setUp(self):
+        patch = mock.patch.object(rendezvous, "INTERVALO_COMBUSTIVEL", 0.0)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def criar(self, **extras):
+        jogo = JogoFalso(**extras)
+        return jogo, rendezvous.NaveKrpc(jogo, jogo.nave, jogo.corpo, rendezvous.planeta_do_jogo(jogo.corpo))
+
+    def test_planeta_do_jogo(self):
+        planeta = rendezvous.planeta_do_jogo(CorpoFalso())
+        self.assertEqual(planeta, KERBIN)
+        self.assertEqual(rendezvous.planeta_do_jogo(types.SimpleNamespace(
+            name="Mun", gravitational_parameter=MUN.mu, equatorial_radius=MUN.raio, has_atmosphere=False,
+            atmosphere_depth=0.0, sphere_of_influence=MUN.soi,
+        )), MUN)
+
+    def test_calibracao_do_z_e_leitura_igual_a_da_nave_simulada(self):
+        for canhoto in (True, False):
+            with self.subTest(canhoto=canhoto):
+                jogo, fonte = self.criar(canhoto=canhoto)
+                jogo.sim.avancar(3.0)
+                l = fonte.ler()
+                esperada = jogo.sim.leitura()
+                self.assertEqual(fonte._sinal_z, -1.0 if canhoto else 1.0)
+                for campo in ("r", "v", "nariz"):
+                    self.assertLess(norma(sub(getattr(l, campo), getattr(esperada, campo))), 1e-6, campo)
+                for campo in ("r", "v"):
+                    self.assertLess(norma(sub(getattr(l.alvo, campo), getattr(esperada.alvo, campo))), 1e-6, campo)
+                for campo in ("t", "massa", "empuxo", "isp"):
+                    self.assertAlmostEqual(getattr(l, campo), getattr(esperada, campo), places=6, msg=campo)
+                self.assertEqual(l.alvo.t, l.t)
+
+    def test_leste_errado_levanta_erro_claro(self):
+        jogo = JogoFalso(leste_errado=True)
+        with self.assertRaises(rendezvous.ReferencialErrado) as erro:
+            rendezvous.NaveKrpc(jogo, jogo.nave, jogo.corpo, KERBIN)
+        self.assertIn("leste", str(erro.exception))
+
+    def test_nave_sem_velocidade_nao_calibra(self):
+        jogo = JogoFalso()
+        jogo.sim.v = (0.0, 0.0, 0.0)
+        with self.assertRaises(rendezvous.ReferencialErrado):
+            rendezvous.NaveKrpc(jogo, jogo.nave, jogo.corpo, KERBIN)
+
+    def test_combustivel_e_dos_tanques_do_motor_aceso(self):
+        jogo, fonte = self.criar()
+        partes = jogo.nave.parts
+        self.assertAlmostEqual(fonte.ler().combustivel, COMBUSTIVEL_MODULO)
+        jogo.sim.combustivel = 1_500.0
+        self.assertAlmostEqual(fonte.ler().combustivel, 1_500.0)
+        partes.motor.active = False
+        partes.motor_de_cima.active = True
+        self.assertAlmostEqual(fonte.ler().combustivel, 600.0)
+        partes.motor_de_cima.active = False
+        self.assertEqual(fonte.ler().combustivel, 0.0)
+
+    def test_combustivel_e_relido_so_a_cada_intervalo(self):
+        with mock.patch.object(rendezvous, "INTERVALO_COMBUSTIVEL", 3_600.0):
+            jogo, fonte = self.criar()
+            primeiro = fonte.ler().combustivel
+            jogo.sim.combustivel = 10.0
+            self.assertEqual(fonte.ler().combustivel, primeiro)
+
+    def test_sem_alvo_e_alvo_em_outro_planeta_e_alvo_que_nao_e_nave(self):
+        jogo, fonte = self.criar()
+        self.assertIsNotNone(fonte.ler().alvo)
+        self.assertEqual(fonte.nome_alvo, "Estação um")
+        self.assertIsNone(fonte.problema_alvo)
+
+        jogo = JogoFalso()
+        jogo.space_center.target_vessel = None
+        fonte = rendezvous.NaveKrpc(jogo, jogo.nave, jogo.corpo, KERBIN)
+        self.assertIsNone(fonte.ler().alvo)
+        self.assertIn("nenhuma nave", fonte.problema_alvo)
+
+        jogo.space_center.target_body = types.SimpleNamespace(name="Mun")
+        fonte = rendezvous.NaveKrpc(jogo, jogo.nave, jogo.corpo, KERBIN)
+        self.assertIsNone(fonte.ler().alvo)
+        self.assertIn("Mun", fonte.problema_alvo)
+        self.assertIn("não uma nave", fonte.problema_alvo)
+
+        jogo = JogoFalso()
+        jogo.alvo.orbit = types.SimpleNamespace(body=object())
+        fonte = rendezvous.NaveKrpc(jogo, jogo.nave, jogo.corpo, KERBIN)
+        self.assertIsNone(fonte.ler().alvo)
+        self.assertIn("não orbita Kerbin", fonte.problema_alvo)
+        self.assertEqual(fonte.nome_alvo, "Estação um")
+
+    def test_alvo_que_some_no_meio_vem_sem_alvo(self):
+        jogo, fonte = self.criar()
+        self.assertIsNotNone(fonte.ler().alvo)
+        jogo.alvo.destruido = True
+        l = fonte.ler()
+        self.assertIsNone(l.alvo)
+        self.assertGreater(l.massa, 0.0)
+
+    def test_executar_liga_o_piloto_automatico_e_desliga_o_sas(self):
+        for canhoto in (True, False):
+            with self.subTest(canhoto=canhoto):
+                jogo, fonte = self.criar(canhoto=canhoto)
+                nave = jogo.nave
+                fonte.ler()
+                fonte.executar(Comando(0.6, (1.0, 2.0, 3.0)))
+                self.assertFalse(nave.control.sas)
+                self.assertTrue(nave.control.rcs)
+                self.assertTrue(math.isnan(nave.auto_pilot.target_roll))
+                self.assertEqual(nave.auto_pilot.reference_frame, NR)
+                for superficie in nave.parts.control_surfaces:
+                    self.assertEqual((superficie.pitch_enabled, superficie.yaw_enabled, superficie.roll_enabled), (False,) * 3)
+                self.assertTrue(nave.auto_pilot.engajado)
+                self.assertEqual(nave.control.throttle, 0.6)
+                enviada = nave.auto_pilot.target_direction
+                self.assertLess(norma(sub(jogo.eixos(enviada), unit((1.0, 2.0, 3.0)))), 1e-9)
+                self.assertEqual(enviada[2], -unit((1.0, 2.0, 3.0))[2] if canhoto else unit((1.0, 2.0, 3.0))[2])
+                self.assertEqual(jogo.procedimentos, [])
+
+    def test_comando_sem_direcao_nao_mexe_na_direcao(self):
+        jogo, fonte = self.criar()
+        fonte.ler()
+        fonte.executar(Comando(0.0, None))
+        self.assertIsNone(jogo.nave.auto_pilot.target_direction)
+        fonte.executar(Comando(0.0, (0.0, 0.0, 0.0)))
+        self.assertIsNone(jogo.nave.auto_pilot.target_direction)
+
+    def test_piloto_automatico_com_o_servidor_0_5(self):
+        jogo, fonte = self.criar()
+        jogo.nave.auto_pilot.servidor_antigo = True
+        fonte.ler()
+        fonte.executar(Comando(0.0, (1.0, 0.0, 0.0)))
+        self.assertTrue(jogo.nave.auto_pilot.engajado)
+        fonte.liberar()
+        self.assertFalse(jogo.nave.auto_pilot.engajado)
+        tipo = ("SpaceCenter", "AutoPilot")
+        self.assertEqual(
+            jogo.procedimentos,
+            [("SpaceCenter", "AutoPilot_Engage", tipo), ("SpaceCenter", "AutoPilot_Disengage", tipo)],
+        )
+
+    def test_time_warp_bloqueia_ate_o_tempo_pedido(self):
+        jogo, fonte = self.criar()
+        fonte.ler()
+        fonte.executar(Comando(0.0, (1.0, 0.0, 0.0), acelerar_ate=UT_HOJE + 500.0))
+        self.assertEqual(jogo.space_center.warps, [UT_HOJE + 500.0])
+        self.assertAlmostEqual(jogo.sim.t, UT_HOJE + 500.0)
+        fonte.executar(Comando(0.0, (1.0, 0.0, 0.0), acelerar_ate=UT_HOJE + 100.0))
+        self.assertEqual(jogo.space_center.warps, [UT_HOJE + 500.0])
+
+    def test_sem_warp_o_aviso_sai_uma_vez_so(self):
+        jogo, fonte = self.criar()
+        jogo.space_center.warp_proibido = True
+        fonte.ler()
+        saida = io.StringIO()
+        with contextlib.redirect_stdout(saida):
+            fonte.executar(Comando(acelerar_ate=UT_HOJE + 500.0))
+            fonte.executar(Comando(acelerar_ate=UT_HOJE + 600.0))
+        self.assertEqual(saida.getvalue().count("AVISO"), 1)
+        self.assertEqual(jogo.sim.t, UT_HOJE)
+
+    def test_componentes_do_no(self):
+        dv = (3.0, -2.0, 5.0)
+        for estado in (HOJE_NAVE, circular(KERBIN, 100_000.0, 30.0)):
+            with self.subTest(r=norma(estado.r)):
+                for t in (estado.t, estado.t + 1_234.0, estado.t - 500.0):
+                    pro, nor, rad = rendezvous.componentes_do_no(MU, estado, t, dv)
+                    r, v = propagar(MU, estado.r, estado.v, t - estado.t)
+                    p = unit(v)
+                    n = unit(cruz(r, v))
+                    fora = unit(sub(r, esc(ponto(r, p), p)))
+                    montado = soma(soma(esc(pro, p), esc(nor, n)), esc(rad, fora))
+                    self.assertLess(norma(sub(montado, dv)), 1e-9)
+        pro, nor, rad = rendezvous.componentes_do_no(MU, HOJE_NAVE, UT_HOJE, esc(10.0, unit(HOJE_NAVE.r)))
+        self.assertGreater(rad, 5.0)
+
+    def test_no_criado_com_os_componentes_certos_e_recriado_so_se_mudou(self):
+        for canhoto in (True, False):
+            with self.subTest(canhoto=canhoto):
+                jogo, fonte = self.criar(canhoto=canhoto)
+                controle = jogo.nave.control
+                fonte.ler()
+                t1, dv1 = UT_HOJE + 600.0, (3.0, -2.0, 5.0)
+                fonte.executar(Comando(0.0, None, no=(t1, dv1), no_mudou=True))
+                self.assertEqual(len(controle.nodes), 1)
+                no = controle.nodes[0]
+                self.assertEqual(no.ut, t1)
+                self.assertLess(norma(sub(jogo.eixos(no.burn_vector(NR)), dv1)), 1e-9)
+                self.assertLess(angulo(fonte._corrigir(no.burn_vector(NR)), dv1), 1e-4)
+                for _ in range(3):
+                    fonte.executar(Comando(0.0, None, no=(t1, dv1), no_mudou=False))
+                self.assertEqual(len(jogo.nos_criados), 1)
+                t2, dv2 = UT_HOJE + 900.0, (-1.0, 0.5, 2.0)
+                fonte.executar(Comando(0.0, None, no=(t2, dv2), no_mudou=True))
+                self.assertEqual(len(jogo.nos_criados), 2)
+                self.assertTrue(no.removido)
+                self.assertEqual(controle.nodes, [jogo.nos_criados[1]])
+                self.assertLess(norma(sub(jogo.eixos(controle.nodes[0].burn_vector(NR)), dv2)), 1e-9)
+                fonte.executar(Comando(0.0, None, no=None, no_mudou=True))
+                self.assertEqual(controle.nodes, [])
+
+    def test_no_no_passado_vai_para_agora(self):
+        jogo, fonte = self.criar()
+        fonte.ler()
+        fonte.executar(Comando(0.0, None, no=(UT_HOJE - 50.0, (1.0, 1.0, 1.0)), no_mudou=True))
+        self.assertEqual(jogo.nos_criados[0].ut, UT_HOJE)
+
+    def test_nos_do_piloto_ficam_e_o_do_script_some(self):
+        jogo, fonte = self.criar()
+        controle = jogo.nave.control
+        do_piloto = controle.add_node(UT_HOJE + 5_000.0, prograde=10.0)
+        fonte.ler()
+        saida = io.StringIO()
+        with contextlib.redirect_stdout(saida):
+            fonte.executar(Comando(0.0, (1.0, 0.0, 0.0), no=(UT_HOJE + 600.0, (3.0, 0.0, 0.0)), no_mudou=True))
+            fonte.executar(Comando(0.0, (1.0, 0.0, 0.0), no=(UT_HOJE + 700.0, (4.0, 0.0, 0.0)), no_mudou=True))
+        self.assertEqual(saida.getvalue().count("AVISO: já há 1 nó"), 1)
+        self.assertEqual(len(controle.nodes), 2)
+        fonte.liberar()
+        self.assertEqual(controle.nodes, [do_piloto])
+        self.assertFalse(do_piloto.removido)
+
+    def test_nao_dar_para_criar_o_no_avisa_uma_vez_e_segue(self):
+        jogo, fonte = self.criar()
+        jogo.nao_cria_no = True
+        fonte.ler()
+        saida = io.StringIO()
+        with contextlib.redirect_stdout(saida):
+            fonte.executar(Comando(0.4, (1.0, 0.0, 0.0), no=(UT_HOJE + 600.0, (3.0, 0.0, 0.0)), no_mudou=True))
+            fonte.executar(Comando(0.4, (1.0, 0.0, 0.0), no=(UT_HOJE + 700.0, (3.0, 0.0, 0.0)), no_mudou=True))
+        self.assertEqual(saida.getvalue().count("não consegui criar o nó"), 1)
+        self.assertIn(SEM_CONICAS, saida.getvalue())
+        self.assertEqual(jogo.nave.control.throttle, 0.4)
+        self.assertEqual(jogo.nave.control.nodes, [])
+
+    def test_liberar_deixa_tudo_como_estava(self):
+        for antes in (False, True):
+            with self.subTest(rcs_antes=antes):
+                jogo, fonte = self.criar()
+                controle = jogo.nave.control
+                controle.rcs = antes
+                fonte.ler()
+                fonte.executar(Comando(0.8, (1.0, 0.0, 0.0), no=(UT_HOJE + 600.0, (3.0, 0.0, 0.0)), no_mudou=True))
+                self.assertTrue(controle.rcs)
+                fonte.liberar()
+                self.assertEqual(controle.throttle, 0.0)
+                self.assertTrue(controle.sas)
+                self.assertEqual(controle.rcs, antes)
+                self.assertFalse(jogo.nave.auto_pilot.engajado)
+                self.assertEqual(controle.nodes, [])
+                self.assertTrue(all(f.removido for f in jogo.fluxos))
+                estados = [(s.pitch_enabled, s.yaw_enabled, s.roll_enabled) for s in jogo.nave.parts.control_surfaces]
+                self.assertEqual(estados, [(True, True, True), (True, True, False)])
+
+    def test_liberar_faz_cada_passo_por_si(self):
+        jogo, fonte = self.criar()
+        fonte.ler()
+        fonte.executar(Comando(0.8, (1.0, 0.0, 0.0), no=(UT_HOJE + 600.0, (3.0, 0.0, 0.0)), no_mudou=True))
+        jogo.nave.auto_pilot.quebrado = True
+        fonte.liberar()
+        self.assertEqual(jogo.nave.control.throttle, 0.0)
+        self.assertTrue(jogo.nave.control.sas)
+        self.assertEqual(jogo.nave.control.nodes, [])
+        self.assertTrue(all(f.removido for f in jogo.fluxos))
+
+    def test_liberar_sem_ter_assumido_o_controle_so_apaga_o_no_e_as_streams(self):
+        jogo, fonte = self.criar()
+        controle = jogo.nave.control
+        controle.sas = False
+        controle.throttle = 0.3
+        fonte.ler()
+        fonte.mostrar_no(Comando(no=(UT_HOJE + 600.0, (3.0, 0.0, 0.0)), no_mudou=True))
+        self.assertEqual(len(controle.nodes), 1)
+        fonte.liberar()
+        self.assertEqual(controle.nodes, [])
+        self.assertTrue(all(f.removido for f in jogo.fluxos))
+        self.assertFalse(controle.sas)
+        self.assertEqual(controle.throttle, 0.3)
+        self.assertEqual(jogo.procedimentos, [])
+
+    def test_comparar_no_com_o_burn_vector_e_a_previsao_do_jogo(self):
+        for canhoto in (True, False):
+            with self.subTest(canhoto=canhoto):
+                jogo, fonte = self.criar(canhoto=canhoto)
+                tr = planejar_transferencia(KERBIN, HOJE_NAVE, HOJE_ALVO, UT_HOJE, 6)
+                self.assertEqual(fonte.comparar_no(tr.dv1), {})
+                fonte.ler()
+                fonte.mostrar_no(Comando(no=(tr.t1, tr.dv1), no_mudou=True))
+                jogo_diz = fonte.comparar_no(tr.dv1)
+                self.assertLess(jogo_diz["angulo"], 1e-4)
+                self.assertLess(jogo_diz["distancia"], 2_000.0)
+                self.assertTrue(UT_HOJE < jogo_diz["t"] < UT_HOJE + 40_000.0)
+                errado = esc(1.0, rotacionar(tr.dv1, unit(cruz(tr.dv1, POLO)), math.radians(2.0)))
+                self.assertAlmostEqual(fonte.comparar_no(errado)["angulo"], 2.0, places=3)
+
+
+class TestTextos(unittest.TestCase):
+    def test_duracao(self):
+        textos = [rendezvous._texto_duracao(s) for s in (42.0, 423.0, 12_240.0, -61.0)]
+        self.assertEqual(textos, ["42 s", "7 min 03 s", "3 h 24 min", "1 min 01 s"])
+        self.assertEqual(rendezvous._texto_t(30.0), "T-30 s")
+        self.assertEqual(rendezvous._texto_t(-5.4), "T+5 s")
+
+    def test_distancia(self):
+        self.assertEqual(rendezvous._texto_distancia(285.4), "285 m")
+        self.assertEqual(rendezvous._texto_distancia(585_500.0), "585.5 km")
+
+    def test_plano_e_linha_de_status(self):
+        nave = montar(HOJE_NAVE, HOJE_ALVO)
+        l = nave.leitura()
+        g = Guiagem(KERBIN, D_FINAL, 6)
+        g.passo(l)
+        plano = rendezvous.linhas_do_plano(l, g)
+        self.assertEqual(len(plano), 3)
+        self.assertRegex(plano[0], r"transferência: [0-9.]+ m/s em T-[0-9]+ s")
+        self.assertRegex(plano[1], r"[0-9.]+ voltas de transferência, em UT [0-9]+ s .*velocidade relativa [0-9.]+ m/s")
+        self.assertRegex(plano[2], r"previsto: [0-9.]+ m/s .* disponível: [0-9]+ m/s")
+        linha = rendezvous.status(l, g)
+        self.assertRegex(linha, r"^TRANSFERENCIA +dist +585\.\d km +vrel +\d+\.\d\d m/s +proxima T-\d+ s [0-9.]+ m/s +gasto +0\.0 m/s +motor +0%$")
+        sem_alvo = nave.leitura()
+        sem_alvo.alvo = None
+        self.assertIn("dist      ---", rendezvous.status(sem_alvo, g))
+
+    def test_texto_do_aviso(self):
+        fonte = types.SimpleNamespace(problema_alvo="nenhuma nave escolhida como alvo no jogo.")
+        self.assertEqual(rendezvous.texto_do_aviso("ALVO", fonte), "nenhuma nave escolhida como alvo no jogo.")
+        fonte.problema_alvo = None
+        self.assertIn("alvo sumiu", rendezvous.texto_do_aviso("ALVO", fonte))
+        for aviso in ("ORBITA", "TRANSFERENCIA", "COMBUSTIVEL"):
+            self.assertIn(aviso, rendezvous.PRIORIDADE_AVISOS)
+            self.assertTrue(rendezvous.texto_do_aviso(aviso, fonte))
+        self.assertIn("desistiu", rendezvous.texto_do_aviso(None, fonte))
+
+
+class TestEncontrar(unittest.TestCase):
+    def voar(self, jogo, **extras):
+        with sem_espera() as saida:
+            with com_fisica(jogo):
+                codigo = rendezvous.encontrar(jogo, argumentos(**extras))
+        return codigo, saida.getvalue()
+
+    def conferir_liberada(self, jogo):
+        controle = jogo.nave.control
+        self.assertEqual(controle.throttle, 0.0)
+        self.assertTrue(controle.sas)
+        self.assertFalse(jogo.nave.auto_pilot.engajado)
+        self.assertTrue(all(f.removido for f in jogo.fluxos))
+
+    def test_voo_completo_pelo_krpc_nos_dois_sentidos_do_referencial(self):
+        tr = planejar_transferencia(KERBIN, HOJE_NAVE, HOJE_ALVO, UT_HOJE, 6)
+        for canhoto in (True, False):
+            with self.subTest(canhoto=canhoto):
+                jogo = JogoFalso(canhoto=canhoto)
+                codigo, texto = self.voar(jogo)
+                self.assertEqual(codigo, rendezvous.CHEGOU, texto)
+                l = jogo.sim.leitura()
+                self.assertLess(norma(sub(l.alvo.r, l.r)), D_FINAL + 50.0)
+                self.assertLess(norma(sub(l.v, l.alvo.v)), 0.3)
+                self.assertLess(MASSA_MODULO - jogo.sim.massa, 50.0 / (ISP_MODULO * G0) * MASSA_MODULO)
+                self.assertTrue(jogo.space_center.warps)
+                self.conferir_liberada(jogo)
+                self.assertEqual(jogo.nave.control.nodes, [])
+                self.assertGreaterEqual(len(jogo.nos_criados), 3)
+                self.assertTrue(all(no.removido for no in jogo.nos_criados))
+                primeiro = jogo.nos_criados[0]
+                self.assertAlmostEqual(primeiro.ut, tr.t1, places=3)
+                self.assertLess(norma(sub(jogo.eixos(primeiro.burn_vector(NR)), tr.dv1)), 1e-6)
+                self.assertIn("Queima de transferência", texto)
+                for fase in ("TRANSFERENCIA", "CORRECAO", "VELOCIDADE", "APROXIMA", "ENCONTRO"):
+                    self.assertIn(f"--> {fase}", texto)
+                self.assertRegex(texto, r"Encontro: a \d+ m do alvo, velocidade relativa [0-9.]+ m/s")
+
+    def test_sem_alvo_nao_comeca(self):
+        jogo = JogoFalso()
+        jogo.space_center.target_vessel = None
+        codigo, texto = self.voar(jogo)
+        self.assertEqual(codigo, rendezvous.NAO_CHEGOU)
+        self.assertIn("AVISO: nenhuma nave escolhida como alvo", texto)
+        self.assertIn("Não chegou: nenhuma nave escolhida", texto)
+        self.assertEqual(jogo.nos_criados, [])
+        self.assertEqual(jogo.procedimentos, [])
+        self.assertEqual(jogo.sim.t, UT_HOJE)
+        self.conferir_liberada(jogo)
+
+    def test_alvo_em_outro_planeta_nao_comeca(self):
+        jogo = JogoFalso()
+        jogo.alvo.orbit = types.SimpleNamespace(body=object())
+        jogo.alvo.name = "Estação Duna"
+        codigo, texto = self.voar(jogo)
+        self.assertEqual(codigo, rendezvous.NAO_CHEGOU)
+        self.assertIn("Estação Duna não orbita Kerbin", texto)
+        self.assertEqual(jogo.nos_criados, [])
+        self.assertEqual(jogo.sim.t, UT_HOJE)
+
+    def test_aviso_alvo_vem_da_guiagem(self):
+        jogo = JogoFalso()
+        jogo.space_center.target_vessel = None
+        fonte = rendezvous.NaveKrpc(jogo, jogo.nave, jogo.corpo, KERBIN)
+        g = Guiagem(KERBIN, D_FINAL, 6)
+        g.passo(fonte.ler())
+        self.assertEqual((g.fase, g.aviso), (FALHA, "ALVO"))
+
+    def test_alvo_que_some_no_meio_do_voo_e_falha(self):
+        jogo = JogoFalso()
+        chamadas = []
+
+        def derrubar():
+            chamadas.append(1)
+            if len(chamadas) == 5:
+                jogo.alvo.destruido = True
+
+        with sem_espera() as saida:
+            with com_fisica(jogo, derrubar):
+                codigo = rendezvous.encontrar(jogo, argumentos())
+        self.assertEqual(codigo, rendezvous.NAO_CHEGOU)
+        self.assertIn("Não chegou: sem alvo válido", saida.getvalue())
+        self.conferir_liberada(jogo)
+        self.assertEqual(jogo.nave.control.nodes, [])
+
+    def test_pouco_combustivel_falha_antes_de_queimar(self):
+        jogo = JogoFalso(combustivel=100.0)
+        codigo, texto = self.voar(jogo)
+        self.assertEqual(codigo, rendezvous.NAO_CHEGOU)
+        self.assertIn("combustível insuficiente", texto)
+        self.assertEqual(jogo.nos_criados, [])
+        self.assertEqual(jogo.sim.massa, MASSA_MODULO)
+
+    def test_ctrl_c_no_warp_libera_a_nave(self):
+        jogo = JogoFalso()
+        do_piloto = jogo.nave.control.add_node(UT_HOJE + 9_000.0, prograde=5.0)
+
+        def interromper(ut):
+            raise KeyboardInterrupt
+
+        jogo.space_center.warp_to = interromper
+        with sem_espera() as saida:
+            with com_fisica(jogo):
+                with self.assertRaises(KeyboardInterrupt):
+                    rendezvous.encontrar(jogo, argumentos())
+        self.assertEqual(len(jogo.nos_criados), 2)
+        self.assertTrue(jogo.nave.auto_pilot.target_direction is not None)
+        self.conferir_liberada(jogo)
+        self.assertEqual(jogo.nave.control.nodes, [do_piloto])
+        self.assertFalse(do_piloto.removido)
+        self.assertIn("AVISO: já há 1 nó", saida.getvalue())
+
+    def test_ctrl_c_no_laco_libera_a_nave(self):
+        jogo = JogoFalso()
+        chamadas = []
+
+        def interromper():
+            chamadas.append(1)
+            if len(chamadas) == 3:
+                raise KeyboardInterrupt
+
+        with sem_espera():
+            with com_fisica(jogo, interromper):
+                with self.assertRaises(KeyboardInterrupt):
+                    rendezvous.encontrar(jogo, argumentos())
+        self.conferir_liberada(jogo)
+        self.assertEqual(jogo.nave.control.nodes, [])
+        self.assertTrue(jogo.nos_criados)
+
+    def test_so_planejar_cria_o_no_imprime_o_plano_e_nao_liga_o_piloto(self):
+        for canhoto in (True, False):
+            with self.subTest(canhoto=canhoto):
+                jogo = JogoFalso(canhoto=canhoto)
+                controle = jogo.nave.control
+                controle.sas = False
+                esperas = []
+                texto_pedido = []
+
+                def entrar(mensagem):
+                    texto_pedido.append(mensagem)
+                    esperas.append(list(controle.nodes))
+                    return ""
+
+                with sem_espera() as saida:
+                    with mock.patch.object(sys, "stdin", types.SimpleNamespace(isatty=lambda: True)):
+                        with mock.patch("builtins.input", side_effect=entrar):
+                            codigo = rendezvous.encontrar(jogo, argumentos(so_planejar=True))
+                texto = saida.getvalue()
+                self.assertEqual(codigo, rendezvous.CHEGOU, texto)
+                self.assertEqual(len(jogo.nos_criados), 1)
+                self.assertEqual(esperas, [[jogo.nos_criados[0]]])
+                self.assertIn("Enter para apagar o nó e sair", texto_pedido[0])
+                self.assertEqual(controle.nodes, [])
+                self.assertTrue(jogo.nos_criados[0].removido)
+                self.assertFalse(jogo.nave.auto_pilot.engajado)
+                self.assertEqual(jogo.procedimentos, [])
+                self.assertIsNone(jogo.nave.auto_pilot.target_direction)
+                self.assertFalse(controle.sas)
+                self.assertFalse(controle.rcs)
+                self.assertEqual(controle.throttle, 0.0)
+                self.assertEqual(jogo.space_center.warps, [])
+                self.assertEqual(jogo.sim.t, UT_HOJE)
+                self.assertTrue(all(f.removido for f in jogo.fluxos))
+                self.assertIn("Queima de transferência", texto)
+                self.assertRegex(texto, r"Menor distância pela nossa conta: \d+ m")
+                self.assertRegex(texto, r"Menor distância que o kRPC prevê com o nó: \d+ m")
+                angulo_jogo = float(re.search(r"nosso dv1: ([0-9.]+)°", texto).group(1))
+                self.assertLess(angulo_jogo, 0.1)
+                self.assertNotIn("AVISO", texto)
+
+    def test_so_planejar_sem_terminal_apaga_logo(self):
+        jogo = JogoFalso()
+        with sem_espera() as saida:
+            with mock.patch("builtins.input", side_effect=AssertionError("não devia esperar")):
+                codigo = rendezvous.encontrar(jogo, argumentos(so_planejar=True))
+        self.assertEqual(codigo, rendezvous.CHEGOU)
+        self.assertEqual(jogo.nave.control.nodes, [])
+        self.assertEqual(len(jogo.nos_criados), 1)
+        self.assertIn("Queima de transferência", saida.getvalue())
+
+    def test_so_planejar_com_o_no_de_diferenca_grande_avisa(self):
+        jogo = JogoFalso()
+        original = NoFalso.burn_vector
+
+        def torto(no, referencia):
+            return rotacionar(original(no, referencia), (0.0, 1.0, 0.0), math.radians(3.0))
+
+        with sem_espera() as saida:
+            with mock.patch.object(NoFalso, "burn_vector", torto):
+                codigo = rendezvous.encontrar(jogo, argumentos(so_planejar=True))
+        self.assertEqual(codigo, rendezvous.CHEGOU)
+        self.assertIn("AVISO: o nó do jogo difere do dv1", saida.getvalue())
+
+    def test_so_planejar_sem_alvo_nao_cria_no(self):
+        jogo = JogoFalso()
+        jogo.space_center.target_vessel = None
+        with sem_espera() as saida:
+            codigo = rendezvous.encontrar(jogo, argumentos(so_planejar=True))
+        self.assertEqual(codigo, rendezvous.NAO_CHEGOU)
+        self.assertEqual(jogo.nos_criados, [])
+        self.assertIn("Não chegou", saida.getvalue())
+        self.assertFalse(jogo.nave.auto_pilot.engajado)
+
+    def test_so_planejar_com_plano_diferente_mostra_o_no_do_plano(self):
+        n_alvo = rotacionar(POLO, (1.0, 0.0, 0.0), math.radians(0.5))
+        nave = circular(KERBIN, 158_000.0, 100.0)
+        alvo = circular(KERBIN, 158_000.0, 150.0, normal=n_alvo)
+        jogo = JogoFalso(nave, alvo)
+        with sem_espera() as saida:
+            codigo = rendezvous.encontrar(jogo, argumentos(so_planejar=True))
+        self.assertEqual(codigo, rendezvous.CHEGOU)
+        self.assertEqual(len(jogo.nos_criados), 1)
+        self.assertIn("o primeiro nó é o do plano", saida.getvalue())
+        self.assertFalse(jogo.nave.auto_pilot.engajado)
+
+    def test_so_planejar_com_o_alvo_perto_nao_cria_no(self):
+        graus = math.degrees(2_000.0 / (KERBIN.raio + 158_000.0))
+        jogo = JogoFalso(circular(KERBIN, 158_000.0, 0.0), circular(KERBIN, 158_000.0, graus))
+        with sem_espera() as saida:
+            codigo = rendezvous.encontrar(jogo, argumentos(so_planejar=True))
+        self.assertEqual(codigo, rendezvous.CHEGOU)
+        self.assertEqual(jogo.nos_criados, [])
+        self.assertIn("não há transferência", saida.getvalue())
+
+    def test_eixos_errados_nao_comecam(self):
+        jogo = JogoFalso(leste_errado=True)
+        codigo, texto = self.voar(jogo)
+        self.assertEqual(codigo, rendezvous.NAO_CHEGOU)
+        self.assertIn("ERRO", texto)
+        self.assertEqual(jogo.nos_criados, [])
+
+    def test_distancia_pedida_vale_no_voo(self):
+        jogo = JogoFalso()
+        codigo, texto = self.voar(jogo, distancia=200.0)
+        self.assertEqual(codigo, rendezvous.CHEGOU, texto)
+        l = jogo.sim.leitura()
+        self.assertAlmostEqual(norma(sub(l.alvo.r, l.r)), 200.0, delta=70.0)
+
+
+class TestMain(unittest.TestCase):
+    def rodar(self, *opcoes):
+        with sem_espera() as saida:
+            with mock.patch.object(sys, "argv", ["rendezvous.py", *opcoes]):
+                codigo = rendezvous.main()
+        return codigo, saida.getvalue()
+
+    def test_demo_chega_perto_do_alvo(self):
+        codigo, texto = self.rodar("--demo")
+        self.assertEqual(codigo, rendezvous.CHEGOU, texto)
+        self.assertIn("Demonstração", texto)
+        for fase in ("TRANSFERENCIA", "CORRECAO", "VELOCIDADE", "APROXIMA", "ENCONTRO"):
+            self.assertIn(f"--> {fase}", texto)
+        self.assertRegex(texto, r"Encontro: a \d+ m do alvo, velocidade relativa [0-9.]+ m/s, Dv gasto [0-9.]+ m/s")
+        self.assertRegex(texto, r"TRANSFERENCIA +dist +\d+\.\d km +vrel")
+        distancia = float(re.search(r"Encontro: a (\d+) m", texto).group(1))
+        self.assertLess(distancia, 150.0)
+
+    def test_demo_com_distancia_diferente(self):
+        codigo, texto = self.rodar("--demo", "--distancia", "200")
+        self.assertEqual(codigo, rendezvous.CHEGOU)
+        self.assertIn("distância final: 200 m", texto)
+        distancia = float(re.search(r"Encontro: a (\d+) m", texto).group(1))
+        self.assertTrue(150.0 < distancia < 250.0)
+
+    def test_demo_so_planejar_nao_voa(self):
+        codigo, texto = self.rodar("--demo", "--so-planejar")
+        self.assertEqual(codigo, rendezvous.CHEGOU)
+        self.assertIn("Queima de transferência", texto)
+        self.assertIn("Menor distância pela nossa conta", texto)
+        self.assertNotIn("kRPC", texto)
+        self.assertNotIn("-->", texto)
+
+    def test_ctrl_c_na_demo_devolve_130(self):
+        with mock.patch.object(rendezvous, "encontrar_demo", side_effect=KeyboardInterrupt):
+            codigo, texto = self.rodar("--demo")
+        self.assertEqual(codigo, rendezvous.INTERROMPIDO)
+        self.assertEqual(rendezvous.INTERROMPIDO, 130)
+
+    def test_argumentos_do_krpc(self):
+        jogo = JogoFalso()
+        chamadas = []
+
+        def conectar_krpc(address, *dispositivos, esperar=True):
+            chamadas.append((address, dispositivos, esperar))
+            return jogo
+
+        falsa = types.SimpleNamespace(conectar_krpc=conectar_krpc)
+        recebidos = []
+        with mock.patch.dict(sys.modules, {"ponte": falsa}):
+            with mock.patch.object(rendezvous, "encontrar", lambda conn, args: recebidos.append(args) or 0):
+                codigo, _ = self.rodar("10.0.0.5", "--distancia", "250", "--voltas-max", "9", "--so-planejar")
+        self.assertEqual(codigo, 0)
+        self.assertEqual(chamadas, [("10.0.0.5", (), False)])
+        self.assertEqual((recebidos[0].distancia, recebidos[0].voltas_max, recebidos[0].so_planejar), (250.0, 9, True))
+        self.assertTrue(jogo.fechada)
+        with mock.patch.dict(sys.modules, {"ponte": falsa}):
+            with mock.patch.object(rendezvous, "encontrar", lambda conn, args: recebidos.append(args) or 0):
+                self.rodar()
+        padrao = recebidos[1]
+        self.assertEqual((padrao.address, padrao.distancia, padrao.voltas_max, padrao.so_planejar, padrao.demo),
+                         ("127.0.0.1", 100.0, 6, False, False))
+
+    def test_krpc_voa_ate_o_encontro_e_fecha_a_conexao(self):
+        jogo = JogoFalso()
+        falsa = types.SimpleNamespace(conectar_krpc=lambda address, *d, esperar=True: jogo)
+        with mock.patch.dict(sys.modules, {"ponte": falsa}):
+            with com_fisica(jogo):
+                codigo, texto = self.rodar()
+        self.assertEqual(codigo, rendezvous.CHEGOU, texto)
+        self.assertTrue(jogo.fechada)
+        self.assertEqual(jogo.nave.control.nodes, [])
+        self.assertTrue(jogo.nave.control.sas)
+
+    def test_ctrl_c_no_krpc_devolve_130_e_libera(self):
+        jogo = JogoFalso()
+        falsa = types.SimpleNamespace(conectar_krpc=lambda address, *d, esperar=True: jogo)
+
+        def interromper(ut):
+            raise KeyboardInterrupt
+
+        jogo.space_center.warp_to = interromper
+        with mock.patch.dict(sys.modules, {"ponte": falsa}):
+            with com_fisica(jogo):
+                codigo, texto = self.rodar()
+        self.assertEqual(codigo, rendezvous.INTERROMPIDO)
+        self.assertIn("Interrompido", texto)
+        self.assertTrue(jogo.fechada)
+        self.assertEqual(jogo.nave.control.throttle, 0.0)
+        self.assertTrue(jogo.nave.control.sas)
+        self.assertFalse(jogo.nave.auto_pilot.engajado)
+        self.assertEqual(jogo.nave.control.nodes, [])
+
+    def test_nave_perdida_devolve_nao_chegou(self):
+        jogo = JogoFalso()
+        falsa = types.SimpleNamespace(conectar_krpc=lambda address, *d, esperar=True: jogo)
+        with mock.patch.dict(sys.modules, {"ponte": falsa}):
+            with mock.patch.object(Guiagem, "passo", side_effect=RuntimeError("a nave explodiu")):
+                codigo, texto = self.rodar()
+        self.assertEqual(codigo, rendezvous.NAO_CHEGOU)
+        self.assertIn("Perdi a nave", texto)
+        self.assertTrue(jogo.fechada)
+        self.assertTrue(all(f.removido for f in jogo.fluxos))
+
+    def test_sem_nave_ativa(self):
+        jogo = JogoFalso()
+
+        class SemNave(CentroFalso):
+            @property
+            def active_vessel(self):
+                raise RuntimeError("sem nave ativa")
+
+        jogo.space_center = SemNave(jogo)
+        with sem_espera() as saida:
+            codigo = rendezvous.encontrar(jogo, argumentos())
+        self.assertEqual(codigo, rendezvous.NAO_CHEGOU)
+        self.assertIn("Nenhuma nave ativa", saida.getvalue())
 
 
 if __name__ == "__main__":

@@ -16,9 +16,31 @@ Fases
  APROXIMA       chega perto do alvo com o motor principal, em tempo real
  ENCONTRO       fim bom
  FALHA          fim ruim, com um aviso
+
+Uso:
+    python scripts/rendezvous.py                      # KSP neste computador, alvo do jogo
+    python scripts/rendezvous.py 192.168.50.1         # KSP em outro computador (ex.: a partir do Pi)
+    python scripts/rendezvous.py --so-planejar        # só cria o nó e imprime o plano
+    python scripts/rendezvous.py --distancia 200 --voltas-max 10
+    python scripts/rendezvous.py --demo               # sem o KSP: módulo e estação de mentira
+
+O alvo é o que está escolhido no jogo (uma nave em órbita do mesmo planeta). O
+script liga o piloto automático e desliga o SAS enquanto voa, e põe no jogo o
+nó da próxima queima só para mostrar no mapa; ao terminar (inclusive com
+Ctrl+C) corta o motor, apaga o nó que ele criou (os do piloto ficam) e devolve o
+SAS. Com --so-planejar, cria o nó do plano, imprime o plano e espera o Enter
+para apagar o nó e sair, sem ligar o piloto automático.
+
+Sai com o código 0 no encontro, 1 se não chegou (ou se recusou começar) e 130 se
+foi interrompido (Ctrl+C).
 """
 
+import argparse
 import math
+import os
+import signal
+import sys
+import time
 from dataclasses import dataclass
 
 from subida import (
@@ -29,7 +51,10 @@ from subida import (
     ERRO_VIRAR,
     FALHA,
     G0,
+    INTERROMPIDO,
+    NAO_CHEGOU,
     PLANO,
+    ReferencialErrado,
     TEMPO_FINAL,
     W_CRESCE,
     W_PROXIMO,
@@ -40,11 +65,13 @@ from subida import (
     elementos,
     esc,
     horizontal,
+    ligar_piloto,
     limitar,
     no_relativo,
     norma,
     ponto,
     rotacionar,
+    sinal_z,
     soma,
     sub,
     tempo_de_queima,
@@ -83,6 +110,12 @@ GIRO_MIN = 0.1
 PESO_GIRO = 0.2
 FOLGA_GIRO = 10.0
 PASSO_FISICA = 0.05
+D_FINAL = 100.0
+INTERVALO = 0.05
+INTERVALO_STATUS = 1.0
+INTERVALO_COMBUSTIVEL = 1.0
+VELOCIDADE_DEMO = 50
+CHEGOU = 0
 
 TRANSFERENCIA = "TRANSFERENCIA"
 CORRECAO = "CORRECAO"
@@ -988,3 +1021,615 @@ class NaveOrbital:
         self.massa -= dm
         self.combustivel -= dm
         self.t += dt
+
+
+KERBIN = Planeta("Kerbin", 3.5316e12, 600_000.0, 70_000.0, 84_159_286.0)
+UT_DEMO = 52_234_731.91853178
+NAVE_DEMO = Estado(
+    UT_DEMO,
+    (-78290.2902049169, -1360.7434381412018, -753771.1251473312),
+    (2147.6951065771736, 4.454166654098578, -222.56623357898968),
+)
+ALVO_DEMO = Estado(
+    UT_DEMO,
+    (-592222.4199506764, -2165.5136644409645, -473168.18995646987),
+    (1368.6752355129909, 0.4863146922667238, -1669.4800787542667),
+)
+MASSA_DEMO = 10_256.234375
+COMBUSTIVEL_DEMO = 3_000.0
+EMPUXO_DEMO = 125_000.0
+ISP_DEMO = 355.0
+
+TEXTOS_AVISO = {
+    AVISO_ALVO: "sem alvo válido: escolha no jogo uma nave em órbita do mesmo planeta (ou o alvo sumiu).",
+    AVISO_ORBITA: "a nave ou o alvo não está em órbita fechada fora do ar.",
+    AVISO_TRANSFERENCIA: "nenhuma transferência cabe nas voltas pedidas (tente --voltas-max maior).",
+    AVISO_COMBUSTIVEL: "combustível insuficiente (ou nenhum motor aceso: acenda o estágio certo).",
+}
+
+
+def componentes_do_no(mu, estado, t, dv):
+    """(prograde, normal, radial) de um nó em t, para o Δv inercial dv.
+
+    A base sai do estado propagado até t: p = unit(v), n = unit(r × v) e o
+    radial para fora, p × n. estado é qualquer coisa com t, r e v.
+    """
+    r, v = propagar(mu, estado.r, estado.v, t - estado.t)
+    p = unit(v)
+    n = unit(cruz(r, v))
+    return ponto(dv, p), ponto(dv, n), ponto(dv, cruz(p, n))
+
+
+def planeta_do_jogo(corpo):
+    """Monta o Planeta da guiagem a partir de um CelestialBody do kRPC."""
+    topo = corpo.atmosphere_depth if corpo.has_atmosphere else 0.0
+    return Planeta(
+        nome=corpo.name,
+        mu=corpo.gravitational_parameter,
+        raio=corpo.equatorial_radius,
+        topo=topo,
+        soi=corpo.sphere_of_influence,
+    )
+
+
+class NaveKrpc:
+    """Lê a nave e o alvo pelo kRPC, com streams, monta a Leitura para a guiagem e aplica o Comando.
+
+    O referencial do kRPC é canhoto, e a guiagem trabalha no destro: a
+    calibração é a da subida (sinal_z), e todo vetor lido, e todo vetor que
+    volta para o jogo (o target_direction), passa pela troca de sinal do z. Os
+    componentes do nó saem de contas no referencial destro e não precisam dela.
+    O referencial é o nr, o não rotativo do planeta (inercial).
+
+    O alvo é o target_vessel do jogo, escolhido na criação e mantido mesmo que
+    o jogador troque de alvo no voo. Sem alvo, alvo que não é nave ou que
+    orbita outro corpo, problema_alvo diz o que houve e a Leitura vem sem alvo
+    (a guiagem responde com o aviso ALVO). Se o alvo some no voo, a Leitura
+    passa a vir sem alvo.
+
+    combustivel é a massa do que os motores acesos queimam (propellant_names),
+    nas peças com o mesmo decouple_stage deles, como o estagios() da subida; é
+    relida a cada INTERVALO_COMBUSTIVEL s. empuxo e isp são os dos motores
+    acesos, que é o que a nave entrega.
+
+    O nó que o script mostra no jogo é só ele: criado e apagado por aqui; os nós
+    que o piloto já tinha ficam como estão (com um aviso).
+    """
+
+    interativa = True
+
+    def __init__(self, conn, nave, corpo_krpc, planeta):
+        space_center = conn.space_center
+        self._conn = conn
+        self._space_center = space_center
+        self._nave = nave
+        self._planeta = planeta
+        self._nr = corpo_krpc.non_rotating_reference_frame
+        self._sinal_z = sinal_z(space_center, nave, self._nr, nave.surface_reference_frame)
+        self._alvo = None
+        self.nome_alvo = None
+        self.problema_alvo = None
+        self._achar_alvo(corpo_krpc)
+
+        stream = conn.add_stream
+        self._streams = {
+            "ut": stream(getattr, space_center, "ut"),
+            "r": stream(nave.position, self._nr),
+            "v": stream(getattr, nave.flight(self._nr), "velocity"),
+            "nariz": stream(nave.direction, self._nr),
+            "massa": stream(getattr, nave, "mass"),
+            "empuxo": stream(getattr, nave, "available_thrust"),
+            "isp": stream(getattr, nave, "specific_impulse"),
+        }
+        self._streams_alvo = {}
+        if self._alvo is not None:
+            self._streams_alvo = {
+                "r": stream(self._alvo.position, self._nr),
+                "v": stream(getattr, self._alvo.flight(self._nr), "velocity"),
+            }
+        self._proximo_combustivel = 0.0
+        self._motores_acesos = None
+        self._tanques = []
+        self._combustivel = 0.0
+        self._ultima = None
+        self._no = None
+        self._avisou_nos = False
+        self._avisou_sem_no = False
+        self._tomou_controle = False
+        self._sem_warp = False
+        self._superficies = []
+        self._rcs_antes = None
+
+    def _achar_alvo(self, corpo_krpc):
+        alvo = self._space_center.target_vessel
+        if alvo is None:
+            corpo = self._space_center.target_body
+            if corpo is None:
+                self.problema_alvo = "nenhuma nave escolhida como alvo no jogo."
+            else:
+                self.problema_alvo = f"o alvo escolhido ({corpo.name}) é um corpo, não uma nave."
+            return
+        self.nome_alvo = alvo.name
+        orbita = alvo.orbit
+        if orbita is None or orbita.body != corpo_krpc:
+            self.problema_alvo = f"{alvo.name} não orbita {self._planeta.nome}, o planeta da nave."
+            return
+        self._alvo = alvo
+
+    def _corrigir(self, vetor):
+        return (vetor[0], vetor[1], self._sinal_z * vetor[2])
+
+    def _atualizar_combustivel(self):
+        nave = self._nave
+        acesos = [m for m in nave.parts.engines if m.active]
+        if acesos != self._motores_acesos:
+            self._motores_acesos = acesos
+            desacoplamentos = {m.part.decouple_stage for m in acesos}
+            nomes = {nome for m in acesos for nome in m.propellant_names}
+            self._tanques = [
+                p
+                for p in nave.parts.all
+                if p.decouple_stage in desacoplamentos and any(p.resources.has_resource(n) for n in nomes)
+            ]
+        self._combustivel = sum(max(p.mass - p.dry_mass, 0.0) for p in self._tanques)
+
+    def _ler_alvo(self, t):
+        if not self._streams_alvo:
+            return None
+        try:
+            return Estado(t, self._corrigir(self._streams_alvo["r"]()), self._corrigir(self._streams_alvo["v"]()))
+        except (RuntimeError, ValueError):
+            return None
+
+    def ler(self):
+        s = {nome: stream() for nome, stream in self._streams.items()}
+        agora = time.monotonic()
+        if agora >= self._proximo_combustivel:
+            self._atualizar_combustivel()
+            self._proximo_combustivel = agora + INTERVALO_COMBUSTIVEL
+        self._ultima = Leitura(
+            t=s["ut"],
+            r=self._corrigir(s["r"]),
+            v=self._corrigir(s["v"]),
+            nariz=self._corrigir(s["nariz"]),
+            massa=s["massa"],
+            empuxo=s["empuxo"],
+            isp=s["isp"],
+            combustivel=self._combustivel,
+            alvo=self._ler_alvo(s["ut"]),
+        )
+        return self._ultima
+
+    def executar(self, comando):
+        """Aplica o Comando: nó mostrado, acelerador, direção do piloto automático e time warp."""
+        controle = self._nave.control
+        piloto = self._nave.auto_pilot
+        if not self._tomou_controle:
+            self._tomou_controle = True
+            controle.sas = False
+            self._rcs_antes = controle.rcs
+            controle.rcs = True
+            piloto.reference_frame = self._nr
+            piloto.target_roll = math.nan
+            self._soltar_superficies()
+            ligar_piloto(self._conn, piloto, True)
+        self.mostrar_no(comando)
+        controle.throttle = comando.acelerador
+        if comando.direcao is not None and norma(comando.direcao) > 0.0:
+            piloto.target_direction = self._corrigir(unit(comando.direcao))
+        if comando.acelerar_ate is not None and not self._sem_warp:
+            self._acelerar(comando.acelerar_ate)
+
+    def mostrar_no(self, comando):
+        """Põe no jogo o nó do comando, se ele mudou: apaga o nó do script e cria o novo (ou nenhum)."""
+        if not comando.no_mudou:
+            return
+        self._apagar_no()
+        if comando.no is not None:
+            self._criar_no(*comando.no)
+
+    def _criar_no(self, t, dv):
+        controle = self._nave.control
+        ut = max(t, self._ultima.t)
+        prograde, normal, radial = componentes_do_no(self._planeta.mu, self._ultima, ut, dv)
+        try:
+            if not self._avisou_nos:
+                self._avisou_nos = True
+                existentes = len(controle.nodes)
+                if existentes:
+                    print(f"AVISO: já há {existentes} nó(s) de manobra no jogo; não mexo neles.")
+            self._no = controle.add_node(ut, prograde=prograde, normal=normal, radial=radial)
+        except Exception as e:
+            self._no = None
+            if not self._avisou_sem_no:
+                self._avisou_sem_no = True
+                print(f"AVISO: não consegui criar o nó no jogo ({e}); sigo sem ele.")
+
+    def _apagar_no(self):
+        no, self._no = self._no, None
+        if no is not None:
+            try:
+                no.remove()
+            except Exception:
+                pass
+
+    def comparar_no(self, dv):
+        """O que o jogo diz do nó criado: {"distancia", "t", "angulo"}, só o que deu para ler.
+
+        distancia e t são a menor distância ao alvo e o UT dela, depois da
+        queima (orbit do nó, contra a órbita do alvo); angulo é o ângulo, em
+        graus, entre o burn_vector do nó (corrigido) e dv.
+        """
+        saida = {}
+        if self._no is None or self._alvo is None:
+            return saida
+        no = self._no
+        try:
+            orbita = no.orbit
+            alvo = self._alvo.orbit
+            saida["distancia"] = orbita.distance_at_closest_approach(alvo)
+            saida["t"] = orbita.time_of_closest_approach(alvo)
+        except Exception:
+            pass
+        try:
+            saida["angulo"] = angulo(self._corrigir(no.burn_vector(self._nr)), dv)
+        except Exception:
+            pass
+        return saida
+
+    def _soltar_superficies(self):
+        """Tira as superfícies de controle (aletas) do controle, guardando como estavam (veja a subida)."""
+        for superficie in self._nave.parts.control_surfaces:
+            self._superficies.append(
+                (superficie, superficie.pitch_enabled, superficie.yaw_enabled, superficie.roll_enabled)
+            )
+            superficie.pitch_enabled = superficie.yaw_enabled = superficie.roll_enabled = False
+
+    def _devolver_superficies(self):
+        for superficie, pitch, yaw, roll in self._superficies:
+            try:
+                superficie.pitch_enabled, superficie.yaw_enabled, superficie.roll_enabled = pitch, yaw, roll
+            except Exception:
+                pass
+        self._superficies = []
+
+    def _acelerar(self, ut):
+        """Time warp até o UT pedido; bloqueia até chegar. Sem o warp, a espera fica em tempo real."""
+        try:
+            if ut > self._space_center.ut:
+                self._space_center.warp_to(ut)
+        except (RuntimeError, ValueError) as e:
+            self._sem_warp = True
+            print(f"AVISO: o jogo não deixou acelerar o tempo ({e}); esperando em tempo real.")
+
+    def _remover_streams(self):
+        for stream in list(self._streams.values()) + list(self._streams_alvo.values()):
+            try:
+                stream.remove()
+            except Exception:
+                pass
+
+    def _devolver_rcs(self):
+        if self._rcs_antes is not None:
+            self._nave.control.rcs = self._rcs_antes
+
+    def liberar(self):
+        """Motor em 0, piloto automático desligado, SAS ligado, RCS e aletas como estavam, o nó do script apagado e streams removidas, cada um por si.
+
+        Se o script nunca assumiu o controle (o --so-planejar), só apaga o nó e
+        remove as streams: o piloto, o SAS e o motor ficam como o jogador deixou.
+        """
+        controle = self._nave.control
+        acoes = [self._apagar_no, self._remover_streams]
+        if self._tomou_controle:
+            acoes = [
+                lambda: setattr(controle, "throttle", 0.0),
+                lambda: ligar_piloto(self._conn, self._nave.auto_pilot, False),
+                lambda: setattr(controle, "sas", True),
+                self._devolver_rcs,
+                self._devolver_superficies,
+                *acoes,
+            ]
+        for acao in acoes:
+            try:
+                acao()
+            except Exception:
+                pass
+
+
+class FonteSimulada:
+    """A NaveOrbital no lugar do kRPC (--demo): cada executar() anda INTERVALO s de jogo."""
+
+    interativa = False
+    problema_alvo = None
+
+    def __init__(self, nave):
+        self.nave = nave
+
+    def ler(self):
+        return self.nave.leitura()
+
+    def executar(self, comando):
+        self.nave.executar(comando)
+        self.nave.avancar(INTERVALO)
+
+    def mostrar_no(self, comando):
+        pass
+
+    def comparar_no(self, dv):
+        return {}
+
+    def liberar(self):
+        pass
+
+
+def _texto_distancia(metros):
+    return f"{metros / 1000:.1f} km" if metros >= 10_000.0 else f"{metros:.0f} m"
+
+
+def _texto_t(segundos):
+    return f"T{'-' if segundos >= 0.0 else '+'}{abs(segundos):.0f} s"
+
+
+def _texto_duracao(segundos):
+    total = int(round(abs(segundos)))
+    horas, resto = divmod(total, 3600)
+    minutos, seg = divmod(resto, 60)
+    if horas:
+        return f"{horas} h {minutos:02d} min"
+    if minutos:
+        return f"{minutos} min {seg:02d} s"
+    return f"{seg} s"
+
+
+def _distancia_ao_alvo(l):
+    return "---" if l.alvo is None else _texto_distancia(norma(sub(l.alvo.r, l.r)))
+
+
+def texto_do_aviso(aviso, fonte):
+    """O texto do aviso para o terminal; no ALVO, o que o kRPC achou de errado com o alvo, se houver."""
+    if aviso == AVISO_ALVO and fonte.problema_alvo:
+        return fonte.problema_alvo
+    return TEXTOS_AVISO.get(aviso, "a guiagem desistiu (a aproximação final passou do tempo máximo).")
+
+
+def linhas_do_plano(l, guiagem):
+    """O plano da transferência para o terminal: a queima, o encontro e o Δv previsto contra o disponível."""
+    tr = guiagem.transferencia
+    disponivel = dv_disponivel(l.massa, l.combustivel, l.isp)
+    return [
+        f"Queima de transferência: {norma(tr.dv1):.1f} m/s em {_texto_t(tr.t1 - l.t)} ({_texto_duracao(tr.t1 - l.t)})",
+        f"Encontro: {tr.voltas:.2f} voltas de transferência, em UT {tr.tm:.0f} s "
+        f"({_texto_duracao(tr.tm - l.t)} daqui), velocidade relativa {tr.v_rel:.1f} m/s",
+        f"Dv previsto: {tr.dv_total:.1f} m/s (mais {RESERVA_DV:.0f} m/s de reserva); disponível: {disponivel:.0f} m/s",
+    ]
+
+
+def status(l, guiagem):
+    """Uma linha de situação para o terminal."""
+    if l.alvo is None:
+        v_rel = "    ---"
+    else:
+        v_rel = f"{norma(sub(l.v, l.alvo.v)):7.2f}"
+    if guiagem.proxima_queima is None:
+        proxima = "---"
+    else:
+        proxima = f"{_texto_t(guiagem.proxima_queima - l.t)} {guiagem.dv_proxima:.1f} m/s"
+    return (
+        f"{guiagem.fase:13} dist {_distancia_ao_alvo(l):>8}  vrel {v_rel} m/s  proxima {proxima:<22}  "
+        f"gasto {guiagem.dv:6.1f} m/s  motor {guiagem.acelerador * 100:3.0f}%"
+    )
+
+
+def encerrar(l, guiagem, fonte):
+    """Imprime o resultado e devolve CHEGOU ou NAO_CHEGOU."""
+    if guiagem.fase == ENCONTRO:
+        print(
+            f"Encontro: a {norma(sub(l.alvo.r, l.r)):.0f} m do alvo, velocidade relativa "
+            f"{norma(sub(l.v, l.alvo.v)):.2f} m/s, Dv gasto {guiagem.dv:.1f} m/s"
+        )
+        return CHEGOU
+    print(f"Não chegou: {texto_do_aviso(guiagem.aviso, fonte)}")
+    return NAO_CHEGOU
+
+
+def conduzir(fonte, guiagem, repeticoes=1):
+    """O laço do rendezvous a 20 Hz de jogo: ler, decidir, executar, mostrar. Devolve o código de saída.
+
+    repeticoes > 1 roda vários passos de jogo por volta (o --demo, mais rápido
+    que o tempo real); o terminal fica no tempo real.
+    """
+    fase = None
+    aviso = None
+    plano = None
+    proximo_status = 0.0
+    while True:
+        inicio = time.monotonic()
+        for _ in range(repeticoes):
+            l = fonte.ler()
+            comando = guiagem.passo(l)
+            if guiagem.fase != fase:
+                fase = guiagem.fase
+                queima = ""
+                if guiagem.proxima_queima is not None:
+                    queima = f", queima de {guiagem.dv_proxima:.1f} m/s em {_texto_t(guiagem.proxima_queima - l.t)}"
+                print(f"--> {fase} (distância {_distancia_ao_alvo(l)}, t = {l.t:.0f} s{queima})")
+            if guiagem.transferencia is not None and guiagem.transferencia is not plano:
+                plano = guiagem.transferencia
+                for linha in linhas_do_plano(l, guiagem):
+                    print(linha)
+            if guiagem.aviso != aviso:
+                aviso = guiagem.aviso
+                if aviso:
+                    print(f"AVISO: {texto_do_aviso(aviso, fonte)}")
+            if guiagem.fase in (ENCONTRO, FALHA):
+                return encerrar(l, guiagem, fonte)
+            agora = time.monotonic()
+            if agora >= proximo_status:
+                print(status(l, guiagem))
+                proximo_status = agora + INTERVALO_STATUS
+            fonte.executar(comando)
+        espera = INTERVALO - (time.monotonic() - inicio)
+        if espera > 0.0:
+            time.sleep(espera)
+
+
+def _esperar_enter(fonte, mensagem):
+    """Espera o Enter, para dar tempo de conferir o nó no mapa; sem terminal interativo, não espera."""
+    if not fonte.interativa or sys.stdin is None or not sys.stdin.isatty():
+        return
+    try:
+        input(mensagem)
+    except EOFError:
+        pass
+
+
+def so_planejar(fonte, guiagem, planeta):
+    """Planeja, mostra o nó no jogo, imprime o plano (e o que o kRPC prevê) e espera o Enter. Não liga o piloto automático.
+
+    Devolve CHEGOU se há plano, NAO_CHEGOU se a guiagem recusou. O nó só some
+    quando a fonte é liberada, depois do Enter.
+    """
+    l = fonte.ler()
+    comando = guiagem.passo(l)
+    if guiagem.aviso:
+        print(f"AVISO: {texto_do_aviso(guiagem.aviso, fonte)}")
+    if guiagem.fase == FALHA:
+        return encerrar(l, guiagem, fonte)
+    fonte.mostrar_no(comando)
+    tr = guiagem.transferencia
+    if tr is None:
+        if comando.no is None:
+            print(
+                f"O alvo está a {_distancia_ao_alvo(l)}: não há transferência, o script só anularia a "
+                f"velocidade relativa ({norma(sub(l.alvo.v, l.v)):.1f} m/s)."
+            )
+        else:
+            print(
+                f"A órbita da nave não está no plano do alvo: o primeiro nó é o do plano, de {guiagem.dv_proxima:.1f} m/s "
+                f"em {_texto_t(guiagem.proxima_queima - l.t)}. A transferência é planejada depois dele."
+            )
+        _esperar_enter(fonte, "Enter para apagar o nó e sair")
+        return CHEGOU
+    for linha in linhas_do_plano(l, guiagem):
+        print(linha)
+    mu = planeta.mu
+    r1, v1 = propagar(mu, l.r, l.v, tr.t1 - l.t)
+    depois = Estado(tr.t1, r1, soma(v1, tr.dv1))
+    d, t, _ = menor_distancia(mu, depois, l.alvo, tr.t1, tr.tm + FRACAO_BUSCA * periodo(mu, depois.r, depois.v))
+    print(f"Menor distância pela nossa conta: {d:.0f} m, em UT {t:.0f} s ({_texto_duracao(t - l.t)} daqui)")
+    jogo = fonte.comparar_no(tr.dv1)
+    if "distancia" in jogo:
+        print(
+            f"Menor distância que o kRPC prevê com o nó: {jogo['distancia']:.0f} m, em UT {jogo['t']:.0f} s "
+            f"({_texto_duracao(jogo['t'] - l.t)} daqui)"
+        )
+    elif fonte.interativa:
+        print("O kRPC não deu a menor distância do nó (veja o mapa).")
+    if "angulo" in jogo:
+        print(f"Ângulo entre o burn_vector do nó e o nosso dv1: {jogo['angulo']:.3f}° (limite 0,1°)")
+        if jogo["angulo"] > 0.1:
+            print("AVISO: o nó do jogo difere do dv1 de mais de 0,1°: confira os eixos antes de voar.")
+    _esperar_enter(fonte, "Enter para apagar o nó e sair")
+    return CHEGOU
+
+
+def encontrar(conn, args):
+    """Leva a nave ativa do KSP até o alvo do jogo (ou só planeja). Devolve o código de saída."""
+    try:
+        nave = conn.space_center.active_vessel
+    except (ValueError, RuntimeError):
+        print("Nenhuma nave ativa: rode o script na cena de voo.")
+        return NAO_CHEGOU
+    corpo_krpc = nave.orbit.body
+    planeta = planeta_do_jogo(corpo_krpc)
+    try:
+        fonte = NaveKrpc(conn, nave, corpo_krpc, planeta)
+    except ReferencialErrado as e:
+        print(f"ERRO: {e}")
+        return NAO_CHEGOU
+    try:
+        guiagem = Guiagem(planeta, args.distancia, args.voltas_max)
+        l = fonte.ler()
+        alvo = fonte.nome_alvo or "nenhum"
+        print(
+            f"Nave: {nave.name} ({planeta.nome})  alvo: {alvo} a {_distancia_ao_alvo(l)}  "
+            f"distância final: {args.distancia:g} m"
+        )
+        if args.so_planejar:
+            return so_planejar(fonte, guiagem, planeta)
+        return conduzir(fonte, guiagem)
+    finally:
+        fonte.liberar()
+
+
+def encontrar_demo(args):
+    """O mesmo rendezvous, com a NaveOrbital do caso de hoje (módulo e Estação um) no lugar do jogo."""
+    nave = NaveOrbital(KERBIN, NAVE_DEMO, ALVO_DEMO, MASSA_DEMO, COMBUSTIVEL_DEMO, EMPUXO_DEMO, ISP_DEMO)
+    fonte = FonteSimulada(nave)
+    guiagem = Guiagem(KERBIN, args.distancia, args.voltas_max)
+    l = fonte.ler()
+    print(
+        f"Demonstração: módulo de 10,3 t e Estação um de mentira em {KERBIN.nome}, com os números de "
+        f"20/10/2026, {VELOCIDADE_DEMO}x mais rápido que o tempo real; alvo a {_distancia_ao_alvo(l)}, "
+        f"distância final: {args.distancia:g} m"
+    )
+    if args.so_planejar:
+        return so_planejar(fonte, guiagem, KERBIN)
+    return conduzir(fonte, guiagem, repeticoes=VELOCIDADE_DEMO)
+
+
+def main():
+    """Devolve o código de saída: CHEGOU, NAO_CHEGOU ou INTERROMPIDO."""
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "address",
+        nargs="?",
+        default="127.0.0.1",
+        help="IP do computador onde o KSP está rodando (padrão: este computador)",
+    )
+    parser.add_argument(
+        "--distancia", type=float, default=D_FINAL, help="distância final ao alvo, em metros (padrão: 100)"
+    )
+    parser.add_argument(
+        "--voltas-max",
+        type=int,
+        default=VOLTAS_MAX,
+        help=f"limite do tempo de voo da transferência, em voltas da nave (padrão: {VOLTAS_MAX})",
+    )
+    parser.add_argument(
+        "--so-planejar", action="store_true", help="só cria o nó da transferência, imprime o plano e sai"
+    )
+    parser.add_argument(
+        "--demo", action="store_true", help="não conecta no KSP: módulo e estação de mentira, com os números de hoje"
+    )
+    args = parser.parse_args()
+
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, signal.default_int_handler)
+
+    if args.demo:
+        try:
+            return encontrar_demo(args)
+        except KeyboardInterrupt:
+            print("\nInterrompido.")
+            return INTERROMPIDO
+
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bridge"))
+    from ponte import conectar_krpc
+
+    conn = conectar_krpc(args.address, esperar=False)
+    try:
+        return encontrar(conn, args)
+    except KeyboardInterrupt:
+        print("\nInterrompido: motor cortado, o controle volta para o piloto.")
+        return INTERROMPIDO
+    except (ValueError, RuntimeError) as e:
+        print(f"\nPerdi a nave (explodiu ou o jogo saiu da cena de voo): {e}")
+        return NAO_CHEGOU
+    finally:
+        conn.close()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
