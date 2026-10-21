@@ -595,6 +595,195 @@ class TestVoos(unittest.TestCase):
         self.conferir(voo, 50.0, d_final=200.0)
 
 
+A_RCS = 0.97
+
+
+def montar_aproximacao(distancia, a_rcs, v_rel=0.0):
+    """Nave e alvo na mesma órbita de 158 km, `distancia` m atrás, com a velocidade relativa v_rel (m/s, no sentido do alvo)."""
+    alvo = circular(KERBIN, 158_000.0, 0.0)
+    graus = math.degrees(distancia / norma(alvo.r))
+    nave = circular(KERBIN, 158_000.0, -graus)
+    velocidade = soma(alvo.v, esc(v_rel, unit(sub(alvo.r, nave.r))))
+    sim = montar(Estado(nave.t, nave.r, velocidade), alvo)
+    sim.a_rcs = a_rcs
+    return sim
+
+
+@dataclass
+class Aproximacao:
+    """O que se mediu numa aproximação: o fim, o tempo na APROXIMA, as velocidades, o Δv do RCS e o nariz."""
+
+    fase: str
+    t_aproxima: float
+    distancia: float
+    v_rel: float
+    v_max: float
+    dv_rcs: float
+    dv_rcs_somado: float
+    motor_max: float
+    desvio_nariz: float
+    trocas_de_direcao: int
+    translacoes: int
+
+
+def aproximar(sim, guiagem, gancho=None, t_max=4_000.0, passo=0.05):
+    """Roda a Guiagem na NaveOrbital até ENCONTRO ou FALHA, medindo só o que acontece na APROXIMA."""
+    t0 = sim.t
+    t_entrada = None
+    v_max = motor_max = desvio = dv_somado = 0.0
+    trocas = translacoes = 0
+    nariz_fixo = None
+    anterior = None
+    while sim.t - t0 < t_max:
+        l = sim.leitura()
+        comando = guiagem.passo(l)
+        if guiagem.fase in (ENCONTRO, FALHA):
+            break
+        if guiagem.fase == APROXIMA:
+            if t_entrada is None:
+                t_entrada = l.t
+            v_max = max(v_max, norma(sub(l.v, l.alvo.v)))
+            motor_max = max(motor_max, comando.acelerador)
+            if comando.translacao is not None:
+                translacoes += 1
+                dv_somado += norma(comando.translacao) * l.a_rcs * passo
+            if guiagem._nariz_aproxima is not None:
+                if nariz_fixo is None and angulo(l.nariz, guiagem._nariz_aproxima) < 0.01:
+                    nariz_fixo = guiagem._nariz_aproxima
+                if nariz_fixo is not None:
+                    desvio = max(desvio, angulo(l.nariz, nariz_fixo))
+            atual = comando.direcao
+            if anterior is not None and atual is not None and angulo(anterior[0], atual) > 10.0:
+                if anterior[1] == 0.0 and comando.acelerador == 0.0:
+                    trocas += 1
+            anterior = (atual, comando.acelerador) if atual is not None else None
+        if gancho is not None:
+            gancho(sim, l)
+        sim.executar(comando)
+        sim.avancar(passo)
+    l = sim.leitura()
+    return Aproximacao(
+        fase=guiagem.fase,
+        t_aproxima=sim.t - (t0 if t_entrada is None else t_entrada),
+        distancia=norma(sub(l.alvo.r, l.r)),
+        v_rel=norma(sub(l.v, l.alvo.v)),
+        v_max=v_max,
+        dv_rcs=guiagem.dv_rcs,
+        dv_rcs_somado=dv_somado,
+        motor_max=motor_max,
+        desvio_nariz=desvio,
+        trocas_de_direcao=trocas,
+        translacoes=translacoes,
+    )
+
+
+class TestAproximaComRcs(unittest.TestCase):
+    def test_de_368_m_parado_chega_no_encontro_so_com_o_rcs(self):
+        sim = montar_aproximacao(368.0, A_RCS)
+        guiagem = Guiagem(KERBIN, D_FINAL)
+        voo = aproximar(sim, guiagem)
+        self.assertEqual(voo.fase, ENCONTRO, voo)
+        self.assertAlmostEqual(voo.distancia, D_FINAL, delta=rendezvous.FOLGA_ENCONTRO)
+        self.assertLess(voo.t_aproxima, 300.0, voo)
+        self.assertLess(voo.v_max, rendezvous.V_RCS_MAX + rendezvous.TOL_RCS_LIGA + 0.05, voo)
+        self.assertEqual(voo.motor_max, 0.0)
+        self.assertLess(guiagem.dv, 0.01)
+        self.assertLess(voo.desvio_nariz, 1.0, voo)
+
+    def test_o_dv_do_rcs_e_a_soma_do_que_foi_pedido(self):
+        guiagem = Guiagem(KERBIN, D_FINAL)
+        voo = aproximar(montar_aproximacao(368.0, A_RCS), guiagem)
+        self.assertGreater(voo.dv_rcs, 2.0)
+        self.assertAlmostEqual(voo.dv_rcs, voo.dv_rcs_somado, delta=0.2)
+
+    def test_a_translacao_nunca_passa_de_1(self):
+        sim = montar_aproximacao(368.0, A_RCS, v_rel=-3.0)
+        guiagem = Guiagem(KERBIN, D_FINAL)
+        maior = []
+        voo = aproximar(sim, guiagem, gancho=lambda s, l: maior.append(norma(guiagem.translacao or (0.0, 0.0, 0.0))))
+        self.assertEqual(voo.fase, ENCONTRO, voo)
+        self.assertLessEqual(max(maior), 1.0 + 1e-9)
+
+    def test_de_3_km_termina_dentro_do_tempo_maximo(self):
+        sim = montar_aproximacao(2_900.0, A_RCS)
+        voo = aproximar(sim, Guiagem(KERBIN, D_FINAL))
+        self.assertEqual(voo.fase, ENCONTRO, voo)
+        self.assertLess(voo.t_aproxima, rendezvous.TEMPO_MAX_APROX, voo)
+        self.assertLess(voo.v_max, rendezvous.V_RCS_MAX + rendezvous.TOL_RCS_LIGA + 0.05, voo)
+        self.assertEqual(voo.motor_max, 0.0)
+
+    def test_o_monopropelente_acaba_no_meio_e_o_motor_termina(self):
+        sim = montar_aproximacao(368.0, A_RCS)
+        guiagem = Guiagem(KERBIN, D_FINAL)
+
+        def acabar(s, l):
+            if norma(sub(l.alvo.r, l.r)) < 200.0:
+                s.a_rcs = 0.0
+
+        voo = aproximar(sim, guiagem, gancho=acabar)
+        self.assertEqual(voo.fase, ENCONTRO, voo)
+        self.assertEqual(sim.a_rcs, 0.0)
+        self.assertGreater(voo.motor_max, 0.0)
+        self.assertGreater(guiagem.dv, 0.0)
+
+    def test_motor_sem_rcs_so_vira_uma_vez_para_frear_e_segura_a_mira_na_espera(self):
+        sim = montar_aproximacao(368.0, 0.0)
+        voo = aproximar(sim, Guiagem(KERBIN, D_FINAL))
+        self.assertEqual(voo.fase, ENCONTRO, voo)
+        self.assertEqual(voo.translacoes, 0)
+        self.assertLessEqual(voo.trocas_de_direcao, 1, voo)
+        self.assertEqual(voo.dv_rcs, 0.0)
+
+    def test_longe_pede_a_translacao_cheia_para_o_alvo_e_segura_o_nariz(self):
+        sim = montar_aproximacao(250.0, A_RCS)
+        guiagem = Guiagem(KERBIN, D_FINAL)
+        guiagem.passo(sim.leitura())
+        guiagem.fase = APROXIMA
+        l = sim.leitura()
+        comando = guiagem.passo(l)
+        u = unit(sub(l.alvo.r, l.r))
+        self.assertLess(norma(sub(comando.translacao, u)), 1e-6)
+        self.assertEqual(comando.acelerador, 0.0)
+        self.assertLess(angulo(comando.direcao, u), 1e-9)
+
+    def test_com_a_velocidade_pedida_a_translacao_e_zero_com_o_rcs_ligado(self):
+        sim = montar_aproximacao(500.0, A_RCS, v_rel=rendezvous.V_RCS_MAX)
+        guiagem = Guiagem(KERBIN, D_FINAL)
+        guiagem.passo(sim.leitura())
+        guiagem.fase = APROXIMA
+        comando = guiagem.passo(sim.leitura())
+        self.assertEqual(comando.translacao, (0.0, 0.0, 0.0))
+        self.assertEqual(comando.acelerador, 0.0)
+
+    def test_perto_do_fim_a_velocidade_pedida_cai_com_a_raiz_da_distancia(self):
+        sim = montar_aproximacao(D_FINAL + 1.0, A_RCS, v_rel=0.5)
+        guiagem = Guiagem(KERBIN, D_FINAL)
+        guiagem.passo(sim.leitura())
+        guiagem.fase = APROXIMA
+        l = sim.leitura()
+        u = unit(sub(l.alvo.r, l.r))
+        v_pedida = math.sqrt(2.0 * rendezvous.FRACAO_FREIO * A_RCS * (norma(sub(l.alvo.r, l.r)) - D_FINAL))
+        self.assertLess(v_pedida, rendezvous.V_RCS_MAX)
+        w = sub(esc(v_pedida, u), sub(l.v, l.alvo.v))
+        comando = guiagem.passo(l)
+        self.assertLess(norma(sub(comando.translacao, esc(1.0 / (A_RCS * rendezvous.TEMPO_RCS), w))), 1e-6)
+
+    def test_o_rcs_so_acende_acima_da_faixa_e_so_apaga_abaixo_dela(self):
+        def comando_com(v_rel, guiagem):
+            sim = montar_aproximacao(500.0, A_RCS, v_rel=v_rel)
+            return guiagem.passo(sim.leitura())
+
+        guiagem = Guiagem(KERBIN, D_FINAL)
+        guiagem.passo(montar_aproximacao(500.0, A_RCS).leitura())
+        guiagem.fase = APROXIMA
+        guiagem._rcs_corrigindo = False
+        meio = rendezvous.V_RCS_MAX - (rendezvous.TOL_RCS + rendezvous.TOL_RCS_LIGA) / 2.0
+        self.assertEqual(comando_com(meio, guiagem).translacao, (0.0, 0.0, 0.0))
+        self.assertNotEqual(comando_com(rendezvous.V_RCS_MAX - 0.2, guiagem).translacao, (0.0, 0.0, 0.0))
+        self.assertNotEqual(comando_com(meio, guiagem).translacao, (0.0, 0.0, 0.0))
+        self.assertEqual(comando_com(rendezvous.V_RCS_MAX - 0.01, guiagem).translacao, (0.0, 0.0, 0.0))
+
+
 class TestNaveOrbital(unittest.TestCase):
     def test_sem_motor_bate_com_propagar(self):
         nave = montar(HOJE_NAVE, HOJE_ALVO)
@@ -738,6 +927,7 @@ class TestGuiagemPassoAPasso(unittest.TestCase):
 
 NR = "nr"
 SUP = "sup"
+REF_NAVE = "nave"
 SEM_CONICAS = "o jogo não deixa criar nós agora"
 
 
@@ -850,6 +1040,13 @@ class ControleFalso:
         self.rcs = False
         self.throttle = 0.0
         self.nodes = []
+        self.right = self.forward = self.up = 0.0
+        self.escritas = []
+
+    def __setattr__(self, nome, valor):
+        if nome in ("rcs", "right", "forward", "up") and "escritas" in self.__dict__:
+            self.escritas.append((nome, valor))
+        super().__setattr__(nome, valor)
 
     def add_node(self, ut, prograde=0.0, normal=0.0, radial=0.0):
         if self.jogo.nao_cria_no:
@@ -907,6 +1104,18 @@ class NaveFalsa:
         self.control = ControleFalso(jogo)
         self.auto_pilot = PilotoFalso()
         self.parts = PartesFalsas(jogo)
+        self.reference_frame = REF_NAVE
+
+    @property
+    def available_reaction_wheel_torque(self):
+        torque = 100.0 if self.jogo.com_roda else 0.0
+        return ((torque,) * 3, (torque,) * 3)
+
+    @property
+    def available_rcs_force(self):
+        sim = self.jogo.sim
+        forca = sim.a_rcs * sim.massa / rendezvous.FATOR_RCS if self.control.rcs else 0.0
+        return ((forca,) * 3, (forca,) * 3)
 
     def position(self, referencia):
         return self.jogo.eixos(self.jogo.sim.r)
@@ -983,6 +1192,8 @@ class CentroFalso:
         return self.jogo.nave
 
     def transform_direction(self, direcao, de, para):
+        if de == NR and para == REF_NAVE:
+            return self.jogo.para_a_nave(direcao)
         assert de == SUP and para == NR and tuple(direcao) == (0.0, 0.0, 1.0)
         leste = unit(cruz(POLO, self.jogo.sim.r))
         if self.jogo.leste_errado:
@@ -999,8 +1210,19 @@ class CentroFalso:
 class JogoFalso:
     """Um KSP de mentira em volta de uma NaveOrbital, com os eixos canhotos do kRPC (z trocado)."""
 
-    def __init__(self, nave=HOJE_NAVE, alvo=HOJE_ALVO, canhoto=True, leste_errado=False, combustivel=COMBUSTIVEL_MODULO):
+    def __init__(
+        self,
+        nave=HOJE_NAVE,
+        alvo=HOJE_ALVO,
+        canhoto=True,
+        leste_errado=False,
+        combustivel=COMBUSTIVEL_MODULO,
+        a_rcs=0.0,
+        com_roda=True,
+    ):
         self.sim = montar(nave, alvo, combustivel)
+        self.sim.a_rcs = a_rcs
+        self.com_roda = com_roda
         self.canhoto = canhoto
         self.leste_errado = leste_errado
         self.fluxos = []
@@ -1035,10 +1257,31 @@ class JogoFalso:
         self.procedimentos.append((servico, procedimento, tipos[0]))
         piloto.engajado = procedimento == "AutoPilot_Engage"
 
+    def base_da_nave(self):
+        """(direita, frente, cima) da nave, no referencial destro da simulação: direita × frente = cima."""
+        frente = unit(self.sim.nariz)
+        cima = unit(sub(POLO, esc(ponto(POLO, frente), frente)))
+        return cruz(frente, cima), frente, cima
+
+    def para_a_nave(self, direcao):
+        """Um vetor do referencial do kRPC para o da nave: x para a direita, y para a frente, z para baixo."""
+        d = self.eixos(direcao)
+        direita, frente, cima = self.base_da_nave()
+        return (ponto(d, direita), ponto(d, frente), -ponto(d, cima))
+
+    def translacao_fisica(self):
+        """A translação que o control.right, forward e up fazem, no referencial destro da simulação."""
+        controle = self.nave.control
+        direita, frente, cima = self.base_da_nave()
+        return soma(soma(esc(controle.right, direita), esc(controle.forward, frente)), esc(controle.up, cima))
+
     def avancar(self, dt):
         controle = self.nave.control
         direcao = self.nave.auto_pilot.target_direction
-        self.sim.executar(Comando(controle.throttle, None if direcao is None else self.eixos(direcao)))
+        translacao = self.translacao_fisica() if controle.rcs else None
+        self.sim.executar(
+            Comando(controle.throttle, None if direcao is None else self.eixos(direcao), translacao=translacao)
+        )
         self.sim.avancar(dt)
 
 
@@ -1178,7 +1421,7 @@ class TestNaveKrpc(unittest.TestCase):
                 fonte.ler()
                 fonte.executar(Comando(0.6, (1.0, 2.0, 3.0)))
                 self.assertFalse(nave.control.sas)
-                self.assertTrue(nave.control.rcs)
+                self.assertFalse(nave.control.rcs)
                 self.assertTrue(math.isnan(nave.auto_pilot.target_roll))
                 self.assertEqual(nave.auto_pilot.reference_frame, NR)
                 for superficie in nave.parts.control_surfaces:
@@ -1314,6 +1557,8 @@ class TestNaveKrpc(unittest.TestCase):
                 controle.rcs = antes
                 fonte.ler()
                 fonte.executar(Comando(0.8, (1.0, 0.0, 0.0), no=(UT_HOJE + 600.0, (3.0, 0.0, 0.0)), no_mudou=True))
+                self.assertFalse(controle.rcs)
+                fonte.executar(Comando(0.8, (1.0, 0.0, 0.0), translacao=(0.5, 0.0, 0.0)))
                 self.assertTrue(controle.rcs)
                 fonte.liberar()
                 self.assertEqual(controle.throttle, 0.0)
@@ -1367,6 +1612,161 @@ class TestNaveKrpc(unittest.TestCase):
                 self.assertAlmostEqual(fonte.comparar_no(errado)["angulo"], 2.0, places=3)
 
 
+class TestNaveKrpcComRcs(unittest.TestCase):
+    def setUp(self):
+        patch = mock.patch.object(rendezvous, "INTERVALO_COMBUSTIVEL", 0.0)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def criar(self, **extras):
+        jogo = JogoFalso(**extras)
+        fonte = rendezvous.NaveKrpc(jogo, jogo.nave, jogo.corpo, rendezvous.planeta_do_jogo(jogo.corpo))
+        fonte.ler()
+        return jogo, fonte
+
+    def test_a_translacao_inercial_vira_os_eixos_da_nave(self):
+        for canhoto in (True, False):
+            with self.subTest(canhoto=canhoto):
+                jogo, fonte = self.criar(canhoto=canhoto, a_rcs=A_RCS)
+                controle = jogo.nave.control
+                for translacao in ((1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.3, -0.5, 0.2)):
+                    fonte.executar(Comando(0.0, (1.0, 0.0, 0.0), translacao=translacao))
+                    direita, frente, cima = jogo.base_da_nave()
+                    self.assertAlmostEqual(controle.right, ponto(translacao, direita), places=9)
+                    self.assertAlmostEqual(controle.forward, ponto(translacao, frente), places=9)
+                    self.assertAlmostEqual(controle.up, ponto(translacao, cima), places=9)
+                    self.assertLess(norma(sub(jogo.translacao_fisica(), translacao)), 1e-9)
+                fonte.executar(Comando(0.0, (1.0, 0.0, 0.0), translacao=(1.0, 0.0, 0.0)))
+                self.assertGreater(abs(controle.right) + abs(controle.up), 1e-3)
+
+    def test_cada_eixo_fica_limitado_a_1(self):
+        jogo, fonte = self.criar(a_rcs=A_RCS)
+        fonte.executar(Comando(0.0, None, translacao=(3.0, 0.0, 0.0)))
+        controle = jogo.nave.control
+        for eixo in (controle.right, controle.forward, controle.up):
+            self.assertLessEqual(abs(eixo), 1.0)
+
+    def test_o_rcs_so_liga_com_translacao_se_a_nave_tem_roda_de_reacao(self):
+        jogo, fonte = self.criar(a_rcs=A_RCS)
+        controle = jogo.nave.control
+        fonte.executar(Comando(0.0, (1.0, 0.0, 0.0)))
+        self.assertFalse(controle.rcs)
+        fonte.executar(Comando(0.0, (1.0, 0.0, 0.0), translacao=(0.0, 0.0, 0.0)))
+        self.assertTrue(controle.rcs)
+        fonte.executar(Comando(0.0, (1.0, 0.0, 0.0), translacao=(0.2, 0.0, 0.0)))
+        self.assertTrue(controle.rcs)
+        fonte.executar(Comando(0.0, (1.0, 0.0, 0.0)))
+        self.assertFalse(controle.rcs)
+
+    def test_o_rcs_so_e_escrito_quando_o_estado_desejado_muda(self):
+        jogo, fonte = self.criar(a_rcs=A_RCS)
+        controle = jogo.nave.control
+        for _ in range(3):
+            fonte.executar(Comando(0.0, (1.0, 0.0, 0.0)))
+        for _ in range(3):
+            fonte.executar(Comando(0.0, (1.0, 0.0, 0.0), translacao=(0.0, 0.0, 0.0)))
+        for _ in range(3):
+            fonte.executar(Comando(0.0, (1.0, 0.0, 0.0)))
+        escritas = [valor for nome, valor in controle.escritas if nome == "rcs"]
+        self.assertEqual(escritas, [True, False, True, False])
+
+    def test_sem_roda_de_reacao_o_rcs_fica_ligado(self):
+        jogo, fonte = self.criar(a_rcs=A_RCS, com_roda=False)
+        controle = jogo.nave.control
+        for _ in range(3):
+            fonte.executar(Comando(0.0, (1.0, 0.0, 0.0)))
+        self.assertTrue(controle.rcs)
+        fonte.executar(Comando(0.0, (1.0, 0.0, 0.0), translacao=(0.5, 0.0, 0.0)))
+        fonte.executar(Comando(0.0, (1.0, 0.0, 0.0)))
+        self.assertTrue(controle.rcs)
+        self.assertEqual([valor for nome, valor in controle.escritas if nome == "rcs"], [True])
+
+    def test_sem_translacao_os_eixos_zeram_so_se_nao_estavam_zerados(self):
+        jogo, fonte = self.criar(a_rcs=A_RCS)
+        controle = jogo.nave.control
+        for _ in range(3):
+            fonte.executar(Comando(0.0, None))
+        self.assertEqual([n for n, _ in controle.escritas if n in ("right", "forward", "up")], [])
+        fonte.executar(Comando(0.0, None, translacao=(0.3, -0.5, 0.2)))
+        antes = len(controle.escritas)
+        fonte.executar(Comando(0.0, None))
+        self.assertEqual((controle.right, controle.forward, controle.up), (0.0, 0.0, 0.0))
+        depois = len(controle.escritas)
+        self.assertGreater(depois, antes)
+        fonte.executar(Comando(0.0, None))
+        self.assertEqual(len(controle.escritas), depois)
+
+    def test_a_rcs_vem_da_forca_do_rcs_dividida_pela_massa(self):
+        jogo, fonte = self.criar(a_rcs=A_RCS)
+        self.assertEqual(fonte.ler().a_rcs, 0.0)
+        fonte.executar(Comando(0.0, None))
+        self.assertAlmostEqual(fonte.ler().a_rcs, A_RCS, places=9)
+        jogo.nave.control.rcs = False
+        jogo.sim.a_rcs = 0.5
+        self.assertAlmostEqual(fonte.ler().a_rcs, A_RCS, places=9)
+
+    def test_a_rcs_e_o_do_eixo_mais_fraco(self):
+        jogo, fonte = self.criar(a_rcs=A_RCS)
+        forca = A_RCS * jogo.sim.massa / rendezvous.FATOR_RCS
+        fraca = ((forca, forca / 2.0, forca), (forca, forca, forca * 3.0))
+        with mock.patch.object(NaveFalsa, "available_rcs_force", fraca):
+            fonte.executar(Comando(0.0, None))
+            self.assertAlmostEqual(fonte.ler().a_rcs, A_RCS / 2.0, places=9)
+
+    def test_a_rcs_e_relido_com_o_rcs_ligado_e_cai_a_zero_sem_monopropelente(self):
+        jogo, fonte = self.criar(a_rcs=A_RCS)
+        fonte.executar(Comando(0.0, None, translacao=(0.0, 0.0, 0.0)))
+        self.assertAlmostEqual(fonte.ler().a_rcs, A_RCS, places=9)
+        jogo.sim.a_rcs = 0.0
+        self.assertEqual(fonte.ler().a_rcs, 0.0)
+        fonte.executar(Comando(0.0, None))
+        jogo.sim.a_rcs = A_RCS
+        self.assertEqual(fonte.ler().a_rcs, 0.0)
+
+    def test_nave_sem_rcs_tem_a_rcs_zero(self):
+        jogo, fonte = self.criar()
+        fonte.executar(Comando(0.0, None))
+        self.assertEqual(fonte.ler().a_rcs, 0.0)
+
+    def test_liberar_zera_a_translacao_e_devolve_o_rcs_do_jogador(self):
+        for antes in (False, True):
+            with self.subTest(rcs_antes=antes):
+                jogo, fonte = self.criar(a_rcs=A_RCS)
+                controle = jogo.nave.control
+                controle.rcs = antes
+                fonte.executar(Comando(0.0, (1.0, 0.0, 0.0), translacao=(0.3, -0.5, 0.2)))
+                self.assertNotEqual((controle.right, controle.forward, controle.up), (0.0, 0.0, 0.0))
+                fonte.liberar()
+                self.assertEqual((controle.right, controle.forward, controle.up), (0.0, 0.0, 0.0))
+                self.assertEqual(controle.rcs, antes)
+                nomes = [n for n, _ in controle.escritas]
+                ultimo_eixo = max(i for i, n in enumerate(nomes) if n in ("right", "forward", "up"))
+                self.assertLess(ultimo_eixo, len(nomes) - 1)
+
+    def test_aproximacao_inteira_pelo_krpc_so_com_o_rcs(self):
+        raio = KERBIN.raio + 158_000.0
+        jogo = JogoFalso(
+            nave=circular(KERBIN, 158_000.0, -math.degrees(368.0 / raio)),
+            alvo=circular(KERBIN, 158_000.0, 0.0),
+            a_rcs=A_RCS,
+        )
+        jogo.sim.v = jogo.sim.alvo().v
+        with mock.patch.object(rendezvous, "INTERVALO_STATUS", 0.0):
+            with sem_espera() as saida:
+                with com_fisica(jogo):
+                    codigo = rendezvous.encontrar(jogo, argumentos())
+        texto = saida.getvalue()
+        self.assertEqual(codigo, rendezvous.CHEGOU, texto)
+        self.assertRegex(texto, r"rcs +\d+%")
+        self.assertRegex(texto, r"Dv gasto 0\.\d m/s, RCS [1-9]\d*\.\d m/s")
+        controle = jogo.nave.control
+        self.assertEqual((controle.right, controle.forward, controle.up), (0.0, 0.0, 0.0))
+        self.assertFalse(controle.rcs)
+        self.assertEqual(controle.throttle, 0.0)
+        l = jogo.sim.leitura()
+        self.assertAlmostEqual(norma(sub(l.alvo.r, l.r)), D_FINAL, delta=rendezvous.FOLGA_ENCONTRO)
+
+
 class TestTextos(unittest.TestCase):
     def test_duracao(self):
         textos = [rendezvous._texto_duracao(s) for s in (42.0, 423.0, 12_240.0, -61.0)]
@@ -1390,6 +1790,9 @@ class TestTextos(unittest.TestCase):
         self.assertRegex(plano[2], r"previsto: [0-9.]+ m/s .* disponível: [0-9]+ m/s")
         linha = rendezvous.status(l, g)
         self.assertRegex(linha, r"^TRANSFERENCIA +dist +585\.\d km +vrel +\d+\.\d\d m/s +proxima T-\d+ s [0-9.]+ m/s +gasto +0\.0 m/s +motor +0%$")
+        self.assertNotIn(" rcs ", linha)
+        g.translacao = (0.3, 0.4, 0.0)
+        self.assertRegex(rendezvous.status(l, g), r"motor +0% rcs +50%$")
         sem_alvo = nave.leitura()
         sem_alvo.alvo = None
         self.assertIn("dist      ---", rendezvous.status(sem_alvo, g))

@@ -2,7 +2,7 @@
 
 O [`scripts/rendezvous.py`](../scripts/rendezvous.py) leva a nave ativa, já em órbita, até 100 m (ou a distância pedida) de outra nave, parada em relação a ela. Os dois têm de orbitar o mesmo planeta, em órbita fechada e fora do ar. O script iguala o plano, acha a queima de transferência, corrige o caminho, anula a velocidade relativa e se aproxima. O acoplamento não faz parte dele.
 
-**Status: script escrito e testado numa nave simulada; o plano foi conferido no jogo em 21/10/2026; falta o voo completo no jogo.** Os testes sem o KSP estão em [`scripts/tests/test_rendezvous.py`](../scripts/tests/test_rendezvous.py), e o roteiro para o jogo está [abaixo](#testar-no-jogo).
+**Status: voou no jogo em 21/10/2026 e terminou a 111 m da estação, com 98,3 m/s gastos (89,6 previstos); a aproximação com RCS de translação também foi testada no jogo.** Os testes sem o KSP estão em [`scripts/tests/test_rendezvous.py`](../scripts/tests/test_rendezvous.py), e o roteiro para o jogo está [abaixo](#testar-no-jogo).
 
 ## Como usar
 
@@ -43,7 +43,7 @@ Também mudou a transferência: a Hohmann com busca do momento da queima virava 
 | `TRANSFERENCIA` | Planeja a transferência. Espera `t1 − duração/2`, com warp até a margem antes, apontando para a queima. Queima "como um nó do KSP" |
 | `CORRECAO` | Refaz o tiro a partir do estado de agora, em frações de volta antes do encontro. Queima se a correção passa da tolerância; pula a fração cujo instante já passou |
 | `VELOCIDADE` | Acha a menor distância a partir do estado de agora, espera a hora e anula a velocidade relativa |
-| `APROXIMA` | Sem warp, em tempo real: vai para o alvo com uma velocidade que cai com a distância, até a distância final |
+| `APROXIMA` | Sem warp, em tempo real: vai para o alvo pelo RCS de translação, sem virar a nave, a até 2 m/s, freando no fim; sem RCS, pelo motor |
 | `ENCONTRO` | Fim bom: motor em 0, piloto automático desligado, SAS ligado e código 0 |
 | `FALHA` | Fim ruim, com um aviso; código 1 |
 
@@ -57,7 +57,7 @@ Também mudou a transferência: a Hohmann com busca do momento da queima virava 
 
 **As travas de alinhamento:** nenhuma queima começa com o nariz a mais de 5° da direção dela, e o motor fica em 0 com o nariz a mais de 45°. Sem isso, um nariz lento queimava para o lado errado. Na subida o motor acende de leve para o gimbal virar a nave; aqui o nariz vira sozinho, pelas rodas de reação.
 
-**Nas esperas**, o nariz fica no pró-grado até a margem antes da queima, e depois vira para ela. Parado em `APROXIMA`, o nariz fica apontado para o lado oposto ao alvo, pronto para frear.
+**Nas esperas**, o nariz fica no pró-grado até a margem antes da queima, e depois vira para ela. Em `APROXIMA`, o nariz fica parado: apontado para o alvo com o RCS, ou na direção da última queima com o motor.
 
 ## As contas
 
@@ -131,9 +131,18 @@ A guiagem mede o giro de verdade do nariz enquanto ele está a mais de 20° da d
 
 ### A aproximação final
 
-Sem warp. `v_des = limitar((d − D_FINAL)/tempo, 0, 5 m/s)`, na direção do alvo, com `tempo` de 60 s. Se `|v_des − v_rel|` passa de 0,3 m/s mais 10% de `v_des`, aponta e queima para corrigir; senão, motor em 0. Termina quando a distância fica abaixo da final mais 20 m e `|v_rel|` abaixo de 0,2 m/s. Passou de 1 200 s sem chegar, é `FALHA`.
+Sem warp. Termina quando a distância fica abaixo da final mais 20 m e `|v_rel|` abaixo de 0,2 m/s. Passou de 3 000 s sem chegar, é `FALHA`.
 
-O RCS de translação fica para o acoplamento: a aproximação usa o motor principal, com as mesmas queimas apontadas das outras fases.
+**Com RCS** (o caso normal): o nariz vira uma vez, para o alvo, e fica parado; o RCS empurra a nave para frente, para trás e para os lados.
+- A velocidade pedida segue a curva de frenagem: `v_des = min(2 m/s, √(2 · 0,5 · a_rcs · (d − D_FINAL)))`, na direção do alvo. A nave anda a 2 m/s e só freia nos últimos metros, com metade da aceleração do RCS.
+- A translação é `w/(a_rcs · 1 s)`, com `w = v_des − v_rel` e o módulo limitado a 1. Há uma faixa: o RCS acende quando `|w|` passa de 0,15 m/s e apaga abaixo de 0,05.
+- `a_rcs` é o eixo mais fraco do `available_rcs_force`, dividido pela massa e multiplicado por 0,5. O kRPC informa uns 2 vezes a força que a nave entrega: no SmalLifter, 1,55 m/s² informados no eixo do nariz, ~0,8 medidos com pulsos.
+- O vetor de translação vai para os eixos da nave pelo `transform_direction`, com `right = x`, `forward = y` e `up = −z` (medidos no jogo com pulsos).
+- **O RCS só fica ligado na APROXIMA**, ou o voo todo se a nave não tem roda de reação. No resto do voo, quem vira a nave é a roda.
+- Se o monopropelente acaba no meio, a fase segue pelo motor.
+- **O custo cresce com a distância:** ir em linha reta até o alvo vai contra a órbita (as duas naves caem em volta do planeta), e manter a reta pede ~0,02 m/s² o tempo todo. De ~370 m, como sai da `VELOCIDADE`, são ~4 m/s de RCS e ~2 min; de 1,3 km, ~30 m/s e ~8 min.
+
+**Sem RCS:** `v_des = limitar((d − D_FINAL)/tempo, 0, 5 m/s)`, com `tempo` de 60 s. Se `|v_des − v_rel|` passa de 0,3 m/s mais 10% de `v_des`, aponta e queima com o motor; senão, motor em 0 e o nariz parado onde está.
 
 ### O Δv e o combustível
 
@@ -190,8 +199,19 @@ O primeiro caso real: o módulo `AEAS - SmalLifter` (10,3 t, um Cheetah de 125 k
    - 99,5 m/s ao todo (uma Hohmann de 100 a 158 km custa ~88 m/s).
 
    Conferir no mapa: o nó, a aproximação que o KSP desenha (tem que ficar a ~300 m, perto da nossa) e o `burn_vector` do nó contra o `dv1`. O script apaga o nó sozinho.
-2. **Voo completo no jogo: a fazer.** Tem que terminar a ~100 m, parado. Anotar o Δv gasto contra o previsto, e o monopropelente gasto.
-3. **Depois:** uma nave a 80 km, para testar a transferência tipo Hohmann até a estação.
+2. **Voo completo no jogo.** **Feito em 21/10/2026**, logo depois da subida (`subida.py --altitude 100000 --plano-do-alvo`), que deixou o SmalLifter a 99,7 × 99,4 km, a 0,025° do plano e a 576 km da estação:
+   - o plano: não precisou;
+   - a transferência: 39,5 m/s, 3 h depois; o encontro previsto para 5 h depois, a 50,1 m/s de velocidade relativa;
+   - a VELOCIDADE começou a 10,6 km, com 51,0 m/s, e deixou a nave a 368 m;
+   - o ENCONTRO: a 111 m, a 0,20 m/s, com **98,3 m/s gastos contra 89,6 previstos** (+10%, dentro da reserva de 20 m/s);
+   - o monopropelente: **117 de 750 gastos**, quase tudo na APROXIMA. Ali a mira trocava a cada passo entre o Δv que falta, que muda de direção perto do alvo, e o lado contrário ao alvo; com o RCS ligado pelo script, a nave virava sem parar. O RCS foi desligado no meio da APROXIMA, e dali só a roda de reação virou;
+   - a APROXIMA levou 5,5 min para 260 m: a velocidade pedida cai com a distância (`tempo` de 60 s), e a nave chegou a andar a 0,4 m/s.
+3. **A aproximação com RCS.** **Feito em 21/10/2026**, com o `--distancia 60`, a partir do fim do voo anterior. A nave tinha derivado para 917 m enquanto parada:
+   - a `VELOCIDADE` gastou 0,2 m/s de motor;
+   - a `APROXIMA` foi de 1 319 m a 59 m, a 2 m/s e sem virar a nave, em 8,4 min. Terminou a 0,19 m/s;
+   - o monopropelente: 34,6 gastos (~32 m/s), quase tudo segurando a reta por 1,2 km. A simulação dá o mesmo (~30 m/s de 1,4 km);
+   - a frenagem começou tarde: a 60 m a nave ainda andava a 0,84 m/s. É daí o fator 0,5 no `a_rcs`, que entrou depois deste voo, junto com a faixa do RCS.
+4. **Depois:** uma nave a 80 km, para testar a transferência tipo Hohmann até a estação.
 
 Se algo der errado, anote a fase, o que o terminal imprimiu e a nave. O primeiro ponto a conferir é a primeira mensagem do script: se o referencial do kRPC não for o que o script espera, ele para antes de qualquer queima, com uma mensagem sobre o referencial.
 
@@ -199,7 +219,7 @@ Se algo der errado, anote a fase, o que o terminal imprimiu e a nave. O primeiro
 
 - **Nave quase na altitude do alvo, com o alvo longe na fase** (por exemplo, de 140 a 170 km até 158 km, com o alvo de 90° a 180° à frente ou atrás): o período sinódico passa de 15 voltas, e a fase é corrigida dentro de `--voltas-max` voltas de transferência, a **60–170 m/s**, contra 12–26 m/s de uma Hohmann depois de dezenas de voltas de espera. Um `--voltas-max` maior barateia: o custo cai com 1/voltas.
 - **Sem troca de estágio.** O script confere antes se o Δv do estágio aceso basta; se não basta, não começa.
-- **Só o motor principal.** O RCS de translação e o acoplamento ficam para depois.
+- **A aproximação com RCS de longe gasta muito:** ~2 m/s de RCS a cada 100 m, a partir de ~1 km. O certo para longe seria um tiro de Kepler (queima, voo livre, freada), como a transferência; fica para depois. O acoplamento também.
 - **A busca é lenta no Pi:** ~2,5 s no PC e ~11 s no Pi 4 (medido em 21/10/2026 contra o jogo, de 100 km até a Estação um). O motor fica em 0 enquanto ela roda, o que não atrapalha: a busca roda antes da queima, com a nave em queda livre. Se passar muito disso, o próximo passo é guardar o estado do alvo numa grade de tempo.
 - **O nariz lento:** a guiagem mede o giro e começa a virar mais cedo; testado a 1°/s. Uma nave que vira bem mais devagar que isso precisa de margens maiores.
 - **As versões do kRPC.** O Pi tem o cliente 0.6.0, e o jogo, o servidor 0.5.4. O `auto_pilot.engaged` não existe no servidor: o script usa o contorno da subida (`ligar_piloto`). No cliente 0.6.0, o `relative_inclination` recebe o `Orbit` do alvo, não a nave.

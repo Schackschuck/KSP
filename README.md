@@ -426,6 +426,7 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
 - [ ] Testar no jogo ([roteiro](docs/subida.md#testar-no-jogo)): primeiro 80 km e 0°, depois a inclinação, o plano de um alvo e a Mun.
 - [x] A configuração pelo encoder AJUSTE, no Uno, com a página SUBIDA aberta ([docs/encoder.md](docs/encoder.md#na-ponte-da-tela)).
 - [ ] Depois: a guiagem do vácuo (PEG), mais eficiente que seguir o pró-grado.
+- [ ] Depois: lançar na hora certa para o rendezvous. Além de esperar o plano do alvo, o script esperaria a **fase**: decolar quando o alvo estiver no ângulo certo à frente, para a subida terminar logo atrás dele, e o rendezvous virar só a aproximação final. Na Estação um (quase equatorial, ~37 min de volta), o alvo passa por cima do KSC a cada ~41 min, então a espera é curta. No primeiro voo completo (21/10/2026), a subida sem essa espera terminou a 576 km da estação, e o rendezvous previu 89,6 m/s e 5 h até o encontro.
 
 ### Pouso de precisão (volta à base)
 
@@ -439,7 +440,7 @@ O pouso da SpaceX completo. O `pouso.py` desce na vertical onde a nave estiver; 
 
 ### Rendezvous
 
-**Status: script escrito e testado numa nave simulada; o plano conferido no jogo em 21/10/2026; falta o voo completo no jogo.** [`scripts/rendezvous.py`](scripts/rendezvous.py) leva a nave até 100 m de outra em órbita do mesmo planeta, parada em relação a ela. Como funciona, as contas e o roteiro de teste no jogo estão em [docs/rendezvous.md](docs/rendezvous.md).
+**Status: voou no jogo em 21/10/2026, de 100 km até 111 m da Estação um, com 98,3 m/s gastos (89,6 previstos); a aproximação com RCS de translação também foi testada no jogo.** [`scripts/rendezvous.py`](scripts/rendezvous.py) leva a nave até 100 m de outra em órbita do mesmo planeta, parada em relação a ela. Como funciona, as contas e o roteiro de teste no jogo estão em [docs/rendezvous.md](docs/rendezvous.md).
 
 **O script queima sozinho**, porque o EXEC da fase 5 ainda não existe. O nó que ele cria no jogo é só para mostrar: no mapa, o KSP desenha a aproximação, e o piloto confere o plano. Com `--so-planejar`, o script só cria o nó, imprime o plano e sai.
 
@@ -448,7 +449,7 @@ O pouso da SpaceX completo. O `pouso.py` desce na vertical onde a nave estiver; 
   2. **Transferência:** a conta pesada. Uma busca com tiro (shooting): para cada momento de queima e tempo de voo, um palpite tangencial e um Newton em 3D acertam a queima para a nave passar 300 m acima do alvo. O momento da queima varre o período sinódico, e o custo é o Δv da queima mais a velocidade relativa no encontro. Serve também quando a nave já está na altitude do alvo, onde uma Hohmann dá 0 m/s. Sem motor, as órbitas seguem Kepler: a previsão é exata.
   3. **Correções** no meio do caminho: o mesmo tiro, a partir do estado de agora, em frações de volta antes do encontro.
   4. **Igualar a velocidade:** no momento da menor distância, com a queima igual à diferença entre a velocidade do alvo e a da nave.
-  5. **Aproximação final**, sem nó: aponta para o alvo, se aproxima com uma velocidade que cai com a distância, anula a deriva e para a uns 100 m. Dali segue o acoplamento assistido.
+  5. **Aproximação final**, sem nó: aponta para o alvo e vai pelo RCS de translação, sem virar a nave, a até 2 m/s, freando só no fim, e para a uns 100 m. Sem RCS, vai pelo motor. Dali segue o acoplamento assistido.
 - **Automático ou diretor de voo:** o script encadeia as etapas e acelera o tempo entre elas (`warp_to`). O modo diretor de voo, em que ele só propõe cada nó e o piloto queima, fica para depois.
 - **Na página do editor de manobras, na tela multifunção:** a menor distância prevista até o alvo, quando ela acontece e a velocidade relativa nesse ponto, atualizadas enquanto o encoder e o TEMPO mexem no nó.
 - **Ordem para fazer**, do mais simples ao mais difícil:
@@ -456,7 +457,9 @@ O pouso da SpaceX completo. O `pouso.py` desce na vertical onde a nave estiver; 
   2. [x] Os nós de igualar o plano e igualar a velocidade e a busca da transferência, numa etapa só, para o script já fechar o voo. Testado em voos simulados.
   3. [x] A aproximação final, que já entrou junto. Falta a passagem para o acoplamento.
   4. [x] O plano conferido no jogo (`--so-planejar`, 21/10/2026): 99,5 m/s previstos de 100 km até a Estação um.
-  5. [ ] O voo completo no jogo ([roteiro](docs/rendezvous.md#testar-no-jogo)).
+  5. [x] O voo completo no jogo ([roteiro](docs/rendezvous.md#testar-no-jogo)), 21/10/2026: 111 m e 0,20 m/s no fim, 98,3 m/s e 117 de monopropelente gastos.
+  6. [x] A aproximação com o RCS de translação, sem virar a nave, e com a curva de frenagem até 2 m/s. Testada no jogo em 21/10/2026: de 1,3 km a 59 m, parada a 0,19 m/s. O RCS só fica ligado nela; no resto do voo, quem vira a nave é a roda de reação.
+  7. [ ] De longe (mais de ~1 km), trocar a reta por um tiro de Kepler: seguir a reta contra a órbita gasta ~2 m/s de RCS a cada 100 m.
 - **Decidido:**
   - Quem prevê as órbitas: uma previsão própria, com a equação de Kepler (as funções f e g), rápida e testável sem o KSP. Com o kRPC, cada pergunta vai pela rede, e a busca faz milhares. O `--so-planejar` confere a menor distância da previsão própria contra a do kRPC.
   - Queimas longas: começam metade da duração antes do nó, senão o encontro erra por quilômetros, e seguem o Δv que ainda falta, como o KSP. Como o script queima sozinho, a regra está nele; o EXEC, quando existir, usa a mesma.

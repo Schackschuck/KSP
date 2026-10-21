@@ -13,7 +13,7 @@ Fases
  TRANSFERENCIA  queima planejada que põe a nave na mira, 300 m acima do alvo
  CORRECAO       refaz o tiro em frações de volta antes do encontro
  VELOCIDADE     anula a velocidade relativa no ponto de menor distância
- APROXIMA       chega perto do alvo com o motor principal, em tempo real
+ APROXIMA       chega perto do alvo em tempo real: com o RCS de translação, ou com o motor principal se não houver RCS
  ENCONTRO       fim bom
  FALHA          fim ruim, com um aviso
 
@@ -97,7 +97,7 @@ V_APROX_MAX = 5.0
 TEMPO_APROX = 60.0
 TOL_APROX = 0.3
 TOL_APROX_RELATIVA = 0.1
-TEMPO_MAX_APROX = 1_200.0
+TEMPO_MAX_APROX = 3_000.0
 MARGEM_WARP = 60.0
 MARGEM_COMBUSTIVEL = 0.9
 RESERVA_DV = 20.0
@@ -114,6 +114,13 @@ D_FINAL = 100.0
 INTERVALO = 0.05
 INTERVALO_STATUS = 1.0
 INTERVALO_COMBUSTIVEL = 1.0
+V_RCS_MAX = 2.0
+FRACAO_FREIO = 0.5
+TOL_RCS = 0.05
+TOL_RCS_LIGA = 0.15
+FATOR_RCS = 0.5
+TEMPO_RCS = 1.0
+A_RCS_DEMO = 0.97
 VELOCIDADE_DEMO = 50
 CHEGOU = 0
 
@@ -152,7 +159,10 @@ class Estado:
 
 @dataclass
 class Leitura:
-    """O que a guiagem lê da nave em t: posição, velocidade, nariz, massa, empuxo e Isp disponíveis, combustível e o alvo (Estado em t)."""
+    """O que a guiagem lê da nave em t: posição, velocidade, nariz, massa, empuxo e Isp disponíveis, combustível e o alvo (Estado em t).
+
+    a_rcs é a aceleração (m/s²) do eixo mais fraco do RCS, 0 se a nave não tem RCS.
+    """
 
     t: float
     r: tuple
@@ -163,6 +173,7 @@ class Leitura:
     isp: float
     combustivel: float
     alvo: Estado | None
+    a_rcs: float = 0.0
 
 
 @dataclass
@@ -170,7 +181,9 @@ class Comando:
     """acelerador (0 a 1), direcao (vetor inercial para o nariz, ou None), acelerar_ate (UT ou None) e o nó a mostrar no jogo.
 
     no é (t, dv) (dv em vetor inercial) ou None; no_mudou é verdade no
-    primeiro comando depois de o nó mudar (ou sumir).
+    primeiro comando depois de o nó mudar (ou sumir). translacao é o vetor
+    inercial (módulo até 1) da fração do RCS em cada direção: None é sem
+    translação, (0, 0, 0) é RCS ligado e parado.
     """
 
     acelerador: float = 0.0
@@ -178,6 +191,7 @@ class Comando:
     acelerar_ate: float | None = None
     no: tuple | None = None
     no_mudou: bool = False
+    translacao: tuple | None = None
 
 
 @dataclass
@@ -542,6 +556,7 @@ class Guiagem:
 
     Atributos para o terminal: fase, aviso (ou None), transferencia (ou None),
     dv (o Δv gasto, sem contar os passos de mais de 1 s, que são o time warp),
+    dv_rcs (o Δv do RCS, pela mesma regra), translacao (a do último comando, ou None),
     proxima_queima (UT do nó, ou None) e dv_proxima (m/s do nó, 0 sem nó).
     """
 
@@ -552,7 +567,9 @@ class Guiagem:
         self.fase = None
         self.transferencia = None
         self.dv = 0.0
+        self.dv_rcs = 0.0
         self.acelerador = 0.0
+        self.translacao = None
         self.proxima_queima = None
         self.dv_proxima = 0.0
         self._avisos = set()
@@ -572,6 +589,8 @@ class Guiagem:
         self._plano_feito = False
         self._velocidade_pronta = False
         self._t_aproxima = None
+        self._nariz_aproxima = None
+        self._rcs_corrigindo = False
         self._fases = {
             PLANO: self._fase_plano,
             TRANSFERENCIA: self._fase_transferencia,
@@ -606,6 +625,7 @@ class Guiagem:
             comando = self._fase_parada(l)
         if self.fase in (ENCONTRO, FALHA):
             comando.acelerador = 0.0
+            comando.translacao = None
             self._fim_do_no()
         if comando.direcao is not None and norma(comando.direcao) > 0.0:
             self._direcao = comando.direcao
@@ -613,6 +633,7 @@ class Guiagem:
         comando.no_mudou = self._no != self._no_enviado
         self._no_enviado = self._no
         self.acelerador = comando.acelerador
+        self.translacao = comando.translacao
         return comando
 
     def _falhar(self, aviso=None):
@@ -624,8 +645,11 @@ class Guiagem:
         """Soma o Δv gasto desde a leitura anterior."""
         if self._t_anterior is not None:
             dt = l.t - self._t_anterior
-            if 0.0 < dt <= 1.0 and l.massa > 0.0:
-                self.dv += self.acelerador * l.empuxo / l.massa * dt
+            if 0.0 < dt <= 1.0:
+                if l.massa > 0.0:
+                    self.dv += self.acelerador * l.empuxo / l.massa * dt
+                if self.translacao is not None:
+                    self.dv_rcs += norma(self.translacao) * l.a_rcs * dt
         self._t_anterior = l.t
 
     def _medir_giro(self, l):
@@ -890,6 +914,29 @@ class Guiagem:
             self.fase = APROXIMA
         return comando
 
+    def _aproximar_com_rcs(self, l, para_o_alvo, distancia, v_rel):
+        """A aproximação com o RCS: nariz parado no alvo, velocidade pedida pela curva de frenagem, motor em 0.
+
+        O RCS acende quando o que falta passa de TOL_RCS_LIGA e apaga abaixo de
+        TOL_RCS: uma faixa, para não ficar aceso o tempo todo contra erros pequenos.
+        """
+        if self._nariz_aproxima is None:
+            self._nariz_aproxima = unit(para_o_alvo)
+        falta = max(distancia - self.d_final, 0.0)
+        v_des = min(V_RCS_MAX, math.sqrt(2.0 * FRACAO_FREIO * l.a_rcs * falta))
+        w = sub(esc(v_des, unit(para_o_alvo)), v_rel)
+        if norma(w) > TOL_RCS_LIGA:
+            self._rcs_corrigindo = True
+        elif norma(w) < TOL_RCS:
+            self._rcs_corrigindo = False
+        if not self._rcs_corrigindo:
+            translacao = (0.0, 0.0, 0.0)
+        else:
+            translacao = esc(1.0 / (l.a_rcs * TEMPO_RCS), w)
+            if norma(translacao) > 1.0:
+                translacao = unit(translacao)
+        return Comando(0.0, self._nariz_aproxima, translacao=translacao)
+
     def _fase_aproxima(self, l):
         if self._t_aproxima is None:
             self._t_aproxima = l.t
@@ -902,12 +949,15 @@ class Guiagem:
         if distancia < self.d_final + FOLGA_ENCONTRO and norma(v_rel) < V_ENCONTRO:
             self.fase = ENCONTRO
             return None
+        if l.a_rcs > 0.0:
+            self._queimando = False
+            return self._aproximar_com_rcs(l, para_o_alvo, distancia, v_rel)
         tempo = max(TEMPO_APROX, 1.5 * 180.0 / self._giro)
         v_des = limitar((distancia - self.d_final) / tempo, 0.0, V_APROX_MAX)
         w = sub(esc(v_des, unit(para_o_alvo)), v_rel)
         if not self._queimando:
             if norma(w) <= TOL_APROX + TOL_APROX_RELATIVA * v_des:
-                return Comando(0.0, esc(-1.0, para_o_alvo))
+                return Comando(0.0, self._direcao)
             if angulo(l.nariz, w) > ERRO_APONTAR:
                 return Comando(0.0, w)
             self._comecar_a_queimar()
@@ -923,8 +973,9 @@ class NaveOrbital:
 
     Serve aos testes e ao --demo: a mesma Guiagem comanda esta nave no lugar do
     kRPC. A física anda em subpassos de PASSO_FISICA s (gravidade e empuxo ao
-    longo do nariz, leapfrog), com a massa caindo pelo Isp. O nariz gira até a
-    direção pedida a no máximo giro_max graus por segundo (GIRO_MAX, se ninguém
+    longo do nariz, leapfrog), com a massa caindo pelo Isp. O RCS soma a aceleração
+    a_rcs vezes o vetor de translação do Comando, em qualquer direção e sem
+    gastar massa. O nariz gira até a direção pedida a no máximo giro_max graus por segundo (GIRO_MAX, se ninguém
     mudar). fator_empuxo e fator_isp multiplicam o empuxo e o Isp de verdade, mas
     não o que a leitura entrega: simulam uma nave diferente do que a guiagem
     acha.
@@ -935,7 +986,7 @@ class NaveOrbital:
     Uso: l = nave.leitura(); nave.executar(guiagem.passo(l)); nave.avancar(dt).
     """
 
-    def __init__(self, planeta, nave, alvo, massa, combustivel, empuxo, isp):
+    def __init__(self, planeta, nave, alvo, massa, combustivel, empuxo, isp, a_rcs=0.0):
         self.planeta = planeta
         self.t = nave.t
         self.r = nave.r
@@ -944,12 +995,14 @@ class NaveOrbital:
         self.combustivel = combustivel
         self.empuxo = empuxo
         self.isp = isp
+        self.a_rcs = a_rcs
         self.giro_max = GIRO_MAX
         self.fator_empuxo = 1.0
         self.fator_isp = 1.0
         self.nariz = unit(nave.v)
         self._alvo = alvo
         self._acelerador = 0.0
+        self._translacao = None
         self._direcao = self.nariz
 
     def alvo(self):
@@ -970,11 +1023,13 @@ class NaveOrbital:
             isp=self.isp if com_motor else 0.0,
             combustivel=self.combustivel,
             alvo=self.alvo(),
+            a_rcs=self.a_rcs,
         )
 
     def executar(self, comando):
-        """Aplica o Comando: acelerador, direção do nariz e time warp."""
+        """Aplica o Comando: acelerador, translação do RCS, direção do nariz e time warp."""
         self._acelerador = limitar(comando.acelerador, 0.0, 1.0)
+        self._translacao = comando.translacao
         if comando.direcao is not None and norma(comando.direcao) > 0.0:
             self._direcao = comando.direcao
         if comando.acelerar_ate is not None and comando.acelerar_ate > self.t:
@@ -1019,6 +1074,8 @@ class NaveOrbital:
             empuxo = self._acelerador * self.empuxo * self.fator_empuxo
             dm = min(empuxo / (self.isp * self.fator_isp * G0) * dt, self.combustivel)
         a_empuxo = esc(empuxo / self.massa, self.nariz)
+        if self._translacao is not None:
+            a_empuxo = soma(a_empuxo, esc(self.a_rcs, self._translacao))
         v_meio = soma(self.v, esc(dt / 2.0, soma(self._gravidade(self.r), a_empuxo)))
         self.r = soma(self.r, esc(dt, v_meio))
         self.v = soma(v_meio, esc(dt / 2.0, soma(self._gravidade(self.r), a_empuxo)))
@@ -1096,6 +1153,12 @@ class NaveKrpc:
     relida a cada INTERVALO_COMBUSTIVEL s. empuxo e isp são os dos motores
     acesos, que é o que a nave entrega.
 
+    O RCS só fica ligado quando o comando pede translação, ou quando a nave não
+    tem roda de reação (aí ele é quem vira a nave). A translação inercial do
+    comando vira os eixos da nave (control.right, forward e up) pelo
+    transform_direction. a_rcs é a aceleração do eixo mais fraco do RCS, lida
+    ao assumir o controle e relida a cada INTERVALO_COMBUSTIVEL s com o RCS ligado.
+
     O nó que o script mostra no jogo é só ele: criado e apagado por aqui; os nós
     que o piloto já tinha ficam como estão (com um aviso).
     """
@@ -1143,6 +1206,10 @@ class NaveKrpc:
         self._sem_warp = False
         self._superficies = []
         self._rcs_antes = None
+        self._rcs_ligado = False
+        self._com_roda = True
+        self._a_rcs = 0.0
+        self._eixos = (0.0, 0.0, 0.0)
 
     def _achar_alvo(self, corpo_krpc):
         alvo = self._space_center.target_vessel
@@ -1190,6 +1257,8 @@ class NaveKrpc:
         agora = time.monotonic()
         if agora >= self._proximo_combustivel:
             self._atualizar_combustivel()
+            if self._rcs_ligado:
+                self._a_rcs = self._ler_a_rcs()
             self._proximo_combustivel = agora + INTERVALO_COMBUSTIVEL
         self._ultima = Leitura(
             t=s["ut"],
@@ -1201,8 +1270,47 @@ class NaveKrpc:
             isp=s["isp"],
             combustivel=self._combustivel,
             alvo=self._ler_alvo(s["ut"]),
+            a_rcs=self._a_rcs,
         )
         return self._ultima
+
+    def _ler_a_rcs(self):
+        """m/s² do eixo mais fraco do RCS (os seis componentes do available_rcs_force, vezes FATOR_RCS), 0 sem RCS ou sem monopropelente.
+
+        O kRPC informa uns 2 vezes a força que a nave entrega de verdade (medido
+        no SmalLifter em 21/10/2026: 1,55 m/s² informados, ~0,8 medidos).
+        """
+        massa = self._streams["massa"]()
+        componentes = [abs(c) for trio in self._nave.available_rcs_force for c in trio]
+        if massa <= 0.0 or not componentes:
+            return 0.0
+        return FATOR_RCS * min(componentes) / massa
+
+    def _tem_roda_de_reacao(self):
+        return any(c != 0.0 for trio in self._nave.available_reaction_wheel_torque for c in trio)
+
+    def _ajustar_rcs(self, comando):
+        desejado = comando.translacao is not None or not self._com_roda
+        if desejado != self._rcs_ligado:
+            self._nave.control.rcs = desejado
+            self._rcs_ligado = desejado
+
+    def _aplicar_translacao(self, translacao):
+        """Escreve a translação nos eixos da nave (right = x, forward = y, up = -z), só se mudou."""
+        if translacao is None:
+            eixos = (0.0, 0.0, 0.0)
+        else:
+            x, y, z = self._space_center.transform_direction(
+                self._corrigir(translacao), self._nr, self._nave.reference_frame
+            )
+            eixos = (limitar(x, -1.0, 1.0), limitar(y, -1.0, 1.0), limitar(-z, -1.0, 1.0))
+        if eixos != self._eixos:
+            self._escrever_eixos(eixos)
+
+    def _escrever_eixos(self, eixos):
+        controle = self._nave.control
+        controle.right, controle.forward, controle.up = eixos
+        self._eixos = eixos
 
     def executar(self, comando):
         """Aplica o Comando: nó mostrado, acelerador, direção do piloto automático e time warp."""
@@ -1212,12 +1320,17 @@ class NaveKrpc:
             self._tomou_controle = True
             controle.sas = False
             self._rcs_antes = controle.rcs
+            self._com_roda = self._tem_roda_de_reacao()
             controle.rcs = True
+            self._rcs_ligado = True
+            self._a_rcs = self._ler_a_rcs()
             piloto.reference_frame = self._nr
             piloto.target_roll = math.nan
             self._soltar_superficies()
             ligar_piloto(self._conn, piloto, True)
         self.mostrar_no(comando)
+        self._ajustar_rcs(comando)
+        self._aplicar_translacao(comando.translacao)
         controle.throttle = comando.acelerador
         if comando.direcao is not None and norma(comando.direcao) > 0.0:
             piloto.target_direction = self._corrigir(unit(comando.direcao))
@@ -1313,12 +1426,15 @@ class NaveKrpc:
             except Exception:
                 pass
 
+    def _zerar_translacao(self):
+        self._escrever_eixos((0.0, 0.0, 0.0))
+
     def _devolver_rcs(self):
         if self._rcs_antes is not None:
             self._nave.control.rcs = self._rcs_antes
 
     def liberar(self):
-        """Motor em 0, piloto automático desligado, SAS ligado, RCS e aletas como estavam, o nó do script apagado e streams removidas, cada um por si.
+        """Motor em 0, translação zerada, piloto automático desligado, SAS ligado, RCS e aletas como estavam, o nó do script apagado e streams removidas, cada um por si.
 
         Se o script nunca assumiu o controle (o --so-planejar), só apaga o nó e
         remove as streams: o piloto, o SAS e o motor ficam como o jogador deixou.
@@ -1330,6 +1446,7 @@ class NaveKrpc:
                 lambda: setattr(controle, "throttle", 0.0),
                 lambda: ligar_piloto(self._conn, self._nave.auto_pilot, False),
                 lambda: setattr(controle, "sas", True),
+                self._zerar_translacao,
                 self._devolver_rcs,
                 self._devolver_superficies,
                 *acoes,
@@ -1419,9 +1536,12 @@ def status(l, guiagem):
         proxima = "---"
     else:
         proxima = f"{_texto_t(guiagem.proxima_queima - l.t)} {guiagem.dv_proxima:.1f} m/s"
+    rcs = ""
+    if guiagem.translacao is not None:
+        rcs = f" rcs {norma(guiagem.translacao) * 100:3.0f}%"
     return (
         f"{guiagem.fase:13} dist {_distancia_ao_alvo(l):>8}  vrel {v_rel} m/s  proxima {proxima:<22}  "
-        f"gasto {guiagem.dv:6.1f} m/s  motor {guiagem.acelerador * 100:3.0f}%"
+        f"gasto {guiagem.dv:6.1f} m/s  motor {guiagem.acelerador * 100:3.0f}%{rcs}"
     )
 
 
@@ -1430,7 +1550,7 @@ def encerrar(l, guiagem, fonte):
     if guiagem.fase == ENCONTRO:
         print(
             f"Encontro: a {norma(sub(l.alvo.r, l.r)):.0f} m do alvo, velocidade relativa "
-            f"{norma(sub(l.v, l.alvo.v)):.2f} m/s, Dv gasto {guiagem.dv:.1f} m/s"
+            f"{norma(sub(l.v, l.alvo.v)):.2f} m/s, Dv gasto {guiagem.dv:.1f} m/s, RCS {guiagem.dv_rcs:.1f} m/s"
         )
         return CHEGOU
     print(f"Não chegou: {texto_do_aviso(guiagem.aviso, fonte)}")
@@ -1587,7 +1707,7 @@ def encontrar(conn, args):
 
 def encontrar_demo(args):
     """O mesmo rendezvous, com a NaveOrbital do caso de hoje (módulo e Estação um) no lugar do jogo."""
-    nave = NaveOrbital(KERBIN, NAVE_DEMO, ALVO_DEMO, MASSA_DEMO, COMBUSTIVEL_DEMO, EMPUXO_DEMO, ISP_DEMO)
+    nave = NaveOrbital(KERBIN, NAVE_DEMO, ALVO_DEMO, MASSA_DEMO, COMBUSTIVEL_DEMO, EMPUXO_DEMO, ISP_DEMO, A_RCS_DEMO)
     fonte = FonteSimulada(nave)
     guiagem = Guiagem(KERBIN, args.distancia, args.voltas_max)
     l = fonte.ler()
