@@ -70,7 +70,7 @@ Na [versão B do cockpit](../construcao.md#cockpit-versão-b) são 35:
 | Editor de manobras | 3 | PRO, NRM e RAD: uma legenda, acesa no eixo escolhido |
 | Action groups | 4 | PARAQUEDAS, SOLAR, ANTENAS e CARGA: uma legenda, verde |
 | Acelerador | 3 | TREM, FREIOS e LUZES: uma legenda, verde |
-| Recursos e EVA | 2 | JATO e LUZ: uma legenda, verde |
+| EVA | 2 | JATO e LUZ: uma legenda, verde |
 | Câmera | 2 | MAPA e IVA: uma legenda, branca. O IVA com capa |
 | Tempo | 1 | FISICO: uma legenda, branca |
 
@@ -90,7 +90,7 @@ São 31 legendas diferentes para os 35 korry: os cinco scripts vagos usam a mesm
 | Editor de manobras | 3 | `pro`, `nrm`, `rad` |
 | Action groups | 4 | `paraquedas`, `solar`, `antenas`, `carga` |
 | Acelerador | 3 | `trem`, `freios`, `luzes` |
-| Recursos e EVA | 2 | `jato`, `luz` |
+| EVA | 2 | `jato`, `luz` |
 | Câmera | 2 | `mapa`, `iva` |
 | Tempo | 1 | `fisico` |
 
@@ -154,7 +154,7 @@ Os korry de um grupo ficam presos numa **grade**: uma peça preta com as bases d
 | `pecas` | Action groups | 4 em fila | 25,5 | (6, 100,25) e (119, 100,25) |
 | `vista` | Câmera | 2 em fila | 31 | (6, 37,25) e (75, 37,25) |
 | `deltav` | Editor de manobras | 3 em coluna | 25,5 | (26,75, 25,25) e (26,75, 108,25) |
-| `eva` | Recursos e EVA | 2 em fila | 25,5 | (33,75, 77,25) e (91,25, 77,25) |
+| `eva` | EVA | 2 em fila | 25,5 | (33,75, 36,25) e (91,25, 36,25) |
 | `fisico` | Tempo | 1 | | (74,75, 52) |
 
 São 17 parafusos no total. O `voo_sas` tem um parafuso em cima, entre o título e o grupo, e o `scripts` tem os dois à direita do grupo.
