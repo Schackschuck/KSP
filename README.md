@@ -19,7 +19,7 @@ O objetivo principal é **aprender firmware/embarcados e eletrônica**, e de que
    • tela multifunção no navegador do tablet ........ bridge/celular/
    • dispara os scripts de voo ....................... scripts/
           ▲                         ▲
-          │ USB/serial              │ USB (ancoragem do tablet)
+          │ USB/serial              │ Wi-Fi de casa
           │ (protocolo próprio)     │ (página da tela, por HTTP)
           ▼                         ▼
  Arduino Mega = I/O do painel    tablet = tela multifunção
@@ -93,7 +93,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Korry switches** (botões iluminados com legenda, de avião) onde a luz mostra um estado do jogo | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: a legenda impressa em duas cores encaixa num corpo igual para todos, e a chave e os LEDs vão num suporte impresso atrás, sem placa perfurada ([hardware/korry/](hardware/korry/README.md)). O que não tem estado para mostrar é um botão de 16 mm sem luz. |
 | **Cockpit em U, de 766 × 391 mm, com painéis de 125 mm** ([versão B](hardware/construcao.md#cockpit-versão-b)) | Um bloco no meio e duas asas, como num avião, sem painel vazio. Os controles foram juntados em 11 painéis para a caixa não passar de 80 cm; o que não cabe em 125 mm ocupa dois quadrados. O que cada botão faz foi conferido no código-fonte do kRPC antes de desenhar. |
 | **A mikromedia de volta**, no lugar da tela de 7" no HDMI do Pi | Sai mais barato: a placa já está na bancada, e o firmware dela já roda na placa, com o jogo. A tela de 2,8" é pequena para o meio do cockpit, que era o motivo da troca pela de 7"; as páginas têm que ser feitas para caber nela. A placa desenha sozinha a partir dos números que a ponte manda, pela USB do Pi. |
-| **Um tablet velho como tela**, o Galaxy Tab S 8.4 (SM-T705M, Android 6.0.1), no lugar da mikromedia | Já está na bancada e não serve mais para outra coisa. A tela de 8,4" com toque cabe no painel duplo, e o Chrome do Android 6 roda a mesma página do celular, sem firmware novo. Liga no Pi pela ancoragem USB: a página vem do Pi, em HTTP, então não precisa de internet nem de Wi-Fi, e o mesmo cabo carrega o tablet. A tela de 2,8" da mikromedia ficava pequena no meio do cockpit; ela sai de novo, e o firmware dela continua no repositório. |
+| **Um tablet velho como tela**, o Galaxy Tab S 8.4 (SM-T705M, Android 6.0.1), no lugar da mikromedia | Já está na bancada e não serve mais para outra coisa. A tela de 8,4" com toque cabe no painel duplo, e o Chrome do Android 6 roda a mesma página do celular, sem firmware novo. A página chega pela Wi-Fi de casa, vinda do Pi, em HTTP: o tablet só precisa entrar na rede, sem internet. Ele fica no próprio carregador, porque numa USB do Pi a Samsung puxa só uns 0,5 A, que não seguram a tela ligada. A tela de 2,8" da mikromedia ficava pequena no meio do cockpit; ela sai de novo, e o firmware dela continua no repositório. |
 | **Pi ligado no PC por um cabo de rede direto**, com IP fixo dos dois lados, no lugar da Wi-Fi | A ida e volta pelo cabo fica abaixo de 0,5 ms e quase não varia; pela Wi-Fi são de 2 a 10 ms, com picos de 20 a 100 ms, e a variação atrapalha o fly by wire. Não depende do roteador, os endereços não mudam, e o PC e o Pi continuam na internet pela Wi-Fi. No PC só roda o KSP com o kRPC: a ponte abre sozinha no Pi e espera o jogo. Os 1 a 2 quadros de atraso do próprio kRPC continuam ([docs/setup-pi.md](docs/setup-pi.md#8-cabo-de-rede-direto-até-o-pc)). |
 | **Recursos na tela multifunção**, sem as barras de LED | Saem o MAX7219, as 5 barras de 10 LEDs e a fiação delas, e a tela já recebe tudo da ponte. O combustível, o oxidante, o monopropelente e a eletricidade vão para uma página da tela. |
 | **Caixa em MDF cortado a laser, com peças impressas em 3D** | A laser do colégio faz as peças planas e grandes (paredes, painéis com legendas); a impressora de casa, as pequenas e complicadas (korry, knobs, suportes). Cada seção é um painel removível com o seu módulo atrás. |
@@ -209,7 +209,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - [ ] Acelerador pela alavanca; TREM, FREIOS e LUZES em korry.
 - [ ] Sidestick: os 3 eixos pelo Mega, e o botão trocando o modo, com as luzes.
 - [ ] EVA, quando houver o kRPC 0.7: andar e voar pelo manche, JATO, LUZ, SAIR, EMBARCAR, AGARRAR e SOLTAR.
-- [ ] Tela no tablet: levar a página SUBIDA, que hoje só existe na mikromedia, para a página do navegador, e testar no Tab S pela ancoragem USB, em tela cheia.
+- [ ] Tela no tablet: levar a página SUBIDA, que hoje só existe na mikromedia, para a página do navegador, e testar no Tab S pela Wi-Fi, em tela cheia.
 - [ ] Páginas novas na tela: ORBITA, DELTA-V, SUBIDA, ALVO, TEMPO, EVA e RECURSOS (combustível, oxidante, monopropelente e eletricidade, no lugar das barras de LED).
 
 **Pronto quando:** dá para lançar e colocar um foguete em órbita usando só o painel.
@@ -219,7 +219,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - Interface em pygame no Pi: altitude, velocidades, apoapse/periapse, tempo até Ap/Pe, combustível e delta-v por estágio.
 - Depois: gráfico de altitude × tempo, desenho simples da órbita, indicador de atitude.
 - O Pi 4 tem folga de desempenho, mas vale o bom hábito: redesenhar só o que mudou e limitar a taxa de quadros.
-- A tela do cockpit é um tablet Galaxy Tab S 8.4, com a página da tela no Chrome, ligado no Pi pela ancoragem USB ([docs/mfd.md](docs/mfd.md#no-tablet-do-cockpit)). A mesma tela roda no simulador do PC, no celular e na mikromedia ([fase 6](#fase-6--tela-multifunção-mikromedia-for-arm)).
+- A tela do cockpit é um tablet Galaxy Tab S 8.4, com a página da tela no Chrome, com a página chegando pela Wi-Fi de casa e o tablet no próprio carregador ([docs/mfd.md](docs/mfd.md#no-tablet-do-cockpit)). A mesma tela roda no simulador do PC, no celular e na mikromedia ([fase 6](#fase-6--tela-multifunção-mikromedia-for-arm)).
 - A tela multifunção ([docs/mfd.md](docs/mfd.md)) já mostra navball, velocidades, altitude e Ap/Pe, na placa, no simulador e numa página web.
 
 **Pronto quando:** dá para circularizar uma órbita olhando só para a tela.

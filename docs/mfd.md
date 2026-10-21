@@ -237,12 +237,13 @@ Com `python mfd.py --demo --celular`, a página de botões e as páginas novas d
 
 No cockpit, a tela é um tablet velho, o Samsung Galaxy Tab S 8.4 (SM-T705M, Android 6.0.1), atrás do painel da tela ([hardware/construcao.md](../hardware/construcao.md#tela-multifunção)). É o mesmo caso do celular, com duas diferenças:
 
-- **Pelo cabo, sem Wi-Fi:** o tablet liga no Pi pela USB, com a **ancoragem USB** ligada, nas configurações de conexões do tablet. O cabo vira uma rede entre os dois, e o endereço que o terminal mostra passa a ser o da rede do cabo. A página é HTTP e vem do Pi, então o tablet não precisa de internet, e o mesmo cabo o carrega.
-- **O navegador:** o Chrome do Android 6 roda a página. Se o que veio no tablet não abrir, a última versão do Chrome para o Android 6 entra por APK, copiada do PC pelo cabo.
+- **Pela Wi-Fi de casa, no próprio carregador:** o tablet entra na Wi-Fi de casa e abre `http://IP_DO_PI:8000`, com a ponte da tela no Pi aberta com `--celular` ([docs/setup-pi.md](setup-pi.md)). A página é HTTP e vem do Pi: mesmo que a internet não funcione no tablet, ela abre. A energia vem do carregador original, numa tomada.
+- **Por que não pela USB do Pi:** numa porta de dados, a Samsung puxa só uns 0,5 A, menos do que a tela ligada gasta, e o tablet descarrega mesmo no cabo; o Pi 4 também só dá uns 1,2 A nas 4 portas juntas. Um cabo em Y não resolve, porque com os dados no Pi o tablet continua achando que está num computador. Para não depender do roteador, mais tarde: o Pi abrindo uma Wi-Fi própria, ou um hub USB com fonte e porta de carga e dados (CDP, BC 1.2), que deixa puxar 1,5 A com a ancoragem USB.
+- **O navegador:** o Chrome do Android 6 roda a página. Se o que veio no tablet não abrir, a última versão do Chrome para o Android 6 entra por APK, copiada do PC pela USB.
 
 Para não apagar: nas opções de desenvolvedor, ligar **Permanecer ativo**. A tela é AMOLED e marca com imagem parada por horas: brilho baixo e a tela apagando quando o jogo não está aberto.
 
-- [ ] Testar no Tab S: a página pela ancoragem USB, em tela cheia, com o toque.
+- [ ] Testar no Tab S: a página pela Wi-Fi de casa, em tela cheia, com o toque e no carregador.
 - [ ] A página SUBIDA no navegador, que hoje só existe na mikromedia.
 
 ## Painel de scripts e a página do pouso
