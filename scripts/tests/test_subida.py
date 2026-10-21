@@ -240,6 +240,22 @@ class TestContas(unittest.TestCase):
         self.assertTrue(math.isinf(tempo_de_queima(100.0, 1_000.0, 0.0, 300.0)))
         self.assertTrue(math.isinf(tempo_de_queima(100.0, 1_000.0, 1_000.0, 0.0)))
 
+    def test_tempo_de_queima_pelos_estagios(self):
+        estagios = list(subida.FOGUETE_KERBIN)
+        baixo, cima = estagios
+        por_estagios = subida.tempo_de_queima_estagios
+        self.assertAlmostEqual(por_estagios(100.0, estagios),
+                               tempo_de_queima(100.0, baixo.massa_inicial, baixo.empuxo_vacuo, baixo.isp_vacuo))
+        ve = baixo.isp_vacuo * subida.G0
+        disponivel = ve * math.log(baixo.massa_inicial / (baixo.massa_inicial - baixo.combustivel))
+        esvaziar = baixo.combustivel * ve / baixo.empuxo_vacuo
+        resto = tempo_de_queima(200.0, cima.massa_inicial, cima.empuxo_vacuo, cima.isp_vacuo)
+        self.assertAlmostEqual(por_estagios(disponivel + 200.0, estagios), esvaziar + resto, places=6)
+        tudo = esvaziar + cima.combustivel * cima.isp_vacuo * subida.G0 / cima.empuxo_vacuo
+        self.assertAlmostEqual(por_estagios(1e6, estagios), tudo, places=6)
+        vazio = dataclasses.replace(baixo, combustivel=0.0)
+        self.assertAlmostEqual(por_estagios(200.0, [vazio, cima]), resto)
+
     def test_acelerador_pela_pressao_dinamica(self):
         self.assertEqual(subida.acel_q(0.0), 1.0)
         self.assertEqual(subida.acel_q(subida.Q_MAX), 1.0)
@@ -728,6 +744,29 @@ class TestVoos(unittest.TestCase):
         self.assertAlmostEqual(virada(meio), (1.0 + subida.ACEL_VIRAR) / 2.0)
         valores = [virada(e) for e in range(5, 46)]
         self.assertTrue(all(a > b for a, b in zip(valores, valores[1:])))
+
+    def test_circularizacao_longa_com_o_nucleo_quase_vazio_chega_na_altitude_pedida(self):
+        nucleo, cima = 25_006.0, 13_400.0
+        estagios = [
+            subida.Estagio(nucleo, 307.0, nucleo - 307.0 - cima, 1_350_000.0, 1_200_000.0, 315.0, 280.0),
+            subida.Estagio(cima, 3_500.0, cima - 3_500.0, 125_000.0, 37_500.0, 345.0, 100.0),
+        ]
+        nave = NaveSimulada(KERBIN, estagios, 0.0, 0.0, 0.0, aceso=True)
+        ra, rp = KERBIN.raio + 99_870.0, KERBIN.raio - 390_230.0
+        a, e = (ra + rp) / 2.0, (ra - rp) / (ra + rp)
+        r = KERBIN.raio + 70_000.0
+        v_t = math.sqrt(KERBIN.mu * a * (1.0 - e * e)) / r
+        v_r = math.sqrt(KERBIN.mu * (2.0 / r - 1.0 / a) - v_t * v_t)
+        nave.pousada = False
+        nave.r, nave.v = (r, 0.0, 0.0), (v_r, 0.0, -v_t)
+        guiagem = Guiagem(KERBIN, 100_000.0, 0.0, ler_estagios=nave.estagios)
+        guiagem._iniciada = True
+        guiagem.fase = COSTA
+        guiagem._estagios_giro = nave.estagios()
+        resultado = voar(nave, guiagem)
+        self.assertEqual(resultado.fase, ORBITA)
+        self.assertTrue(99_000.0 < resultado.pe < resultado.ap < 101_000.0, (resultado.pe, resultado.ap))
+        self.assertEqual(nave.indice, 1)
 
     def test_kerbin_100_km_a_45_graus(self):
         r = subir_de_kerbin(100_000.0, 45.0)
