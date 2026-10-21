@@ -158,7 +158,7 @@ O painel do editor ([hardware/construcao.md](../hardware/construcao.md#painel-do
 
 ## Encoder AJUSTE
 
-O encoder único do painel da tela ([desenho](../hardware/construcao.md#tela-multifunção)), que mexe na página aberta. Por enquanto ele fica num Uno à parte, na USB do Pi ([encoder.md](encoder.md)). **O firmware já manda estas linhas; a ponte ainda não lê:**
+O encoder único do cockpit, no VOO, logo embaixo da tela ([desenho](../hardware/construcao.md#painel-de-sistemas-de-controle)), que mexe na página aberta. Por enquanto ele fica num Uno à parte, na USB do Pi ([encoder.md](encoder.md)). **O firmware já manda estas linhas; a ponte ainda não lê:**
 
 | Mensagem | Quando | Significado |
 |---|---|---|

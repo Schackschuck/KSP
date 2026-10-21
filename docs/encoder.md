@@ -1,6 +1,6 @@
 # Encoder AJUSTE no Uno
 
-O AJUSTE é o encoder único do [painel da tela](../hardware/construcao.md#tela-multifunção): ele mexe na página aberta (o piloto automático, o Δv do editor, o alvo e a subida). Até o módulo do painel da tela ficar pronto, ele é um EC11 com botão, ligado num Arduino Uno que fica na USB do Pi do cockpit. O firmware é o [`firmware/encoder/encoder.ino`](../firmware/encoder/encoder.ino): ele só manda os cliques e o botão, e quem decide o que eles fazem na tela é a ponte.
+O AJUSTE é o encoder único do cockpit, no [VOO](../hardware/construcao.md#painel-de-sistemas-de-controle), logo embaixo da tela: ele mexe na página aberta (o piloto automático, o Δv do editor, o alvo e a subida). Até o módulo do VOO ficar pronto, ele é um EC11 com botão, ligado num Arduino Uno que fica na USB do Pi do cockpit. O firmware é o [`firmware/encoder/encoder.ino`](../firmware/encoder/encoder.ino): ele só manda os cliques e o botão, e quem decide o que eles fazem na tela é a ponte.
 
 ## Ligação
 

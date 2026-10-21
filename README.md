@@ -16,14 +16,14 @@ O objetivo principal é **aprender firmware/embarcados e eletrônica**, e de que
           ▼
  Raspberry Pi 4 = computador de bordo ............... bridge/
    • ponte kRPC ⇄ placas, aberta sozinha quando o Pi liga
-   • tela multifunção no navegador do celular, pelo Wi-Fi
+   • tela multifunção no navegador do tablet ........ bridge/celular/
    • dispara os scripts de voo ....................... scripts/
           ▲                         ▲
-          │ USB/serial              │ USB/serial (porta PROG)
-          │ (protocolo próprio)     │ (protocolo da tela)
+          │ USB/serial              │ USB (ancoragem do tablet)
+          │ (protocolo próprio)     │ (página da tela, por HTTP)
           ▼                         ▼
- Arduino Mega = I/O do painel    mikromedia = tela multifunção
- firmware/painel/                firmware/mfd/
+ Arduino Mega = I/O do painel    tablet = tela multifunção
+ firmware/painel/                (Galaxy Tab S 8.4, no Chrome)
           ▲
           │  SPI + linhas analógicas
           ▼
@@ -47,7 +47,7 @@ Cada parte tem um papel bem definido:
 | **Sidestick** (joystick JH-D400X-R4 no painel, lido pelo Mega) | Manda os 3 eixos e o botão como qualquer controle do painel; a ponte os traduz em comandos do kRPC. | O KSP não enxerga o joystick: tudo passa pela ponte. |
 | **Painel** (Arduino Mega, C++) | Lê entradas (com debounce), envia eventos; recebe valores e atualiza LEDs, displays e ponteiros. | **Não sabe que o KSP existe.** É um painel de I/O genérico. |
 | **Celular** (opcional, página no navegador) | Mostra a tela multifunção pelo Wi-Fi, com o mesmo protocolo e o mesmo layout, sem precisar da mikromedia. | Não fala com o kRPC nem guarda estado: só desenha o que a ponte manda. |
-| **Tela multifunção** (a mikromedia, de 2,8", na USB do Pi) | Desenha as páginas (navball, órbita, recursos, pouso, piloto) com o que a ponte manda, e troca de página pelo toque ou pelos botões do painel. | Não fala com o kRPC; só mostra o que o computador de bordo manda. |
+| **Tela multifunção** (um tablet Galaxy Tab S 8.4, na USB do Pi) | Abre no Chrome a mesma página do celular e desenha as páginas (navball, órbita, recursos, pouso, piloto) com o que a ponte manda; troca de página pelo toque ou sozinha, pelo painel mexido. | Não fala com o kRPC; só mostra o que o computador de bordo manda. |
 
 Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o endereço do servidor kRPC e a porta serial.
 
@@ -93,6 +93,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Korry switches** (botões iluminados com legenda, de avião) onde a luz mostra um estado do jogo | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: a legenda impressa em duas cores encaixa num corpo igual para todos, e a chave e os LEDs vão num suporte impresso atrás, sem placa perfurada ([hardware/korry/](hardware/korry/README.md)). O que não tem estado para mostrar é um botão de 16 mm sem luz. |
 | **Cockpit em U, de 766 × 391 mm, com painéis de 125 mm** ([versão B](hardware/construcao.md#cockpit-versão-b)) | Um bloco no meio e duas asas, como num avião, sem painel vazio. Os controles foram juntados em 11 painéis para a caixa não passar de 80 cm; o que não cabe em 125 mm ocupa dois quadrados. O que cada botão faz foi conferido no código-fonte do kRPC antes de desenhar. |
 | **A mikromedia de volta**, no lugar da tela de 7" no HDMI do Pi | Sai mais barato: a placa já está na bancada, e o firmware dela já roda na placa, com o jogo. A tela de 2,8" é pequena para o meio do cockpit, que era o motivo da troca pela de 7"; as páginas têm que ser feitas para caber nela. A placa desenha sozinha a partir dos números que a ponte manda, pela USB do Pi. |
+| **Um tablet velho como tela**, o Galaxy Tab S 8.4 (SM-T705M, Android 6.0.1), no lugar da mikromedia | Já está na bancada e não serve mais para outra coisa. A tela de 8,4" com toque cabe no painel duplo, e o Chrome do Android 6 roda a mesma página do celular, sem firmware novo. Liga no Pi pela ancoragem USB: a página vem do Pi, em HTTP, então não precisa de internet nem de Wi-Fi, e o mesmo cabo carrega o tablet. A tela de 2,8" da mikromedia ficava pequena no meio do cockpit; ela sai de novo, e o firmware dela continua no repositório. |
 | **Pi ligado no PC por um cabo de rede direto**, com IP fixo dos dois lados, no lugar da Wi-Fi | A ida e volta pelo cabo fica abaixo de 0,5 ms e quase não varia; pela Wi-Fi são de 2 a 10 ms, com picos de 20 a 100 ms, e a variação atrapalha o fly by wire. Não depende do roteador, os endereços não mudam, e o PC e o Pi continuam na internet pela Wi-Fi. No PC só roda o KSP com o kRPC: a ponte abre sozinha no Pi e espera o jogo. Os 1 a 2 quadros de atraso do próprio kRPC continuam ([docs/setup-pi.md](docs/setup-pi.md#8-cabo-de-rede-direto-até-o-pc)). |
 | **Recursos na tela multifunção**, sem as barras de LED | Saem o MAX7219, as 5 barras de 10 LEDs e a fiação delas, e a tela já recebe tudo da ponte. O combustível, o oxidante, o monopropelente e a eletricidade vão para uma página da tela. |
 | **Caixa em MDF cortado a laser, com peças impressas em 3D** | A laser do colégio faz as peças planas e grandes (paredes, painéis com legendas); a impressora de casa, as pequenas e complicadas (korry, knobs, suportes). Cada seção é um painel removível com o seu módulo atrás. |
@@ -192,7 +193,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - **Painel em módulos:** cada seção vira uma placa, ligada por cabo flat a um backplane de 12 slots no Mega. A placa pequena tem 8 entradas e 8 LEDs (1 × 74HC165 + 1 × 74HC595); a média, 16 e 24 (2 + 3), com um jack JST-XH para cada korry; a grande, 24 e 32 (3 + 4). Os LEDs só mostram o que vem do jogo: nenhum é ligado a um botão. Cada módulo tem uma etiqueta numa chave DIP, e o Mega descobre sozinho o que está encaixado. Esquemáticos, etiquetas e qual placa vai em cada seção em [hardware/](hardware/README.md).
 - Enquanto o primeiro módulo não fica pronto, os controles básicos continuam direto nos pinos do Mega, como em [docs/fase2.md](docs/fase2.md).
 - Próximo passo: o firmware do Mega lendo a fila de módulos pelas etiquetas, e testar o primeiro módulo direto no Mega.
-- **Tela e encoder:** a [tela multifunção](hardware/construcao.md#tela-multifunção) agora é a mikromedia, de 2,8", com um encoder só ao lado, o AJUSTE, que mexe na página aberta: o piloto automático, o Δv do editor, o alvo e a subida. As luzes do piloto e o ESTOL foram junto, e a metade direita do VOO ficou livre. As barras de recursos saíram, e o painel da asa esquerda virou só [EVA](hardware/construcao.md#eva).
+- **Tela e encoder:** a [tela multifunção](hardware/construcao.md#tela-multifunção) agora é um tablet Galaxy Tab S 8.4, atrás do painel duplo. Um encoder só, o AJUSTE, no [VOO](hardware/construcao.md#painel-de-sistemas-de-controle), logo embaixo da tela, mexe na página aberta: o piloto automático, o Δv do editor, o alvo e a subida. As luzes do piloto e os avisos ficam ao lado dele. As barras de recursos saíram, e o painel da asa esquerda virou só [EVA](hardware/construcao.md#eva).
 - **Sidestick e acelerador no painel:** um joystick JH-D400X-R4 de 3 eixos, com o botão do manche trocando entre VOO, CÂMERA e TRANSLAÇÃO, e uma alavanca deslizante de 60 mm, os dois lidos pelo Mega nas linhas analógicas do backplane ([sidestick](hardware/construcao.md#sidestick), [acelerador](hardware/construcao.md#acelerador)). O Extreme 3D Pro fica para desenvolver no PC; mapeamento em [hardware/construcao.md](hardware/construcao.md#joystick-logitech-extreme-3d-pro).
 - **Korry switches:** botões iluminados com legenda, como nos aviões, 35 no cockpit. Legenda impressa em duas cores na FlashForge Inventor, encaixada num corpo igual para todos, com a chave e os LEDs num suporte impresso. As bases de cada grupo saem numa grade impressa, parafusada atrás do painel. O modelo, os STL das 31 legendas, das grades e das peças, o `gerar.py` e a ligação estão em [hardware/korry/](hardware/korry/README.md); o primeiro passo é o teste de folga e um korry ligado direto no Mega.
 
@@ -208,6 +209,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - [ ] Acelerador pela alavanca; TREM, FREIOS e LUZES em korry.
 - [ ] Sidestick: os 3 eixos pelo Mega, e o botão trocando o modo, com as luzes.
 - [ ] EVA, quando houver o kRPC 0.7: andar e voar pelo manche, JATO, LUZ, SAIR, EMBARCAR, AGARRAR e SOLTAR.
+- [ ] Tela no tablet: levar a página SUBIDA, que hoje só existe na mikromedia, para a página do navegador, e testar no Tab S pela ancoragem USB, em tela cheia.
 - [ ] Páginas novas na tela: ORBITA, DELTA-V, SUBIDA, ALVO, TEMPO, EVA e RECURSOS (combustível, oxidante, monopropelente e eletricidade, no lugar das barras de LED).
 
 **Pronto quando:** dá para lançar e colocar um foguete em órbita usando só o painel.
@@ -217,7 +219,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - Interface em pygame no Pi: altitude, velocidades, apoapse/periapse, tempo até Ap/Pe, combustível e delta-v por estágio.
 - Depois: gráfico de altitude × tempo, desenho simples da órbita, indicador de atitude.
 - O Pi 4 tem folga de desempenho, mas vale o bom hábito: redesenhar só o que mudou e limitar a taxa de quadros.
-- A tela do cockpit é a mikromedia, de 2,8" ([fase 6](#fase-6--tela-multifunção-mikromedia-for-arm)). Para desenvolver, a mesma tela roda no simulador do PC e no navegador do celular.
+- A tela do cockpit é um tablet Galaxy Tab S 8.4, com a página da tela no Chrome, ligado no Pi pela ancoragem USB ([docs/mfd.md](docs/mfd.md#no-tablet-do-cockpit)). A mesma tela roda no simulador do PC, no celular e na mikromedia ([fase 6](#fase-6--tela-multifunção-mikromedia-for-arm)).
 - A tela multifunção ([docs/mfd.md](docs/mfd.md)) já mostra navball, velocidades, altitude e Ap/Pe, na placa, no simulador e numa página web.
 
 **Pronto quando:** dá para circularizar uma órbita olhando só para a tela.
@@ -240,7 +242,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - Encoder rotativo para escolher o que cada display mostra. Lido pela mesma cadeia de 74HC165 dos módulos: o Mega lê a cadeia inteira mil vezes por segundo numa **interrupção de timer**, e assim o redesenho do LCD (~20 ms) não faz perder cliques. O painel acumula os cliques e manda `ENC <nome> <cliques>`.
 - **Editor de nós de manobra** (pelo kRPC: `control.add_node`, `node.prograde` etc.):
   - Painel duplo de 250 × 125 mm, desenho e peças em [hardware/construcao.md](hardware/construcao.md#painel-do-editor-de-manobras).
-  - **Δv por um encoder só**, porque os três eixos nunca são mexidos ao mesmo tempo. Três korry (PRO, NRM e RAD) escolhem o eixo, e a legenda do escolhido acende na cor da alça do nó no KSP. Girar no sentido horário soma o passo; no anti-horário, tira. Um nó novo já vem com o PRO escolhido. O encoder é o AJUSTE do painel da tela: com a página do editor aberta, a ponte manda o giro como `ENC DV <cliques>`, e quem sabe o eixo escolhido é ela.
+  - **Δv por um encoder só**, porque os três eixos nunca são mexidos ao mesmo tempo. Três korry (PRO, NRM e RAD) escolhem o eixo, e a legenda do escolhido acende na cor da alça do nó no KSP. Girar no sentido horário soma o passo; no anti-horário, tira. Um nó novo já vem com o PRO escolhido. O encoder é o AJUSTE, no VOO: com a página do editor aberta, a ponte manda o giro como `ENC DV <cliques>`, e quem sabe o eixo escolhido é ela.
   - **PERCURSO:** uma tecla basculante com mola para o centro, como a do TIME WARP, montada deitada, move o nó ao longo da órbita (para a esquerda, antes; para a direita, depois). Segurando, repete; o painel manda `INC TEMPO <passos>`. Embaixo dela, ANT e PROX trocam de nó.
   - **PASSO:** chave rotativa de 4 posições, com a legenda gravada em volta: 0,1 / 1 / 10 / 100 m/s no Δv e 1 s / 10 s / 1 min / 10 min no tempo.
   - Korry NOVO (nó novo no apoastro), APAGAR e CIRC (circulariza no ponto do nó, com o Δv calculado pela ponte). Sem AP e PE: o tempo já leva o nó a qualquer ponto.
@@ -275,7 +277,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 
 ### Fase 6 — Tela multifunção (mikromedia for ARM)
 
-**De volta ao cockpit:** a mikromedia é de novo a tela multifunção, ligada na USB do Pi, no lugar da tela de 7" no HDMI, que sairia mais cara ([decisões](#decisões)). A tela de 2,8" é pequena para o meio do painel: as páginas e o painel da tela têm que ser pensados para ela.
+**Fora do cockpit de novo:** a tela do cockpit passou a ser um tablet Galaxy Tab S 8.4, com a mesma página do celular ([decisões](#decisões)), porque a tela de 2,8" ficava pequena no meio do painel. O firmware continua aqui e roda na placa, com o jogo.
 
 Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de flash, 32 KB de RAM), tela 320x240 com touch resistivo, microSD, saída de áudio e carregador de Li-Po. Aqui o firmware é escrito **sem framework**: C, registradores, script de linker e código de inicialização próprios.
 
@@ -297,7 +299,7 @@ Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de fla
 ### Fase 7 — Hardware definitivo
 
 - PCB no **KiCad** a partir dos esquemáticos de [hardware/](hardware/README.md): uma placa de módulo, fabricada em quantidade, e o backplane. Fabricação na JLCPCB, PCBWay… A do módulo médio já está pronta, com os Gerbers ([hardware/](hardware/README.md#pcb-do-módulo-médio)).
-- Caixa em MDF cortado a laser (no colégio), com peças impressas em 3D (em casa): um painel removível por seção, legendas gravadas, korry switches, o Pi e a mikromedia embutidos. Formato, aparência e ordem para construir em [hardware/construcao.md](hardware/construcao.md).
+- Caixa em MDF cortado a laser (no colégio), com peças impressas em 3D (em casa): um painel removível por seção, legendas gravadas, korry switches, o Pi e o tablet embutidos. Formato, aparência e ordem para construir em [hardware/construcao.md](hardware/construcao.md).
 
 ### Fase 8 — Embarcados avançado (opcional)
 
@@ -384,8 +386,8 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
   - **V/S:** sobe ou desce com a velocidade vertical escolhida. Com o ALT ligado junto, nivela ao chegar na altitude escolhida.
   - **SPD:** acelerador automático, segura a velocidade escolhida. Fica para depois, como mais uma linha do menu.
   - Sem HDG ligado, a rolagem fica com o manche, e a inclinação fica onde o piloto deixou.
-- **No painel da [tela](hardware/construcao.md#tela-multifunção)**, e os korry no de [sistemas de controle](hardware/construcao.md#painel-de-sistemas-de-controle):
-  - **Um encoder só**, o AJUSTE ao lado da tela, mexido pelo menu da página do piloto na tela multifunção: girar move o cursor entre HDG, ALT e V/S; apertar escolhe a linha, e girar muda o valor (horário soma); apertar de novo sai; segurar 1 s liga ou desliga o modo da linha. Girando devagar, o valor muda de 1 em 1 (1°, 10 m, 0,1 m/s); rápido, de 10 em 10.
+- **No painel de [sistemas de controle](hardware/construcao.md#painel-de-sistemas-de-controle)**, junto do SAS, do RCS e do FBW:
+  - **Um encoder só**, o AJUSTE, que também mexe nas outras páginas da tela, mexido pelo menu da página do piloto na tela multifunção: girar move o cursor entre HDG, ALT e V/S; apertar escolhe a linha, e girar muda o valor (horário soma); apertar de novo sai; segurar 1 s liga ou desliga o modo da linha. Girando devagar, o valor muda de 1 em 1 (1°, 10 m, 0,1 m/s); rápido, de 10 em 10.
   - **Uma luz verde por modo**, ao lado do encoder, acesa quando o modo está ligado no FBW. Sem displays de 7 segmentos: os valores ficam na tela.
   - Korry **FBW** (liga e desliga o FBW, como o botão do joystick) e **TRAVA ALT** (trava e destrava a altitude do momento).
 - **Na tela:** a página do piloto, com os modos (azul armado, verde ligado) e os valores escolhidos, abre sozinha quando o encoder é mexido e volta para a navball uns 10 s depois. O caminho pedido aparece na navball: é o ponto verde do FBW.
@@ -394,7 +396,7 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
   - ALT, V/S e a TRAVA ALT pedem o ângulo de subida, que vira carga; sem eles, o pitch fica com o manche;
   - SPD liga o acelerador automático que já existe no `fbw.py`;
   - as proteções do FBW continuam valendo, e mexer no manche devolve o eixo ao piloto.
-- **Precisa de:** o encoder e as luzes do painel da tela. Para começar, uma página de botões no celular faz o papel do painel.
+- **Precisa de:** o encoder e as luzes do VOO. Para começar, uma página de botões no celular faz o papel do painel.
 
 **Pronto quando:** um avião decola na mão, e o piloto automático leva ele até a altitude e o rumo escolhidos no painel e segura lá.
 
@@ -419,7 +421,7 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
 - [x] Ponte da tela: o korry LANCAR, o menu da subida (`ENC SUB`, `BTN SUB`) e a página SUBIDA; na página de botões, o LANCAR e um encoder para a configuração.
 - [x] A página SUBIDA na mikromedia: a configuração e o voo. O simulador e o celular mostram a navball no lugar dela.
 - [ ] Testar no jogo ([roteiro](docs/subida.md#testar-no-jogo)): primeiro 80 km e 0°, depois a inclinação, o plano de um alvo e a Mun.
-- [ ] No cockpit, a configuração pelo encoder AJUSTE do painel da tela.
+- [ ] No cockpit, a configuração pelo encoder AJUSTE do VOO.
 - [ ] Depois: a guiagem do vácuo (PEG), mais eficiente que seguir o pró-grado.
 
 ### Pouso de precisão (volta à base)
@@ -520,8 +522,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [ ] 2× encoders rotativos (KY-040), para escolher o que os displays mostram
 - [ ] Editor de manobras ([peças e medidas](hardware/construcao.md#painel-do-editor-de-manobras)): 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm (a tecla, os botões e os korry estão na fase 2)
 - [ ] Navegação: 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm
-- [ ] Tela ([peças e medidas](hardware/construcao.md#tela-multifunção)): 1× encoder EC11 com botão e knob de alumínio de 30 mm, o AJUSTE
-- [ ] VOO, de sistemas de controle ([peças e medidas](hardware/construcao.md#painel-de-sistemas-de-controle)): os korry e os LEDs estão na fase 2; 1 módulo grande
+- [ ] VOO, de sistemas de controle ([peças e medidas](hardware/construcao.md#painel-de-sistemas-de-controle)): 1× encoder EC11 com botão e knob de alumínio de 30 mm, o AJUSTE (os korry e os LEDs estão na fase 2); 1 módulo grande
 - [ ] 2–4× motores de passo X27.168 (ponteiros)
 - [ ] 1× fonte 5V 3A + conector/borne
 
