@@ -202,7 +202,8 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - [ ] Definir no [protocolo](docs/protocolo.md) as mensagens dos painéis novos: tempo, navegação, action groups e peças, câmera, EVA, acelerador e sidestick.
 - [ ] Tempo: WARP, PARAR, FISICO, ATE O NO, PAUSA, SALVAR, CARREGAR e REVERTER.
 - [x] Encoder AJUSTE da tela: o firmware do Uno, mandando `ENC AJUSTE` e `BTN AJUSTE` ([docs/encoder.md](docs/encoder.md)).
-- [ ] Encoder AJUSTE da tela: a ponte lê o Uno e manda o giro e o aperto para a página aberta, como fazem hoje o `ENC AP`, o `ENC DV` e o `ENC SUB`.
+- [x] Encoder AJUSTE da tela: a ponte lê o Uno (`--encoder`) e manda o giro e o aperto para a página aberta: a SUBIDA ou o piloto automático ([docs/encoder.md](docs/encoder.md#na-ponte-da-tela)).
+- [ ] Encoder AJUSTE: o Δv do editor e o alvo, quando a ponte da tela tiver as páginas deles.
 - [ ] Navegação: PROCURAR abre a página ALVO, e o AJUSTE escolhe o alvo; LIMPAR; REFERENCIA; trocar de nave.
 - [ ] Action groups 1 a 8 e os korry das peças (paraquedas, painéis solares, antenas, compartimento de carga), com a luz do estado.
 - [ ] Câmera: MAPA, IVA, MODO CAM, FOTO e ESCONDER.
@@ -421,7 +422,7 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
 - [x] Ponte da tela: o korry LANCAR, o menu da subida (`ENC SUB`, `BTN SUB`) e a página SUBIDA; na página de botões, o LANCAR e um encoder para a configuração.
 - [x] A página SUBIDA na mikromedia: a configuração e o voo. O simulador e o celular mostram a navball no lugar dela.
 - [ ] Testar no jogo ([roteiro](docs/subida.md#testar-no-jogo)): primeiro 80 km e 0°, depois a inclinação, o plano de um alvo e a Mun.
-- [ ] No cockpit, a configuração pelo encoder AJUSTE do VOO.
+- [x] A configuração pelo encoder AJUSTE, no Uno, com a página SUBIDA aberta ([docs/encoder.md](docs/encoder.md#na-ponte-da-tela)).
 - [ ] Depois: a guiagem do vácuo (PEG), mais eficiente que seguir o pró-grado.
 
 ### Pouso de precisão (volta à base)
