@@ -282,15 +282,19 @@ O `scripts/subida.py` manda como o pouso: UDP para a porta **50100**, 10 vezes p
 | `SUB FASE <fase>` | `JANELA` (esperando a base passar pelo plano do alvo), `DECOLAGEM`, `GIRO`, `CURVA` (a curva de gravidade, no ar), `VACUO`, `COSTA` (motor desligado até o apoastro), `CIRCULARIZA`, `PLANO` (igualando o plano do alvo), `ORBITA`, `FALHA` | O indicador da fase: azul esperando (`JANELA`, `COSTA`), verde queimando e em órbita, vermelho na falha |
 | `SUB ALT <m>` | Altitude sobre o nível do mar | `ALT` |
 | `SUB VEL <décimos de m/s>` | Velocidade orbital (inercial) | `VEL` |
-| `SUB AP <m>` ou `SUB AP OFF` | Apoastro. `OFF` numa trajetória de escape | `AP` e a barra do apoastro |
-| `SUB PE <m>` ou `SUB PE OFF` | Periastro, negativo dentro do planeta | `PE` e a barra do periastro |
-| `SUB ALVO <m>` | A altitude pedida | A marca âmbar nas duas barras |
+| `SUB AP <m>` ou `SUB AP OFF` | Apoastro. `OFF` numa trajetória de escape | `AP`, e a marca âmbar do apoastro no desenho |
+| `SUB PE <m>` ou `SUB PE OFF` | Periastro, negativo dentro do planeta | `PE`, e a marca do periastro no desenho da órbita |
+| `SUB ALVO <m>` | A altitude pedida | O círculo tracejado do alvo no desenho |
 | `SUB Q <Pa>` | Pressão dinâmica | `Q` |
 | `SUB INC <décimos de grau>` | A inclinação de agora | `INC` |
 | `SUB INCA <décimos de grau>` | A inclinação pedida (a do plano do alvo, com o plano ligado) | `INC`, depois da barra |
 | `SUB DV <m/s>` | O Δv gasto desde a decolagem | `DV` |
 | `SUB JAN <s>` ou `SUB JAN OFF` | Segundos até a janela de lançamento | `T- hh:mm:ss` na `JANELA` |
 | `SUB GIRO <décimos de grau>` ou `SUB GIRO OFF` | O giro escolhido pela simulação, no começo da curva | `GIRO` |
-| `SUB MOTOR <0 a 100>` | Acelerador, em % | `MOTOR` |
+| `SUB MOTOR <0 a 100>` | Acelerador, em % | `MOTOR`, e a chama do foguete no desenho |
+| `SUB ANOM <décimos de grau>` | Anomalia verdadeira, de 0 a 3599: 0 no periastro, 1800 no apoastro, abaixo de 1800 subindo | A posição do foguete na trajetória do desenho |
+| `SUB RAIO <m>` | O raio do planeta | O tamanho do planeta no desenho; sem ele, a página fica só com os números |
+| `SUB TOPO <m>` | O topo da atmosfera, 0 sem ar | O anel do céu em volta do planeta |
+| `SUB CORPO <nome>` | O nome do planeta, em maiúsculas, só letras e dígitos (até 12): `KERBIN`, `MUN`, `MINMUS`... | O desenho do planeta: Kerbin com mar, continentes e gelo, a Mun cinza com crateras, Minmus verde-claro; outro, um disco cinza. O KSC só aparece em Kerbin |
 | `SUB AVISO <aviso>` ou `SUB AVISO OFF` | O aviso mais importante: `COMBUSTIVEL` (acabou antes da órbita), `ALVO` (sem alvo para o plano, ou alvo noutro planeta), `ALTITUDE` (dentro do ar), `INCLINACAO` (menor que a latitude da base), `EMPUXO` (empuxo/peso baixo) | O aviso em vermelho, piscando |
 | `SUB OFF` | Só da ponte para a tela: a subida não está mandando | Volta para a configuração |

@@ -415,6 +415,7 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
 - [x] `scripts/subida.py`: a guiagem, a simulação do giro, a janela, o kRPC, o `--demo` e as linhas `SUB`; testes em `scripts/tests/test_subida.py`, numa nave simulada em Kerbin e na Mun.
 - [x] Ponte da tela: o korry LANCAR, o menu da subida (`ENC SUB`, `BTN SUB`) e a página SUBIDA; na página de botões, o LANCAR e um encoder para a configuração.
 - [x] A página SUBIDA na mikromedia: a configuração e o voo. O simulador e o celular mostram a navball no lugar dela.
+- [ ] O desenho do voo na página SUBIDA: o KSC na decolagem, a parábola na subida e a órbita na circularização, com dois zooms. Falta gravar na placa e ver num lançamento. Depois, a visão oblíqua do planeta na órbita.
 - [ ] Testar no jogo ([roteiro](docs/subida.md#testar-no-jogo)): primeiro 80 km e 0°, depois a inclinação, o plano de um alvo e a Mun.
 - [ ] O encoder de verdade da configuração no painel (os de hoje já têm dono).
 - [ ] Depois: a guiagem do vácuo (PEG), mais eficiente que seguir o pró-grado.

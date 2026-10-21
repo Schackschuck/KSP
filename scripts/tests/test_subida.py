@@ -897,7 +897,10 @@ FASES_SUB = {
     "JANELA", "DECOLAGEM", "GIRO", "CURVA", "VACUO", "COSTA", "CIRCULARIZA", "PLANO", "ORBITA", "FALHA",
 }
 AVISOS_SUB = {"EMPUXO", "ALTITUDE", "INCLINACAO", "ALVO", "COMBUSTIVEL"}
-ORDEM_SUB = ["FASE", "ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR", "AVISO"]
+ORDEM_SUB = [
+    "FASE", "ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR",
+    "ANOM", "RAIO", "TOPO", "CORPO", "AVISO",
+]
 
 
 def _inteiro(texto):
@@ -922,6 +925,10 @@ VALIDADORES_SUB = {
     "JAN": _inteiro_ou_off,
     "GIRO": _inteiro_ou_off,
     "MOTOR": lambda v: _inteiro(v) and 0 <= int(v) <= 100,
+    "ANOM": lambda v: _inteiro(v) and 0 <= int(v) < 3600,
+    "RAIO": lambda v: _inteiro(v) and int(v) > 0,
+    "TOPO": lambda v: _inteiro(v) and int(v) >= 0,
+    "CORPO": lambda v: re.fullmatch(r"[A-Z0-9]{1,12}", v) is not None,
     "AVISO": lambda v: v == "OFF" or v in AVISOS_SUB,
 }
 
@@ -1031,6 +1038,40 @@ class TestLinhasDeEstado(unittest.TestCase):
         self.assertEqual(valores["AVISO"], "ALTITUDE")
         self.assertEqual(guiagem.passo(nave.leitura()).acelerador, 0.0)
         self.assertEqual(guiagem.fase, FALHA)
+
+    def test_anomalia_e_planeta_para_o_desenho(self):
+        nave = NaveSimulada.kerbin()
+        guiagem = Guiagem(KERBIN, 80_000.0, 0.0, ler_estagios=nave.estagios)
+        coletadas = voar_coletando(nave, guiagem)
+        subindo = [valores_sub(linhas) for linhas in coletadas if valores_sub(linhas)["FASE"] == "CURVA"]
+        self.assertTrue(subindo)
+        self.assertTrue(all(0 < int(v["ANOM"]) < 1800 for v in subindo))
+        inicio = valores_sub(coletadas[0])
+        self.assertEqual((inicio["RAIO"], inicio["TOPO"], inicio["CORPO"]), ("600000", "70000", "KERBIN"))
+        nave_mun = NaveSimulada.mun()
+        linhas = subida.linhas_de_estado(nave_mun.leitura(), Guiagem(MUN, 20_000.0, 0.0), MUN)
+        self.conferir(linhas)
+        self.assertEqual((valores_sub(linhas)["TOPO"], valores_sub(linhas)["CORPO"]), ("0", "MUN"))
+
+    def test_anomalia_no_periastro_no_apoastro_e_descendo(self):
+        ra, rp = KERBIN.raio + 300_000.0, KERBIN.raio + 100_000.0
+        a = (ra + rp) / 2.0
+        v_pe = math.sqrt(KERBIN.mu * (2.0 / rp - 1.0 / a))
+        v_ap = math.sqrt(KERBIN.mu * (2.0 / ra - 1.0 / a))
+        anomalia = subida.anomalia_verdadeira
+        self.assertAlmostEqual(anomalia(KERBIN, (rp, 0.0, 0.0), (0.0, 0.0, -v_pe)) % 360.0, 0.0, delta=0.01)
+        self.assertAlmostEqual(anomalia(KERBIN, (-ra, 0.0, 0.0), (0.0, 0.0, v_ap)), 180.0, delta=0.01)
+        r = KERBIN.raio + 200_000.0
+        v = math.sqrt(KERBIN.mu * (2.0 / r - 1.0 / a))
+        h = math.sqrt(KERBIN.mu * a * (1.0 - ((ra - rp) / (ra + rp)) ** 2))
+        v_t, v_r = h / r, math.sqrt(v * v - (h / r) ** 2)
+        self.assertLess(anomalia(KERBIN, (r, 0.0, 0.0), (v_r, 0.0, -v_t)), 180.0)
+        self.assertGreater(anomalia(KERBIN, (r, 0.0, 0.0), (-v_r, 0.0, -v_t)), 180.0)
+
+    def test_nome_do_corpo_para_a_tela(self):
+        self.assertEqual(subida.nome_do_corpo(KERBIN), "KERBIN")
+        self.assertEqual(subida.nome_do_corpo(dataclasses.replace(KERBIN, nome="Gilly 2 (b)")), "GILLY2B")
+        self.assertEqual(subida.nome_do_corpo(dataclasses.replace(KERBIN, nome="Ééé")), "OUTRO")
 
     def test_escape_nao_tem_apoastro(self):
         nave = NaveSimulada.kerbin()

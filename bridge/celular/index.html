@@ -96,8 +96,8 @@ const FINS_POUSO = { FIM: ["POUSADA", "verde"], ABORT: ["ABORTADO", "aviso"], FA
 const AVISOS_POUSO = { EMPUXO: "EMPUXO INSUFICIENTE", MOTOR: "SEM MOTOR ATIVO", NARIZ: "NARIZ LONGE DA VERTICAL" };
 const CAMPOS_POUSO = ["FASE", "ALT", "VV", "MOTOR", "TWR", "FREADA", "IGN", "SAS", "INCL", "AVISO"];
 const CAMPOS_POUSO_TEXTO = ["FASE", "SAS", "AVISO"];
-const CAMPOS_SUBIDA = ["FASE", "ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR", "AVISO"];
-const CAMPOS_SUBIDA_TEXTO = ["FASE", "AVISO"];
+const CAMPOS_SUBIDA = ["FASE", "ALT", "VEL", "AP", "PE", "ALVO", "Q", "INC", "INCA", "DV", "JAN", "GIRO", "MOTOR", "ANOM", "RAIO", "TOPO", "CORPO", "AVISO"];
+const CAMPOS_SUBIDA_TEXTO = ["FASE", "AVISO", "CORPO"];
 const LINHAS_MENU_SUBIDA = ["ALT", "INC", "PLANO"];
 const SCRIPTS = ["POUSO", "LANCAR"];
 const pousoVazio = () => Object.fromEntries(CAMPOS_POUSO.map((c) => [c, null]));
