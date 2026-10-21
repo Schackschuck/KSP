@@ -45,7 +45,7 @@ O porquê de cada lugar está nas regras de [como organizar o cockpit](identidad
 
 - **Inclinação:** uns 15° na fileira de baixo e mais em pé na fileira da tela, de 45° a 60°. Testar no protótipo de papelão antes de cortar.
 - **Profundidade:** uns 70 mm por dentro, embaixo dos painéis. O mais fundo atrás do painel é o joystick (uns 40 mm, a medir), depois a chave rotativa (~30 mm), o botão de 16 mm (~25 mm) e o korry (~22 mm mais os fios), e o módulo vai atrás de cada painel.
-- **Tela:** a placa da mikromedia fica inteira atrás do painel, com as duas mini-USB na borda; deixar uns 15 mm livres do lado delas para os cabos.
+- **Tela:** o tablet fica atrás do painel duplo, com o conector micro-USB numa ponta; deixar uns 15 mm livres desse lado para o cabo.
 - **Sem joystick solto:** o sidestick é um painel do cockpit, na ponta da asa direita.
 
 ### Componentes
@@ -58,7 +58,7 @@ Todos existem e são vendidos em lojas de eletrônica e no AliExpress. As medida
 | Chave PSW 8,5 × 8,5 sem trava | 35 | Dentro de cada korry | |
 | LED de 3 mm difuso | ~40 | Korry de uma cor | |
 | LED de 3 mm azul e verde, catodo comum | 10 | Modos do SAS | 3 pernas |
-| Encoder EC11 com botão + knob de alumínio de 30 mm | 1 | AJUSTE, no painel da tela | Eixo de 6 mm, 20 cliques por volta, furo de 7 mm |
+| Encoder EC11 com botão + knob de alumínio de 30 mm | 1 | AJUSTE, no VOO | Eixo de 6 mm, 20 cliques por volta, furo de 7 mm |
 | Chave rotativa 1P12T com batente + knob de ponteiro | 2 | PASSO, REFERENCIA | Furo de 10 mm, corpo Ø ~26 mm |
 | Tecla KCD1 (ON)-OFF-(ON) | 2 | WARP, TEMPO do editor | 21 × 15 mm, furo de 19 × 13 mm |
 | Botão de 16 mm sem trava (R16-503 ou R13-507) | 31 | Action groups, páginas, navegação, editor, tempo, câmera, EVA | Anel Ø 20 mm, cabeça Ø 13 mm, rosca M16 × 1, 24,8 mm de altura. Furo em D: Ø 16 mm com um lado reto a 15 mm |
@@ -68,8 +68,8 @@ Todos existem e são vendidos em lojas de eletrônica e no AliExpress. As medida
 | Capa impressa para korry | 1 | IVA | A desenhar |
 | Potenciômetro deslizante Bourns PTA6043, 10 kΩ linear | 1 | Acelerador | 75 × 9 × 6,5 mm, curso de 60 mm |
 | Joystick JH-D400X-R4, 10 kΩ, com botão | 1 | Sidestick | X e Y ±25 a 30°, torção ±45°. Corpo de ~50 mm; furo a medir |
-| mikromedia for ARM (MIKROE-780), já na bancada | 1 | Tela multifunção | Tela de 2,8", 320 × 240, imagem de ~57,6 × 43,2 mm; placa de ~81 × 60 mm, a medir |
-| LED de 5 mm difuso, no suporte de plástico com porca | 7 | HDG, ALT, V/S e ESTOL (tela), modos do sidestick | Anel Ø 9 mm, furo de 6,5 mm (conferir no suporte); 12 mm entre centros |
+| Tablet Samsung Galaxy Tab S 8.4 (SM-T705M), Android 6.0.1, já na bancada | 1 | Tela multifunção | 212,8 × 125,6 × 6,6 mm; AMOLED de 8,4", 2560 × 1600, imagem de ~181 × 113 mm |
+| LED de 5 mm difuso, no suporte de plástico com porca | 7 | HDG, ALT, V/S e ESTOL (VOO), modos do sidestick | Anel Ø 9 mm, furo de 6,5 mm (conferir no suporte); 12 mm entre centros |
 | Alto-falante USB | 1 | Avisos de voz, atrás da grade da tela | |
 
 ## Construção
@@ -109,7 +109,7 @@ Cada seção do painel é **um painel frontal removível, com o seu módulo para
 - A capa do korry IVA.
 - A alavanca do acelerador, encaixada na haste do potenciômetro deslizante.
 - Tecla do TEMPO do editor de manobras, se a basculante pronta não funcionar bem deitada: uma tecla impressa sobre dois botões táteis, com uma mola que a traz de volta ao meio.
-- Moldura da mikromedia, que segura a placa atrás da janela da tela.
+- Suporte do tablet, que o segura atrás da janela da tela, com o cabo USB saindo de lado.
 - Suportes das placas, do Mega e do Pi, com os furos no lugar certo.
 - Passa-cabos e presilhas para os cabos flat.
 
@@ -129,24 +129,26 @@ Um por seção, todos desenhados com as peças reais. O que cada controle faz no
 
 ## Tela multifunção
 
-![Tela multifunção: a mikromedia de 2,8 polegadas no meio, as luzes do piloto automático e os avisos à esquerda e o encoder de ajuste à direita](img/tela.svg)
+![Tela multifunção: o tablet Galaxy Tab S 8.4 atrás de uma janela que ocupa quase o painel duplo inteiro, com o contorno do tablet tracejado](img/tela.svg)
 
-- **A mikromedia no meio:** a tela de 2,8" da mikromedia for ARM, ligada na USB do Pi, numa moldura impressa atrás de uma janela do painel ([docs/mikromedia.md](../docs/mikromedia.md)). A placa inteira fica atrás do painel.
-- **AJUSTE:** um encoder só para tudo que se ajusta na tela. Ele mexe na página aberta: o menu do piloto automático, o Δv do eixo escolhido no editor, o alvo na página ALVO e a configuração da subida. Girar muda o valor, apertar escolhe a linha, segurar 1 s liga o modo da linha (no piloto).
-- **Qual página está aberta:** a ponte abre sozinha a página do painel que foi mexido (um korry de eixo do editor abre o editor, o PROCURAR da navegação abre a ALVO, o LANCAR abre a SUBIDA), e o toque na tela troca de página. Sem os botões de página: o encoder e o toque fazem o papel deles.
-- **PILOTO AUTO:** três luzes verdes, HDG, ALT e V/S, mostram sem olhar a tela quais modos estão ligados. Os valores ficam na página do piloto.
-- **AVISOS:** a luz vermelha **ESTOL** pisca quando o ângulo de ataque passa de 14,5°, e a tela toca um alarme. É só o aviso: o FBW não mexe em nada ([docs/fbw.md](../docs/fbw.md#aviso-de-estol)). Ao lado, a grade do alto-falante USB dos [avisos de voo](../docs/avisos.md), e **SILENCIAR**, que cala o aviso que está tocando.
-- 4 entradas (as 3 do encoder e o SILENCIAR) e 4 LEDs: placa pequena.
+- **Um tablet velho como tela:** o Samsung Galaxy Tab S 8.4 (SM-T705M), com Android 6.0.1, mostrando no Chrome, em tela cheia, a mesma página do celular ([docs/mfd.md](../docs/mfd.md#no-tablet-do-cockpit)). A tela é AMOLED, de 8,4" e 2560 × 1600, com toque.
+- **Ligado no Pi pela ancoragem USB:** o cabo faz uma rede entre o tablet e o Pi, e a página vem do Pi em HTTP. Não precisa de internet nem de Wi-Fi, e o mesmo cabo carrega o tablet.
+- **Atrás do painel:** a janela tem ~181 × 113 mm, o tamanho da imagem, e o tablet (212,8 × 125,6 × 6,6 mm, tracejado no desenho) fica atrás, num suporte impresso. Ele passa 0,3 mm da borda de cima e da de baixo do painel; os parafusos dos cantos ficam fora dele. Sem título: a janela ocupa a altura toda. Conferir no tablet onde a imagem fica em relação à borda antes de cortar a janela.
+- **Sem controles:** a página troca pelo toque ou sozinha, pelo painel mexido, e o encoder AJUSTE, as luzes do piloto e os avisos ficam logo embaixo, no [VOO](#painel-de-sistemas-de-controle). O painel da tela não tem módulo.
+- **Cuidados:** AMOLED marca com imagem parada por horas: brilho baixo, fundo escuro, como a página já é, e a tela apagando quando o jogo não está aberto. Ligado o tempo todo, uma bateria velha pode estufar: olhar a bateria antes de embutir e de tempos em tempos. Nas opções de desenvolvedor, ligar "Permanecer ativo".
 
 ## Painel de sistemas de controle
 
-Na versão B, o painel **VOO**: os modos do SAS e os sistemas, num painel duplo embaixo da tela. O encoder e as luzes do piloto automático foram para o [painel da tela](#tela-multifunção), e a metade direita do VOO ficou livre por enquanto. O que cada controle faz está no roteiro do [piloto automático](../README.md#piloto-automático-de-avião) e no [protocolo](../docs/protocolo.md#painel-de-sistemas-de-controle).
+Na versão B, o painel **VOO**: os modos do SAS, os sistemas, o encoder AJUSTE, as luzes do piloto automático e os avisos, num painel duplo logo embaixo da tela. O que cada controle faz está no roteiro do [piloto automático](../README.md#piloto-automático-de-avião) e no [protocolo](../docs/protocolo.md#painel-de-sistemas-de-controle).
 
-![Painel VOO: dez korry de modo do SAS com o PRO aceso em verde, korry SAS, RCS, FBW e TRAVA ALT](img/voo.svg)
+![Painel VOO: dez korry de modo do SAS com o PRO aceso em verde, korry SAS, RCS, FBW e TRAVA ALT, o encoder AJUSTE com as luzes HDG, ALT e V/S, e os avisos](img/voo.svg)
 
 - **MODOS DO SAS:** os 10 modos em pares, o modo em cima e o oposto embaixo: ESTAB e MANOBRA, PRO e RETRO, NORMAL e ANTINRM, RAD FORA e RAD DENTRO, ALVO e ANTIALVO. A legenda é o marcador da navball, com a palavra embaixo. Cada korry tem um LED de duas cores: **azul** enquanto a nave vira para o marcador, **verde** quando chegou e o SAS segura nele, apagado quando o modo não está escolhido. Apertar um modo que o jogo não aceita (sem alvo, sem nó de manobra, SAS fraco) não faz nada.
 - **SISTEMAS:** SAS, RCS, FBW e TRAVA ALT. A metade de baixo acende em âmbar quando falta alguma coisa: `SEM EC` (o SAS sem carga elétrica), `SEM MP` (o RCS sem monopropelente) e `DIRETA` (o avião no ar na lei direta).
-- 14 entradas (10 modos e 4 korry) e 27 LEDs: placa grande, com 4 × 74HC595. O desenho de 150 mm, ainda com o piloto automático, está em [`img/antigos/sistemas.svg`](img/antigos/sistemas.svg).
+- **AJUSTE:** um encoder só para tudo que se ajusta na tela. Ele mexe na página aberta: o menu do piloto automático, o Δv do eixo escolhido no editor, o alvo na página ALVO e a configuração da subida. Girar muda o valor, apertar escolhe a linha, segurar 1 s liga o modo da linha (no piloto). A ponte abre sozinha a página do painel que foi mexido (um korry de eixo do editor abre o editor, o PROCURAR da navegação abre a ALVO, o LANCAR abre a SUBIDA), e o toque na tela troca de página.
+- **PILOTO:** três luzes verdes, HDG, ALT e V/S, ao lado do encoder, mostram sem olhar a tela quais modos estão ligados. Os valores ficam na página do piloto.
+- **AVISOS:** a luz vermelha **ESTOL** pisca quando o ângulo de ataque passa de 14,5°, e a tela toca um alarme. É só o aviso: o FBW não mexe em nada ([docs/fbw.md](../docs/fbw.md#aviso-de-estol)). Ao lado, a grade do alto-falante USB dos [avisos de voo](../docs/avisos.md), e **SILENCIAR**, que cala o aviso que está tocando.
+- 18 entradas (10 modos, 4 korry, as 3 do encoder e o SILENCIAR) e 31 LEDs: placa grande, com 4 × 74HC595. O desenho de 150 mm está em [`img/antigos/sistemas.svg`](img/antigos/sistemas.svg).
 
 ## Painel do editor de manobras
 
@@ -154,7 +156,7 @@ Painel duplo, de 250 × 125 mm. O que cada controle faz está no [roteiro da fas
 
 ![Painel do editor de manobras: korry PRO, NRM e RAD com o PRO aceso, grupo PERCURSO, chave rotativa do passo e botões NOVO, APAGAR e CIRC](img/editor_manobras.svg)
 
-- **DELTA-V:** três korry escolhem o eixo (PRO, NRM, RAD) e abrem a página do editor na tela; o encoder AJUSTE, no painel da tela, mexe nele: horário soma, anti-horário tira. A legenda do eixo escolhido acende na cor da alça do nó no KSP: verde-amarelo, magenta e ciano.
+- **DELTA-V:** três korry escolhem o eixo (PRO, NRM, RAD) e abrem a página do editor na tela; o encoder AJUSTE, no VOO, mexe nele: horário soma, anti-horário tira. A legenda do eixo escolhido acende na cor da alça do nó no KSP: verde-amarelo, magenta e ciano.
 - **PERCURSO:** anda pelo caminho da nave, nos dois sentidos. A tecla do TEMPO, deitada, move o nó pela órbita; ANT e PROX, embaixo dela e no mesmo sentido, trocam de nó.
 - **PASSO:** chave rotativa com a legenda gravada em volta. O ponteiro do knob mostra o passo, sem LED e sem olhar a tela.
 - **NO:** NOVO, APAGAR e CIRC, botões de 16 mm: não têm estado para mostrar.
@@ -179,7 +181,7 @@ Os scripts de voo que pilotam a nave sozinhos, um korry por script, na metade di
 - **A luz mostra o script, não o aperto:** apagado parado; **âmbar piscando** enquanto conta para ligar; **verde** com o script voando (piscando âmbar enquanto conta para abortar); **vermelho** por 10 s se o script foi abortado ou falhou. Quando a nave pousa, apaga, e a tela mostra `POUSADA`.
 - **Lugares vagos:** quatro korry com a legenda em cinza, esperando os próximos scripts do [roteiro](../README.md#scripts-de-voo). O korry ganha a legenda quando o script existir; o furo e os fios já ficam prontos. O LANCAR já tem script: a [subida até a órbita](../docs/subida.md).
 - **Sem tela:** a fase, a altura, a descida e a freada aparecem na página POUSO da tela multifunção ([docs/mfd.md](../docs/mfd.md#painel-de-scripts-e-a-página-do-pouso)); a subida tem a página SUBIDA.
-- **A configuração da subida** (altitude, inclinação e o plano do alvo) é mexida por um encoder, num menu da página SUBIDA, como o do piloto automático. No cockpit, é o encoder AJUSTE do [painel da tela](#tela-multifunção); por enquanto, ele fica na página de botões.
+- **A configuração da subida** (altitude, inclinação e o plano do alvo) é mexida por um encoder, num menu da página SUBIDA, como o do piloto automático. No cockpit, é o encoder AJUSTE do [VOO](#painel-de-sistemas-de-controle); por enquanto, ele fica na página de botões.
 - O desenho de 150 mm, quando os scripts tinham painel próprio, está em [`img/antigos/scripts.svg`](img/antigos/scripts.svg).
 
 ## Tempo
@@ -194,7 +196,7 @@ Os scripts de voo que pilotam a nave sozinhos, um korry por script, na metade di
 
 ![Navegação: PROCURAR e LIMPAR o alvo, chave rotativa da referência da navball, e ANT e PROX para trocar de nave](img/navegacao.svg)
 
-- **ALVO:** PROCURAR abre a página ALVO da tela, e o encoder AJUSTE, no painel da tela, percorre as naves e os planetas; apertar escolhe (`target_vessel`, `target_body`). LIMPAR tira o alvo (`clear_target`).
+- **ALVO:** PROCURAR abre a página ALVO da tela, e o encoder AJUSTE, no VOO, percorre as naves e os planetas; apertar escolhe (`target_vessel`, `target_body`). LIMPAR tira o alvo (`clear_target`).
 - **REFERENCIA:** o modo da navball: AUTO (troca sozinho, como no KSP), SUP, ORB ou ALVO. A ponte deixa a navball do jogo igual (`control.speed_mode`).
 - **NAVES:** ANT e PROX trocam a nave ativa (`active_vessel`).
 - 8 entradas, nenhum LED: placa pequena.
@@ -293,7 +295,7 @@ A peça tem ficha própria em [korry/](korry/README.md): medidas, desenho, peça
 - **Sem abrir o joystick:** ele continua inteiro e pode voltar a ser usado em outros jogos.
 - **Leitura:** pelo `pygame`, que a ponte já usa, ou pelo `evdev`, direto no Linux. Decidir quando for escrever o código.
 - **Durante o desenvolvimento no PC:** com o joystick ligado no PC, o KSP também o lê. Deixar os eixos do joystick sem nada nas configurações de controle do KSP, senão os comandos chegam em dobro.
-- **O Pi 4 tem 4 portas USB:** Mega, mikromedia e joystick cabem, e sobra uma.
+- **O Pi 4 tem 4 portas USB:** o Mega e o tablet, pela ancoragem USB, e sobram duas.
 
 ### Um joystick, três modos
 

@@ -233,6 +233,18 @@ Com `python mfd.py --demo --celular`, a página de botões e as páginas novas d
 - [ ] Com o `fbw.py` voando: os korry FBW e TRAVA ALT, e o encoder segurado, mudam o FBW, e as luzes acompanham.
 - [ ] No celular de verdade: arrastar em volta do anel gira o encoder sem rolar a página.
 
+## No tablet do cockpit
+
+No cockpit, a tela é um tablet velho, o Samsung Galaxy Tab S 8.4 (SM-T705M, Android 6.0.1), atrás do painel da tela ([hardware/construcao.md](../hardware/construcao.md#tela-multifunção)). É o mesmo caso do celular, com duas diferenças:
+
+- **Pelo cabo, sem Wi-Fi:** o tablet liga no Pi pela USB, com a **ancoragem USB** ligada, nas configurações de conexões do tablet. O cabo vira uma rede entre os dois, e o endereço que o terminal mostra passa a ser o da rede do cabo. A página é HTTP e vem do Pi, então o tablet não precisa de internet, e o mesmo cabo o carrega.
+- **O navegador:** o Chrome do Android 6 roda a página. Se o que veio no tablet não abrir, a última versão do Chrome para o Android 6 entra por APK, copiada do PC pelo cabo.
+
+Para não apagar: nas opções de desenvolvedor, ligar **Permanecer ativo**. A tela é AMOLED e marca com imagem parada por horas: brilho baixo e a tela apagando quando o jogo não está aberto.
+
+- [ ] Testar no Tab S: a página pela ancoragem USB, em tela cheia, com o toque.
+- [ ] A página SUBIDA no navegador, que hoje só existe na mikromedia.
+
 ## Painel de scripts e a página do pouso
 
 O [painel de scripts](../hardware/construcao.md#painel-de-scripts) tem um korry por script de voo; por enquanto, o POUSO, que dispara o [`scripts/pouso.py`](../scripts/pouso.py), e o LANCAR, que dispara a [subida até a órbita](subida.md) ([`scripts/subida.py`](../scripts/subida.py)). Eles ficam na mesma página de botões do painel de sistemas (porta **8001**), embaixo, com os lugares vagos dos próximos scripts.

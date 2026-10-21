@@ -14,7 +14,7 @@ A referência são os painéis de avião, como o overhead do A320 e o MCP do Boe
 | Material | MDF ou acrílico de 3 mm, cortado e gravado a laser |
 | Cor | Cinza escuro fosco, `#30353a` nos desenhos, com borda `#15181b` e cantos arredondados de 2,5 mm |
 | Fixação | 4 parafusos M3 nos cantos, com o centro a 6 mm das bordas |
-| Título | O nome da seção, gravado em cima e centrado, com letras de 4 mm. Ex.: `EDITOR DE MANOBRAS` |
+| Título | O nome da seção, gravado em cima e centrado, com letras de 4 mm. Ex.: `EDITOR DE MANOBRAS`. A tela multifunção não tem título: a janela do tablet ocupa a altura toda |
 | Margem | Os grupos começam a 10 mm das bordas dos lados, para não bater nos parafusos |
 
 ## Grupos
@@ -88,7 +88,7 @@ Sempre as mesmas peças, no mesmo tamanho, para os painéis combinarem e as peç
 As regras que saíram dos desenhos:
 
 1. **Korry só onde a luz diz alguma coisa.** O que não tem estado no jogo para mostrar (os action groups, NOVO, APAGAR) é botão de 16 mm.
-2. **Um controle por coisa que se mexe junto.** O Δv nunca é mexido nos três eixos ao mesmo tempo, então é um encoder só, com korry para escolher o eixo. E todo valor ajustado por encoder aparece na tela, então o cockpit tem um encoder só, o AJUSTE, ao lado da tela, que mexe na página aberta.
+2. **Um controle por coisa que se mexe junto.** O Δv nunca é mexido nos três eixos ao mesmo tempo, então é um encoder só, com korry para escolher o eixo. E todo valor ajustado por encoder aparece na tela, então o cockpit tem um encoder só, o AJUSTE, no VOO, logo embaixo da tela, que mexe na página aberta.
 3. **O controle se mexe como a coisa no jogo.** A tecla do TEMPO fica deitada: para a esquerda o nó volta na órbita, para a direita avança. ANT e PROX, embaixo, no mesmo sentido.
 4. **Mostrar o estado sem olhar a tela** quando der de graça: a posição do knob da chave rotativa mostra o passo.
 5. **O que se usa mais é maior ou fica mais à mão.**
