@@ -235,6 +235,10 @@ ARGS=192.168.50.1 --celular
     ARGS=192.168.50.1 --porta /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A800FBZD-if00-port0
     ```
   - Com o `--porta`, a tela do celular (a porta 8000) desliga. A página de botões (a 8001) continua.
+- `--encoder`: o Uno do encoder AJUSTE, na USB do Pi, também pelo caminho do `by-id` ([encoder.md](encoder.md#na-ponte-da-tela)):
+  ```
+  ARGS=192.168.50.1 --celular --encoder /dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_854383639383512060A1-if00
+  ```
 - Depois de mudar o arquivo: `sudo systemctl restart ksp-tela@USUARIO`.
 
 **Acompanhar e parar:**

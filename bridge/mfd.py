@@ -19,6 +19,7 @@ Uso:
     python mfd.py --sem-voz          # avisos só no terminal e na luz, sem falar
     python mfd.py --voz plughw:1,0   # a voz num alto-falante escolhido (aplay -l lista)
     python mfd.py --testar-voz       # fala todos os avisos uma vez e sai
+    python mfd.py --encoder COM8     # o encoder AJUSTE no Uno
 
 Os scripts de voo também podem pôr um marcador na navball: o fly by wire
 (scripts/fbw.py) manda o ponto para onde o avião vai, por UDP, e esta ponte
@@ -30,6 +31,10 @@ existe, uma página de botões no navegador (celular/painel.html) manda as
 mesmas linhas. Apertar um modo abre a roda do SAS na tela, e mexer no
 encoder abre a página do piloto automático; uns 10 s depois, a tela volta
 para a navball.
+
+O encoder AJUSTE, num Uno à parte, mexe na página aberta: na SUBIDA, o menu da
+subida (como o ENC SUB); em qualquer outra, o piloto automático (como o ENC AP,
+abrindo a página dele).
 
 Os avisos de voo por voz (avisos.py), como o GPWS: SINK RATE, TERRAIN, PULL
 UP, TOO LOW GEAR, BANK ANGLE, OVERSPEED e as chamadas de altura no pouso,
@@ -60,6 +65,7 @@ from dataclasses import dataclass
 
 import serial
 
+from ajuste import Ajuste, EncoderSerial
 from avisos import FRASES, Avisos, Voo, Voz
 from painel_scripts import MenuSubida, PainelScripts, processo_pouso, processo_subida
 from ponte import BAUD, ESPERA_READY, Painel, manter_krpc
@@ -973,13 +979,14 @@ def voo_dos_avisos(t):
 
 
 def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistemas=None, painel_scripts=None,
-         voz=None):
+         voz=None, encoder=None):
     """Mantém a tela atualizada até continua_valida() dizer que não.
 
     painel: a página de botões do painel de sistemas e de scripts (ou, um
     dia, o painel de verdade), que manda BTN e ENC e recebe as luzes; pode faltar.
     sistemas, painel_scripts: a lógica dos painéis, que continua de uma nave
     para a outra (um script voando não para quando a nave muda).
+    encoder: o Uno do encoder AJUSTE (EncoderSerial); pode faltar.
     """
     modo = ModoNavball()
     sistemas = sistemas or Sistemas(None)
@@ -988,6 +995,16 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
     luzes_painel = Remetente(painel.enviar) if painel is not None else None
     luzes_tela = Remetente(tela.enviar)
     avisos = Avisos()
+    ajuste = Ajuste()
+
+    def do_painel(linha):
+        pagina = painel_scripts.tratar(linha, agora, sistemas.pagina)
+        if pagina is not None:
+            if pagina:
+                sistemas.abrir(pagina, agora)
+        elif not sistemas.tratar(linha, agora, t.rumo, t.altitude):
+            print(f"Linha desconhecida do painel: {linha[:40]}")
+
     proxima_verificacao = proximas_luzes = 0.0
     while True:
         agora = time.monotonic()
@@ -1005,12 +1022,12 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
                 if linha == "READY":
                     luzes_painel.esquecer()
                     continue
-                pagina = painel_scripts.tratar(linha, agora, sistemas.pagina)
-                if pagina is not None:
-                    if pagina:
-                        sistemas.abrir(pagina, agora)
-                elif not sistemas.tratar(linha, agora, t.rumo, t.altitude):
-                    print(f"Linha desconhecida do painel: {linha[:40]}")
+                do_painel(linha)
+        if encoder is not None:
+            for linha in encoder.linhas():
+                traduzida = ajuste.traduzir(linha, sistemas.pagina)
+                if traduzida is not None:
+                    do_painel(traduzida)
         painel_scripts.atualizar(agora)
         # Com um script voando, a tela fica na página dele, e não na navball.
         sistemas.pagina_base = painel_scripts.pagina_em_uso(agora) or "NAV"
@@ -1045,7 +1062,7 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
         time.sleep(0.01)
 
 
-def acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, painel_scripts, voz):
+def acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, painel_scripts, voz, encoder=None):
     """Acompanha uma nave até ela deixar de ser a ativa ou trocar de planeta.
 
     Ao trocar de planeta (ex.: entrar na esfera de influência da Mun), os
@@ -1065,6 +1082,7 @@ def acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, pa
             sistemas,
             painel_scripts,
             voz,
+            encoder,
         )
     finally:
         fonte.remover()
@@ -1193,6 +1211,11 @@ def main():
     vozes = parser.add_mutually_exclusive_group()
     vozes.add_argument("--sem-voz", action="store_true", help="os avisos de voo só no terminal e na luz, sem falar")
     vozes.add_argument("--voz", metavar="DISPOSITIVO", help="alto-falante da voz dos avisos, como o aplay -D (ex.: plughw:1,0)")
+    parser.add_argument(
+        "--encoder",
+        metavar="PORTA",
+        help="porta serial do Uno do encoder AJUSTE, ex.: COM8 ou /dev/serial/by-id/...",
+    )
     parser.add_argument("--testar-voz", action="store_true", help="fala todos os avisos de voo uma vez e sai")
     parser.add_argument(
         "--zoom",
@@ -1209,6 +1232,7 @@ def main():
 
     tela = abrir_tela(args)
     painel = abrir_painel(args)
+    encoder = EncoderSerial(args.encoder) if args.encoder else None
     transmissor = Transmissor(tela)
     sistemas = Sistemas(None)
     menu = MenuSubida()
@@ -1226,14 +1250,16 @@ def main():
             print("Segurar o POUSO 5 s pousa uma nave simulada (scripts/pouso.py --demo).")
             print("Segurar o LANCAR 5 s sobe um foguete simulado até a órbita (scripts/subida.py --demo).")
             scripts = Demo()
-            voar(tela, transmissor, scripts, scripts, lambda: True, painel, sistemas, painel_scripts, voz)
+            voar(tela, transmissor, scripts, scripts, lambda: True, painel, sistemas, painel_scripts, voz, encoder)
         else:
             scripts = Scripts()
             dispositivos = [tela] if painel is None else [tela, painel]
+            if encoder is not None:
+                dispositivos.append(encoder)
 
             def acompanhar(conn, nave):
                 try:
-                    acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, painel_scripts, voz)
+                    acompanhar_nave(conn, tela, transmissor, scripts, nave, painel, sistemas, painel_scripts, voz, encoder)
                 except (ValueError, RuntimeError):
                     pass
 
@@ -1247,6 +1273,8 @@ def main():
         tela.fechar()
         if painel is not None:
             painel.fechar()
+        if encoder is not None:
+            encoder.fechar()
         if scripts is not None:
             scripts.fechar()
 

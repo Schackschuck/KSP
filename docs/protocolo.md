@@ -158,14 +158,17 @@ O painel do editor ([hardware/construcao.md](../hardware/construcao.md#painel-do
 
 ## Encoder AJUSTE
 
-O encoder único do painel da tela ([desenho](../hardware/construcao.md#tela-multifunção)), que mexe na página aberta. Por enquanto ele fica num Uno à parte, na USB do Pi ([encoder.md](encoder.md)). **O firmware já manda estas linhas; a ponte ainda não lê:**
+O encoder único do cockpit, no VOO, logo embaixo da tela ([desenho](../hardware/construcao.md#painel-de-sistemas-de-controle)), que mexe na página aberta. Por enquanto ele fica num Uno à parte, na USB do Pi ([encoder.md](encoder.md)). A ponte da tela lê com o `--encoder` ([`bridge/ajuste.py`](../bridge/ajuste.py)):
 
 | Mensagem | Quando | Significado |
 |---|---|---|
+| `READY` | O Uno ligou (abrir a porta reinicia o Uno) | A ponte ignora |
 | `ENC AJUSTE <cliques>` | O encoder girou | Cliques com sinal, horário positivo. Vários cliques podem ir numa linha só |
 | `BTN AJUSTE 1`, `BTN AJUSTE 0` | O encoder foi apertado e solto | Uma vez por mudança, com debounce de 20 ms |
 
-- **A página é da ponte:** ela repassa o giro e o aperto para a página aberta, como `ENC AP` e `BTN AP` no piloto, `ENC DV` no editor e `ENC SUB` e `BTN SUB` na subida. O painel não sabe qual página está aberta.
+- **A página é da ponte:** ela repassa o giro e o aperto para a página aberta, trocando o `AJUSTE` pelo nome do encoder dela: `SUB` com a SUBIDA aberta (com a subida voando, só mantém a página), e `AP` em qualquer outra (o primeiro giro abre a página do piloto). A página fecha uns 10 s depois do último toque, como a de qualquer encoder. O painel não sabe qual página está aberta.
+- **O aperto e a soltura vão para o mesmo lugar:** a ponte guarda o destino do `BTN AJUSTE 1` e usa o mesmo no `BTN AJUSTE 0`, mesmo que a página tenha mudado.
+- O `ENC DV` do editor e o alvo entram quando a ponte da tela tiver as páginas deles.
 
 ## Painel de sistemas de controle
 
