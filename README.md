@@ -192,15 +192,16 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - **Painel em módulos:** cada seção vira uma placa, ligada por cabo flat a um backplane de 12 slots no Mega. A placa pequena tem 8 entradas e 8 LEDs (1 × 74HC165 + 1 × 74HC595); a média, 16 e 24 (2 + 3), com um jack JST-XH para cada korry; a grande, 24 e 32 (3 + 4). Os LEDs só mostram o que vem do jogo: nenhum é ligado a um botão. Cada módulo tem uma etiqueta numa chave DIP, e o Mega descobre sozinho o que está encaixado. Esquemáticos, etiquetas e qual placa vai em cada seção em [hardware/](hardware/README.md).
 - Enquanto o primeiro módulo não fica pronto, os controles básicos continuam direto nos pinos do Mega, como em [docs/fase2.md](docs/fase2.md).
 - Próximo passo: o firmware do Mega lendo a fila de módulos pelas etiquetas, e testar o primeiro módulo direto no Mega.
-- **Desenhos a refazer:** a tela multifunção agora é a mikromedia, de 2,8", e as barras de recursos saíram ([decisões](#decisões)). Falta redesenhar o painel da tela e o de Recursos e EVA, e atualizar o `hardware/construcao.md`, o `hardware/README.md` (a tabela de seções e o MAX7219) e o `hardware/identidade_visual.md`, que ainda falam da tela de 7" e das barras.
+- **Tela e encoder:** a [tela multifunção](hardware/construcao.md#tela-multifunção) agora é a mikromedia, de 2,8", com um encoder só ao lado, o AJUSTE, que mexe na página aberta: o piloto automático, o Δv do editor, o alvo e a subida. As luzes do piloto e o ESTOL foram junto, e a metade direita do VOO ficou livre. As barras de recursos saíram, e o painel da asa esquerda virou só [EVA](hardware/construcao.md#eva).
 - **Sidestick e acelerador no painel:** um joystick JH-D400X-R4 de 3 eixos, com o botão do manche trocando entre VOO, CÂMERA e TRANSLAÇÃO, e uma alavanca deslizante de 60 mm, os dois lidos pelo Mega nas linhas analógicas do backplane ([sidestick](hardware/construcao.md#sidestick), [acelerador](hardware/construcao.md#acelerador)). O Extreme 3D Pro fica para desenvolver no PC; mapeamento em [hardware/construcao.md](hardware/construcao.md#joystick-logitech-extreme-3d-pro).
 - **Korry switches:** botões iluminados com legenda, como nos aviões, 35 no cockpit. Legenda impressa em duas cores na FlashForge Inventor, encaixada num corpo igual para todos, com a chave e os LEDs num suporte impresso. As bases de cada grupo saem numa grade impressa, parafusada atrás do painel. O modelo, os STL das 31 legendas, das grades e das peças, o `gerar.py` e a ligação estão em [hardware/korry/](hardware/korry/README.md); o primeiro passo é o teste de folga e um korry ligado direto no Mega.
 
 **A fazer na ponte, para a versão B** (o que cada controle faz e o comando do kRPC estão em [hardware/construcao.md](hardware/construcao.md#os-painéis)):
 
-- [ ] Definir no [protocolo](docs/protocolo.md) as mensagens dos painéis novos: tempo, navegação, action groups e peças, câmera, recursos e EVA, acelerador, sidestick e os botões de página da tela.
+- [ ] Definir no [protocolo](docs/protocolo.md) as mensagens dos painéis novos: tempo, navegação, action groups e peças, câmera, EVA, acelerador, sidestick e o encoder AJUSTE da tela.
 - [ ] Tempo: WARP, PARAR, FISICO, ATE O NO, PAUSA, SALVAR, CARREGAR e REVERTER.
-- [ ] Navegação: escolher e limpar o alvo pelo encoder, com a página ALVO na tela; REFERENCIA; trocar de nave.
+- [ ] Encoder AJUSTE da tela: a ponte manda o giro e o aperto para a página aberta, como fazem hoje o `ENC AP`, o `ENC DV` e o `ENC SUB`.
+- [ ] Navegação: PROCURAR abre a página ALVO, e o AJUSTE escolhe o alvo; LIMPAR; REFERENCIA; trocar de nave.
 - [ ] Action groups 1 a 8 e os korry das peças (paraquedas, painéis solares, antenas, compartimento de carga), com a luz do estado.
 - [ ] Câmera: MAPA, IVA, MODO CAM, FOTO e ESCONDER.
 - [ ] Acelerador pela alavanca; TREM, FREIOS e LUZES em korry.
@@ -238,14 +239,14 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - Encoder rotativo para escolher o que cada display mostra. Lido pela mesma cadeia de 74HC165 dos módulos: o Mega lê a cadeia inteira mil vezes por segundo numa **interrupção de timer**, e assim o redesenho do LCD (~20 ms) não faz perder cliques. O painel acumula os cliques e manda `ENC <nome> <cliques>`.
 - **Editor de nós de manobra** (pelo kRPC: `control.add_node`, `node.prograde` etc.):
   - Painel duplo de 250 × 125 mm, desenho e peças em [hardware/construcao.md](hardware/construcao.md#painel-do-editor-de-manobras).
-  - **Δv por um encoder só**, porque os três eixos nunca são mexidos ao mesmo tempo. Três korry (PRO, NRM e RAD) escolhem o eixo, e a legenda do escolhido acende na cor da alça do nó no KSP. Girar no sentido horário soma o passo; no anti-horário, tira. Um nó novo já vem com o PRO escolhido. O painel manda `ENC DV <cliques>`, e quem sabe o eixo escolhido é a ponte.
+  - **Δv por um encoder só**, porque os três eixos nunca são mexidos ao mesmo tempo. Três korry (PRO, NRM e RAD) escolhem o eixo, e a legenda do escolhido acende na cor da alça do nó no KSP. Girar no sentido horário soma o passo; no anti-horário, tira. Um nó novo já vem com o PRO escolhido. O encoder é o AJUSTE do painel da tela: com a página do editor aberta, a ponte manda o giro como `ENC DV <cliques>`, e quem sabe o eixo escolhido é ela.
   - **PERCURSO:** uma tecla basculante com mola para o centro, como a do TIME WARP, montada deitada, move o nó ao longo da órbita (para a esquerda, antes; para a direita, depois). Segurando, repete; o painel manda `INC TEMPO <passos>`. Embaixo dela, ANT e PROX trocam de nó.
   - **PASSO:** chave rotativa de 4 posições, com a legenda gravada em volta: 0,1 / 1 / 10 / 100 m/s no Δv e 1 s / 10 s / 1 min / 10 min no tempo.
   - Korry NOVO (nó novo no apoastro), APAGAR e CIRC (circulariza no ponto do nó, com o Δv calculado pela ponte). Sem AP e PE: o tempo já leva o nó a qualquer ponto.
-  - São 16 entradas e 3 LEDs (os korry de eixo): cabe numa placa média.
+  - São 14 entradas e 3 LEDs (os korry de eixo): cabe numa placa média.
   - **Sem tela no módulo:** Δv, tempo de queima, T− até o nó e o Ap/Pe resultante aparecem numa página do editor na tela multifunção, que abre sozinha quando uma tecla ou botão do editor é usado (ver os [princípios](#princípios)).
   - O botão MAPA (liga e desliga o mapa do jogo) fica na seção da câmera. A câmera do mapa (girar, aproximar, trocar o foco entre nave, nó e planeta) fica no joystick, no modo CÂMERA, não no editor.
-- O que resta de combustível, oxidante, monopropelente e eletricidade vai para a página RECURSOS da tela multifunção, no lugar das barras de LED que estavam no painel de [recursos e EVA](hardware/construcao.md#recursos-e-eva).
+- O que resta de combustível, oxidante, monopropelente e eletricidade vai para a página RECURSOS da tela multifunção, no lugar das barras de LED que estavam no painel da [EVA](hardware/construcao.md#eva).
 - Ponteiro analógico com motor de passo X27.168.
 - Fonte 5V externa (a USB não aguenta muitos LEDs).
 
@@ -382,8 +383,8 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
   - **V/S:** sobe ou desce com a velocidade vertical escolhida. Com o ALT ligado junto, nivela ao chegar na altitude escolhida.
   - **SPD:** acelerador automático, segura a velocidade escolhida. Fica para depois, como mais uma linha do menu.
   - Sem HDG ligado, a rolagem fica com o manche, e a inclinação fica onde o piloto deixou.
-- **No painel de [sistemas de controle](hardware/construcao.md#painel-de-sistemas-de-controle)**, junto do SAS, do RCS e do FBW:
-  - **Um encoder só**, mexido pelo menu da página do piloto na tela multifunção: girar move o cursor entre HDG, ALT e V/S; apertar escolhe a linha, e girar muda o valor (horário soma); apertar de novo sai; segurar 1 s liga ou desliga o modo da linha. Girando devagar, o valor muda de 1 em 1 (1°, 10 m, 0,1 m/s); rápido, de 10 em 10.
+- **No painel da [tela](hardware/construcao.md#tela-multifunção)**, e os korry no de [sistemas de controle](hardware/construcao.md#painel-de-sistemas-de-controle):
+  - **Um encoder só**, o AJUSTE ao lado da tela, mexido pelo menu da página do piloto na tela multifunção: girar move o cursor entre HDG, ALT e V/S; apertar escolhe a linha, e girar muda o valor (horário soma); apertar de novo sai; segurar 1 s liga ou desliga o modo da linha. Girando devagar, o valor muda de 1 em 1 (1°, 10 m, 0,1 m/s); rápido, de 10 em 10.
   - **Uma luz verde por modo**, ao lado do encoder, acesa quando o modo está ligado no FBW. Sem displays de 7 segmentos: os valores ficam na tela.
   - Korry **FBW** (liga e desliga o FBW, como o botão do joystick) e **TRAVA ALT** (trava e destrava a altitude do momento).
 - **Na tela:** a página do piloto, com os modos (azul armado, verde ligado) e os valores escolhidos, abre sozinha quando o encoder é mexido e volta para a navball uns 10 s depois. O caminho pedido aparece na navball: é o ponto verde do FBW.
@@ -392,7 +393,7 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
   - ALT, V/S e a TRAVA ALT pedem o ângulo de subida, que vira carga; sem eles, o pitch fica com o manche;
   - SPD liga o acelerador automático que já existe no `fbw.py`;
   - as proteções do FBW continuam valendo, e mexer no manche devolve o eixo ao piloto.
-- **Precisa de:** o encoder e as luzes do painel de sistemas. Para começar, uma página de botões no celular faz o papel do painel.
+- **Precisa de:** o encoder e as luzes do painel da tela. Para começar, uma página de botões no celular faz o papel do painel.
 
 **Pronto quando:** um avião decola na mão, e o piloto automático leva ele até a altitude e o rumo escolhidos no painel e segura lá.
 
@@ -417,7 +418,7 @@ Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing,
 - [x] Ponte da tela: o korry LANCAR, o menu da subida (`ENC SUB`, `BTN SUB`) e a página SUBIDA; na página de botões, o LANCAR e um encoder para a configuração.
 - [x] A página SUBIDA na mikromedia: a configuração e o voo. O simulador e o celular mostram a navball no lugar dela.
 - [ ] Testar no jogo ([roteiro](docs/subida.md#testar-no-jogo)): primeiro 80 km e 0°, depois a inclinação, o plano de um alvo e a Mun.
-- [ ] O encoder de verdade da configuração no painel (os de hoje já têm dono).
+- [ ] No cockpit, a configuração pelo encoder AJUSTE do painel da tela.
 - [ ] Depois: a guiagem do vácuo (PEG), mais eficiente que seguir o pró-grado.
 
 ### Pouso de precisão (volta à base)
@@ -505,7 +506,7 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 - [ ] 35 korry switches ([lista completa](hardware/korry/README.md#lista-de-peças-um-korry)), cada um com 1 chave PSW 8,5 × 8,5 mm sem trava, até 2 LEDs difusos de alto brilho de 3 mm, 4 fios finos e 1 conector JST-XH fêmea de 4 vias com os terminais; filamento PLA preto e transparente
 - [ ] 10× LED azul e verde de 3 mm, difuso, catodo comum (korry dos modos do SAS)
 - [ ] 17× parafuso M3 autoatarraxante de 8 mm, para as 9 grades dos korry ([fixação no painel](hardware/korry/README.md#fixação-no-painel))
-- [ ] 34× botão de 16 mm sem trava, com anel de 20 mm (R16-503 ou R13-507), e 2 capas impressas para o CARREGAR e o REVERTER
+- [ ] 31× botão de 16 mm sem trava, com anel de 20 mm (R16-503 ou R13-507), e 2 capas impressas para o CARREGAR e o REVERTER
 - [ ] 2× botão de metal de 22 mm com anel de LED (vermelho e branco), de 5 V ou 3 V, e 2× capa transparente para botão de 22 mm
 - [ ] 2× tecla KCD1 (ON)-OFF-(ON) de 21 × 15 mm
 - [ ] 7× LED de 5 mm difuso (3 verdes e 1 vermelho do piloto, 3 brancos do sidestick)
@@ -516,9 +517,10 @@ Itens marcados já estão na bancada. Compre por fase — não precisa tudo de u
 
 - [ ] 3–4× módulos MAX7219 com 8 dígitos de 7 segmentos (o piloto automático não usa mais: os valores vão para a tela)
 - [ ] 2× encoders rotativos (KY-040), para escolher o que os displays mostram
-- [ ] Editor de manobras ([peças e medidas](hardware/construcao.md#painel-do-editor-de-manobras)): 1× encoder EC11 com knob de alumínio de 30 mm; 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm (a tecla, os botões e os korry estão na fase 2)
-- [ ] Navegação: 1× encoder EC11 com botão e knob de alumínio de 30 mm; 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm
-- [ ] VOO, de sistemas de controle ([peças e medidas](hardware/construcao.md#painel-de-sistemas-de-controle)): 1× encoder EC11 com botão e knob de alumínio de 30 mm (os korry e os LEDs estão na fase 2); 1 módulo grande
+- [ ] Editor de manobras ([peças e medidas](hardware/construcao.md#painel-do-editor-de-manobras)): 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm (a tecla, os botões e os korry estão na fase 2)
+- [ ] Navegação: 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm
+- [ ] Tela ([peças e medidas](hardware/construcao.md#tela-multifunção)): 1× encoder EC11 com botão e knob de alumínio de 30 mm, o AJUSTE
+- [ ] VOO, de sistemas de controle ([peças e medidas](hardware/construcao.md#painel-de-sistemas-de-controle)): os korry e os LEDs estão na fase 2; 1 módulo grande
 - [ ] 2–4× motores de passo X27.168 (ponteiros)
 - [ ] 1× fonte 5V 3A + conector/borne
 
