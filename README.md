@@ -116,6 +116,7 @@ bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de 
                   o serviço do systemd que abre a ponte da tela quando o Pi liga (servico/)
 scripts/          scripts de voo (pouso, subida até a órbita, fly by wire...), que rodam com ou sem o cockpit; testes em scripts/tests/
 firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
+firmware/encoder/ Arduino Uno com um encoder e o botão dele (docs/encoder.md)
 firmware/passos/  sketches de aprendizado, um por passo da fase 1
 firmware/mfd/     mikromedia for ARM / LPC2148 (C, compilado com o LLVM pelo compilar.py): a tela multifunção
 hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa; ver hardware/README.md
