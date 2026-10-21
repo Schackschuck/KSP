@@ -295,7 +295,7 @@ A peça tem ficha própria em [korry/](korry/README.md): medidas, desenho, peça
 - **Sem abrir o joystick:** ele continua inteiro e pode voltar a ser usado em outros jogos.
 - **Leitura:** pelo `pygame`, que a ponte já usa, ou pelo `evdev`, direto no Linux. Decidir quando for escrever o código.
 - **Durante o desenvolvimento no PC:** com o joystick ligado no PC, o KSP também o lê. Deixar os eixos do joystick sem nada nas configurações de controle do KSP, senão os comandos chegam em dobro.
-- **O Pi 4 tem 4 portas USB:** o Mega e o tablet, pela ancoragem USB, e sobram duas.
+- **O Pi 4 tem 4 portas USB:** o Mega, o tablet (pela ancoragem USB) e, por enquanto, o Uno do encoder AJUSTE ([docs/encoder.md](../docs/encoder.md)), e sobra uma.
 
 ### Um joystick, três modos
 

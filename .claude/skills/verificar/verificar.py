@@ -14,6 +14,7 @@ from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[3]
 FQBN = "arduino:avr:mega:cpu=atmega2560"
+FQBN_UNO = "arduino:avr:uno"
 ARDUINO_CLI_IDE = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs/Arduino IDE/resources/app/lib/backend/resources/arduino-cli.exe"
 
 
@@ -52,9 +53,9 @@ def achar_arduino_cli():
     return shutil.which("arduino-cli") or (str(ARDUINO_CLI_IDE) if ARDUINO_CLI_IDE.exists() else None)
 
 
-def compilar_sketch(cli, pasta):
-    """Compila um sketch para o Mega; só os avisos dos arquivos do próprio sketch reprovam."""
-    codigo, saida = rodar([cli, "compile", "--fqbn", FQBN, "--warnings", "all", str(pasta)], timeout=600)
+def compilar_sketch(cli, pasta, fqbn=FQBN):
+    """Compila um sketch (por padrão para o Mega); só os avisos dos arquivos do próprio sketch reprovam."""
+    codigo, saida = rodar([cli, "compile", "--fqbn", fqbn, "--warnings", "all", str(pasta)], timeout=600)
     nome = pasta.relative_to(RAIZ).as_posix()
     if codigo != 0:
         return [f"{nome} não compilou:\n{saida[-3000:]}"]
@@ -80,6 +81,7 @@ def firmware_painel(mudados, tudo):
     falhas = []
     for pasta in sorted(sketches):
         falhas += compilar_sketch(cli, pasta)
+    falhas += compilar_sketch(cli, RAIZ / "firmware/encoder", FQBN_UNO)
     return falhas
 
 
@@ -107,7 +109,7 @@ def main():
     etapas = [
         ("Testes Python", True, testes_python),
         ("pyflakes", True, pyflakes),
-        ("Firmware do painel (ATmega2560)", True, lambda: firmware_painel(mudados, args.tudo)),
+        ("Firmware do painel (ATmega2560) e do encoder (Uno)", True, lambda: firmware_painel(mudados, args.tudo)),
         ("Firmware da mikromedia (LPC2148)", mudou("firmware/mfd/"), firmware_mfd),
         ("Desenhos dos painéis", mudou("hardware/desenho/"), desenhos),
     ]
