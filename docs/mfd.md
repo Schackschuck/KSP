@@ -331,6 +331,7 @@ A ponte do painel (`ponte.py`) pode rodar ao mesmo tempo, em outro terminal: o k
 | Fica parado em `Conectando ao kRPC...` | O jogo está esperando você aceitar a conexão | Aceitar na janela do kRPC, dentro do jogo |
 | Tocar em SAS não deixa o botão verde | A nave não tem SAS (sem piloto nem núcleo de sonda com SAS) | É o comportamento certo: o botão mostra o jogo |
 | `SEM SINAL` com o foguete voando | A ponte parou, ou o terminal mostra `Nenhuma nave ativa` | Ver a mensagem no terminal |
+| `SEM SINAL` no tablet depois que o Pi reiniciou ou a tela apagou | A página perdeu o fluxo de eventos da ponte | A página tenta de novo sozinha a cada 5 s e quando a tela acende. Uma página aberta antes dessa mudança precisa ser recarregada uma vez |
 | O celular não abre a página | Celular noutra rede (dados móveis, Wi-Fi de visitantes), firewall do Windows, ou rede do Windows como Pública | Mesmo Wi-Fi; permitir o Python em *Redes privadas*; rede do Windows como Privada, como na fase 0 |
 | O endereço mostrado não funciona, e o notebook tem mais de uma rede (cabo e Wi-Fi, VPN) | O IP mostrado é o da outra rede | Ver o IP do Wi-Fi com `ipconfig` e usar esse, com `:8000` no fim |
 | `Não foi possível abrir a porta 8000 para o celular` | Outro programa já usa a porta | `python mfd.py --celular 8080` e abrir com `:8080` no fim |
