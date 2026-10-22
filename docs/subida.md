@@ -26,7 +26,7 @@ A nave tem que estar parada no chão, com o primeiro estágio ainda por acender.
 4. Segure o LANCAR 5 s. O korry pisca âmbar contando, fica verde com o script voando, e a página passa a mostrar o voo. Segurar de novo 5 s aborta.
 5. No fim, a página mostra `EM ORBITA`, `ABORTADO` ou `FALHOU` por 10 s.
 
-**O desenho do voo.** No meio da página, entre os números de cima e a fase embaixo, a tela desenha o voo. É um desenho só (o planeta, a atmosfera, a trajetória e o círculo tracejado do alvo) visto por uma câmera que abre em dois zooms de 1,5 s:
+**O desenho do voo.** No meio da página, entre os números de cima e a fase embaixo, a tela desenha o voo. É um desenho só (o planeta, a atmosfera, a trajetória e o círculo tracejado do alvo) visto por uma câmera que abre em dois zooms. No navegador, cada zoom leva 3 s, preso no foguete: ele desliza da posição da vista antiga para a da nova, enquanto o mundo encolhe em volta, e o KSC, a trajetória e a órbita aparecem e somem aos poucos. Na mikromedia, o zoom leva 1,5 s e as partes trocam de uma vez. Antes da decolagem, o chão do desenho fica na altitude da plataforma, e o foguete aparece em cima dela:
 
 - **Na decolagem**, a câmera fica no KSC: o VAB, a torre da plataforma, a caixa d'água e o foguete, com a chama pelo acelerador. Quando o foguete sobe, ela abre aos poucos para ele não sair da tela.
 - **No giro**, o primeiro zoom: o KSC some, o chão vira a curva do planeta e aparece a trajetória prevista, uma parábola. O trecho verde é o já voado, o tracejado o que falta, e a marca âmbar é o apoastro. A parábola cresce até o círculo do alvo.

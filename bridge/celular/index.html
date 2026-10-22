@@ -42,6 +42,7 @@
 const LARGURA = 320, ALTURA = 240;
 const MAX_LINHA = 31;
 const SEM_SINAL = 1000;           // ms sem mensagem válida
+const RECONECTAR = 5000;
 const DESTAQUE_TOQUE = 200;       // ms de borda acesa depois do toque
 const INTERVALO_QUADRO = 1000 / 30;
 
@@ -114,7 +115,7 @@ const AVISOS_SUBIDA = {
   ALVO: "SEM ALVO PARA O PLANO", COMBUSTIVEL: "SEM COMBUSTIVEL",
 };
 
-const CENA = { x: 160, y: 130, topo: 70, fundo: 190, exagero: 3, zoom: 1500, longe: 2500, limite: 1e6 };
+const CENA = { x: 160, y: 130, topo: 70, fundo: 190, exagero: 3, zoom: 3000, longe: 2500, limite: 1e6 };
 const MODOS_CENA = {
   GIRO: "TRAJ", CURVA: "TRAJ", VACUO: "TRAJ", COSTA: "TRAJ",
   CIRCULARIZA: "ORB", PLANO: "ORB", ORBITA: "ORB", FALHA: "MANTER",
@@ -187,7 +188,7 @@ const estado = {
   toque: [null, -Infinity],
 };
 
-const cena = { modo: null, antes: null, desde: 0 };
+const cena = { modo: null, antes: null, desde: 0, chao: null };
 
 function inteiro(texto) {
   return /^[+-]?[0-9]+$/.test(texto) ? parseInt(texto, 10) : null;
@@ -197,7 +198,7 @@ function linhaDaSubida(nome, partes, numeros) {
   if (nome === "SUB") {
     if (partes.length === 1 && partes[0] === "OFF") {
       estado.subida = subidaVazia();
-      cena.modo = null;
+      cena.modo = cena.chao = null;
       return true;
     }
     if (partes.length !== 2) return false;
@@ -300,16 +301,30 @@ function mandar(linha) {
     .catch(() => {});
 }
 
-const eventos = new EventSource("/eventos");
 // Como a placa ao ligar: a ponte reenvia tudo. Vale também quando a conexão
 // cai e volta sozinha.
-eventos.onopen = () => mandar("READY");
-eventos.onmessage = (e) => {
-  const linha = e.data;
-  if (linha.length > MAX_LINHA) return;
-  if (interpretar(linha)) estado.ultimaValida = performance.now();
-  else mandar("ERR " + linha);
-};
+let eventos = null;
+let conectouEm = -Infinity;
+function conectar() {
+  if (eventos) eventos.close();
+  conectouEm = performance.now();
+  eventos = new EventSource("/eventos");
+  eventos.onopen = () => mandar("READY");
+  eventos.onmessage = (e) => {
+    const linha = e.data;
+    if (linha.length > MAX_LINHA) return;
+    if (interpretar(linha)) estado.ultimaValida = performance.now();
+    else mandar("ERR " + linha);
+  };
+}
+conectar();
+setInterval(() => {
+  const agora = performance.now();
+  if (agora - estado.ultimaValida > RECONECTAR && agora - conectouEm > RECONECTAR) conectar();
+}, 1000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && performance.now() - estado.ultimaValida > SEM_SINAL) conectar();
+});
 
 // ---------- navball ----------
 
@@ -961,7 +976,7 @@ function rotuloDaCena(t, [x, y], ux) {
 function desenharCenaSubida(agora) {
   const s = estado.subida;
   if (!(s.RAIO > 0)) {
-    cena.modo = null;
+    cena.modo = cena.chao = null;
     return;
   }
   const raio = limitar(s.RAIO, 1000, 1e8);
@@ -992,33 +1007,54 @@ function desenharCenaSubida(agora) {
     cena.modo = pedido;
     cena.desde = agora;
   }
+  if (s.FASE === "JANELA" || s.FASE === "DECOLAGEM") cena.chao = cena.chao === null ? alt : Math.min(cena.chao, alt);
+  const sobreChao = alt - (cena.chao || 0);
   const t = limitar((agora - cena.desde) / CENA.zoom, 0, 1);
-  const b = t * t * (3 - 2 * t);
+  const b = t * t * t * (t * (6 * t - 15) + 10);
   const cameraDo = (modo) => {
-    if (modo === "PAD") return { s: 96 / Math.max(340, CENA.exagero * limitar(alt, 0, 1e6) * 1.35 + 140), gy: 174, ref: nu };
-    if (modo === "TRAJ") return { s: 84 / (CENA.exagero * alvo), gy: 160, ref: 180 };
+    if (modo === "PAD") return { s: 96 / Math.max(340, CENA.exagero * limitar(sobreChao, 0, 1e6) * 1.35 + 140), gx: CENA.x, gy: 174, ref: nu };
+    if (modo === "TRAJ") return { s: 84 / (CENA.exagero * alvo), gx: CENA.x, gy: 160, ref: 180 };
     const escala = 88 / (2 * 1.04 * (raio + CENA.exagero * Math.min(apOk && ap > alvo ? ap : alvo, 2.5e8)));
-    return { s: escala, gy: CENA.y - raio * escala, ref: nu };
+    return { s: escala, gx: CENA.x, gy: CENA.y - raio * escala, ref: nu };
+  };
+  const pesoPad = cena.modo === "PAD" ? 1 : cena.antes === "PAD" ? 1 - b : 0;
+  const rdNave = exibido(raio + limitar(alt - (cena.chao || 0) * pesoPad, 0, 9e8));
+  const naveNa = (c) => {
+    const phi = (90 + c.ref - nu) * RAD;
+    return [c.gx + rdNave * Math.cos(phi) * c.s, c.gy - (rdNave * Math.sin(phi) - raio) * c.s];
   };
   let cam = cameraDo(cena.modo);
   if (cena.antes !== cena.modo && b < 1) {
     const c0 = cameraDo(cena.antes);
-    cam = {
+    const p0 = naveNa(c0), p1 = naveNa(cam);
+    const meio = {
       s: Math.exp(Math.log(c0.s) + (Math.log(cam.s) - Math.log(c0.s)) * b),
-      gy: c0.gy + (cam.gy - c0.gy) * b,
+      gx: 0, gy: 0,
       ref: c0.ref + (cam.ref - c0.ref) * b,
     };
+    const q = naveNa(meio);
+    meio.gx = p0[0] + (p1[0] - p0[0]) * b - q[0];
+    meio.gy = p0[1] + (p1[1] - p0[1]) * b - q[1];
+    cam = meio;
   }
-  const pesoPad = cena.modo === "PAD" ? 1 : cena.antes === "PAD" ? 1 - b : 0;
   const pesoTraj = cena.modo === "TRAJ" ? (cena.antes === "TRAJ" ? 1 : b) : cena.antes === "TRAJ" ? 1 - b : 0;
+  const pesoOrb = cena.modo === "ORB" ? (cena.antes === "ORB" ? 1 : b) : cena.antes === "ORB" ? 1 - b : 0;
+  const voo = 1 - pesoPad;
+  const comAlfa = (alfa, desenho) => {
+    if (alfa <= 0.01) return;
+    ctx.globalAlpha = alfa;
+    desenho();
+    ctx.globalAlpha = 1;
+  };
 
   const tela = (rd, phi) => [
-    CENA.x + limitar(rd * Math.cos(phi * RAD) * cam.s, -CENA.limite, CENA.limite),
+    cam.gx + limitar(rd * Math.cos(phi * RAD) * cam.s, -CENA.limite, CENA.limite),
     cam.gy - limitar((rd * Math.sin(phi * RAD) - raio) * cam.s, -CENA.limite, CENA.limite),
   ];
   const fora = (phi) => [Math.cos(phi * RAD), -Math.sin(phi * RAD)];
   const angulo = (v) => 90 + cam.ref - v;
   const longe = ([x, y]) => Math.abs(x - CENA.x) > CENA.longe || Math.abs(y - CENA.y) > CENA.longe;
+  const cx = cam.gx;
   const arco = (de, ate, pontos) => {
     const xy = [];
     for (let k = 0; k <= pontos; k++) {
@@ -1037,27 +1073,28 @@ function desenharCenaSubida(agora) {
   ctx.rect(0, CENA.topo, LARGURA, CENA.fundo - CENA.topo + 1);
   ctx.clip();
   for (const [x, y] of ESTRELAS) circulo(x, y, 0.8, COR_CENA.estrela, null);
-  if (topo > 0) circulo(CENA.x, cy, exibido(raio + topo) * cam.s, COR_CENA.ceu, null);
-  if (pesoPad < 0.5) {
+  if (topo > 0) circulo(cx, cy, exibido(raio + topo) * cam.s, COR_CENA.ceu, null);
+  comAlfa(voo, () => {
     ctx.setLineDash([3, 4]);
-    circulo(CENA.x, cy, exibido(raio + alvo) * cam.s, null, COR.ambar, 1);
+    circulo(cx, cy, exibido(raio + alvo) * cam.s, null, COR.ambar, 1);
     ctx.setLineDash([]);
-    if (conica && cena.modo === "ORB") {
-      tracado(arco(0, 360, 96), COR.verde, 2);
-    } else if (conica) {
+  });
+  if (conica) {
+    comAlfa(voo * pesoOrb, () => tracado(arco(0, 360, 96), COR.verde, 2));
+    comAlfa(voo * (1 - pesoOrb), () => {
       const de = nuChao > 0 ? nuChao - 2 : 0, ate = nuChao > 0 ? 360 - nuChao + 2 : 360;
       const v = limitar(nu, de, ate);
       tracado(arco(v, ate, 60), COR.traco, 1, [4, 3]);
       tracado(arco(de, v, 40), COR.verde, 2);
-    }
+    });
   }
 
   const corpo = s.CORPO;
-  circulo(CENA.x, cy, rPlaneta, { KERBIN: COR_CENA.mar, MUN: COR_CENA.mun, MINMUS: COR_CENA.minmus }[corpo] || COR_CENA.outro, null);
+  circulo(cx, cy, rPlaneta, { KERBIN: COR_CENA.mar, MUN: COR_CENA.mun, MINMUS: COR_CENA.minmus }[corpo] || COR_CENA.outro, null);
   if (corpo === "KERBIN") {
     for (const [leste, oeste, dentro] of CONTINENTES) {
       ctx.beginPath();
-      ctx.arc(CENA.x, cy, rPlaneta, -leste * RAD, -oeste * RAD, true);
+      ctx.arc(cx, cy, rPlaneta, -leste * RAD, -oeste * RAD, true);
       for (const [phi, f] of dentro) ctx.lineTo(...naSuperficie(phi, f));
       ctx.closePath();
       ctx.fillStyle = COR_CENA.terra;
@@ -1073,7 +1110,7 @@ function desenharCenaSubida(agora) {
   }
 
   const phiNave = angulo(nu);
-  const nave = tela(exibido(raio + limitar(alt, 0, 9e8)), phiNave);
+  const nave = tela(rdNave, phiNave);
   const chao = tela(raio, phiNave);
   const cima = fora(phiNave);
   let tangente = [-cima[1], cima[0]];
@@ -1088,28 +1125,26 @@ function desenharCenaSubida(agora) {
   const eixo = ne > 0 ? [ex / ne, ey / ne] : [0, -1];
   const fator = 3 * cam.s;
 
-  if (corpo === "KERBIN" && pesoPad >= 0.5 && fator >= 11 / 256 && !longe(chao)) desenharKsc(chao, cima, fator);
+  if (corpo === "KERBIN" && fator >= 11 / 256 && !longe(chao)) comAlfa(pesoPad, () => desenharKsc(chao, cima, fator));
 
-  if (pesoPad < 0.5) {
-    if (conica) {
-      const pAp = tela(exibido(ra), angulo(180)), uAp = fora(angulo(180));
-      if (!longe(pAp)) {
-        marcaDaCena(pAp, uAp, COR.ambar);
-        const t = `AP ${formatarDistancia(s.AP)}`;
-        if (cena.modo === "ORB") rotuloDaCena(t, pAp, uAp[0]);
-        else textoCentro(t, COR.texto, pAp[0], pAp[1] - 17.5 < CENA.topo ? pAp[1] + 13 : pAp[1] - 12, 11);
-      }
-      if (cena.modo === "ORB" && pe > 0) {
-        const pPe = tela(exibido(rp), angulo(0)), uPe = fora(angulo(0));
-        if (!longe(pPe)) {
-          marcaDaCena(pPe, uPe, COR.rotulo);
-          rotuloDaCena(`PE ${formatarDistancia(s.PE)}`, pPe, uPe[0]);
-        }
-      }
+  if (conica) {
+    const pAp = tela(exibido(ra), angulo(180)), uAp = fora(angulo(180));
+    if (!longe(pAp)) {
+      const t = `AP ${formatarDistancia(s.AP)}`;
+      comAlfa(voo, () => marcaDaCena(pAp, uAp, COR.ambar));
+      comAlfa(voo * pesoOrb, () => rotuloDaCena(t, pAp, uAp[0]));
+      comAlfa(voo * (1 - pesoOrb), () => textoCentro(t, COR.texto, pAp[0], pAp[1] - 17.5 < CENA.topo ? pAp[1] + 13 : pAp[1] - 12, 11));
     }
-    const rAlvo = exibido(raio + alvo) * cam.s, dx = 296 - CENA.x;
-    if (pesoTraj >= 0.5 && rAlvo > dx) texto(`ALVO ${formatarDistancia(alvo)}`, COR.ambar, 304, cy - Math.sqrt(rAlvo * rAlvo - dx * dx) - 4, "right", "bottom", 11);
+    const pPe = tela(exibido(rp), angulo(0)), uPe = fora(angulo(0));
+    if (pe > 0 && !longe(pPe)) {
+      comAlfa(voo * pesoOrb, () => {
+        marcaDaCena(pPe, uPe, COR.rotulo);
+        rotuloDaCena(`PE ${formatarDistancia(s.PE)}`, pPe, uPe[0]);
+      });
+    }
   }
+  const rAlvo = exibido(raio + alvo) * cam.s, dx = 296 - cx;
+  if (rAlvo > Math.abs(dx)) comAlfa(pesoTraj, () => texto(`ALVO ${formatarDistancia(alvo)}`, COR.ambar, 304, cy - Math.sqrt(rAlvo * rAlvo - dx * dx) - 4, "right", "bottom", 11));
 
   if (!longe(nave)) desenharFoguete(nave, eixo, limitar(fator, 83 / 256, 2), 5 * pesoPad, s.MOTOR || 0);
   ctx.restore();
