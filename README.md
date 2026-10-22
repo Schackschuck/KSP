@@ -94,6 +94,7 @@ Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o ende
 | **Cockpit em U, de 766 × 391 mm, com painéis de 125 mm** ([versão B](hardware/construcao.md#cockpit-versão-b)) | Um bloco no meio e duas asas, como num avião, sem painel vazio. Os controles foram juntados em 11 painéis para a caixa não passar de 80 cm; o que não cabe em 125 mm ocupa dois quadrados. O que cada botão faz foi conferido no código-fonte do kRPC antes de desenhar. |
 | **A mikromedia de volta**, no lugar da tela de 7" no HDMI do Pi | Sai mais barato: a placa já está na bancada, e o firmware dela já roda na placa, com o jogo. A tela de 2,8" é pequena para o meio do cockpit, que era o motivo da troca pela de 7"; as páginas têm que ser feitas para caber nela. A placa desenha sozinha a partir dos números que a ponte manda, pela USB do Pi. |
 | **Um tablet velho como tela**, o Galaxy Tab S 8.4 (SM-T705M, Android 6.0.1), no lugar da mikromedia | Já está na bancada e não serve mais para outra coisa. A tela de 8,4" com toque cabe no painel duplo, e o Chrome do Android 6 roda a mesma página do celular, sem firmware novo. A página chega pela Wi-Fi de casa, vinda do Pi, em HTTP: o tablet só precisa entrar na rede, sem internet. Ele fica no próprio carregador, porque numa USB do Pi a Samsung puxa só uns 0,5 A, que não seguram a tela ligada. A tela de 2,8" da mikromedia ficava pequena no meio do cockpit; ela sai de novo, e o firmware dela continua no repositório. |
+| **O mapa da órbita no tablet**, e não no monitor do PC | O monitor fica sempre na vista do foguete. O botão MAPA abre a página MAPA no tablet: a órbita em 3D, as luas, o alvo e o nó de manobra, girada e aproximada pelo toque ([docs/mfd.md](docs/mfd.md#a-página-mapa)). O mapa do jogo continua lá, mas o cockpit não precisa dele. |
 | **Pi ligado no PC por um cabo de rede direto**, com IP fixo dos dois lados, no lugar da Wi-Fi | A ida e volta pelo cabo fica abaixo de 0,5 ms e quase não varia; pela Wi-Fi são de 2 a 10 ms, com picos de 20 a 100 ms, e a variação atrapalha o fly by wire. Não depende do roteador, os endereços não mudam, e o PC e o Pi continuam na internet pela Wi-Fi. No PC só roda o KSP com o kRPC: a ponte abre sozinha no Pi e espera o jogo. Os 1 a 2 quadros de atraso do próprio kRPC continuam ([docs/setup-pi.md](docs/setup-pi.md#8-cabo-de-rede-direto-até-o-pc)). |
 | **Recursos na tela multifunção**, sem as barras de LED | Saem o MAX7219, as 5 barras de 10 LEDs e a fiação delas, e a tela já recebe tudo da ponte. O combustível, o oxidante, o monopropelente e a eletricidade vão para uma página da tela. |
 | **Caixa em MDF cortado a laser, com peças impressas em 3D** | A laser do colégio faz as peças planas e grandes (paredes, painéis com legendas); a impressora de casa, as pequenas e complicadas (korry, knobs, suportes). Cada seção é um painel removível com o seu módulo atrás. |
@@ -206,12 +207,13 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
 - [ ] Encoder AJUSTE: o Δv do editor e o alvo, quando a ponte da tela tiver as páginas deles.
 - [ ] Navegação: PROCURAR abre a página ALVO, e o AJUSTE escolhe o alvo; LIMPAR; REFERENCIA; trocar de nave.
 - [ ] Action groups 1 a 8 e os korry das peças (paraquedas, painéis solares, antenas, compartimento de carga), com a luz do estado.
-- [ ] Câmera: MAPA, IVA, MODO CAM, FOTO e ESCONDER.
+- [ ] Câmera: IVA, MODO CAM, FOTO e ESCONDER. O MAPA já existe na página de botões e abre a página MAPA do tablet.
 - [ ] Acelerador pela alavanca; TREM, FREIOS e LUZES em korry.
 - [ ] Sidestick: os 3 eixos pelo Mega, e o botão trocando o modo, com as luzes.
 - [ ] EVA, quando houver o kRPC 0.7: andar e voar pelo manche, JATO, LUZ, SAIR, EMBARCAR, AGARRAR e SOLTAR.
 - [x] Tela no tablet: a página SUBIDA no navegador, com o menu e o desenho do voo, como na mikromedia.
 - [ ] Testar a tela no Tab S pela Wi-Fi, em tela cheia.
+- [x] Página MAPA no tablet: a órbita em 3D, as luas, o alvo e o nó de manobra, no lugar do mapa do jogo ([docs/mfd.md](docs/mfd.md#a-página-mapa)). Depois: as trajetórias que trocam de esfera de influência.
 - [ ] Páginas novas na tela: ORBITA, DELTA-V, SUBIDA, ALVO, TEMPO, EVA e RECURSOS (combustível, oxidante, monopropelente e eletricidade, no lugar das barras de LED).
 
 **Pronto quando:** dá para lançar e colocar um foguete em órbita usando só o painel.
@@ -250,7 +252,7 @@ Versão completa, que recebe o IP como argumento, espera a cena de voo e explica
   - Korry NOVO (nó novo no apoastro), APAGAR e CIRC (circulariza no ponto do nó, com o Δv calculado pela ponte). Sem AP e PE: o tempo já leva o nó a qualquer ponto.
   - São 14 entradas e 3 LEDs (os korry de eixo): cabe numa placa média.
   - **Sem tela no módulo:** Δv, tempo de queima, T− até o nó e o Ap/Pe resultante aparecem numa página do editor na tela multifunção, que abre sozinha quando uma tecla ou botão do editor é usado (ver os [princípios](#princípios)).
-  - O botão MAPA (liga e desliga o mapa do jogo) fica na seção da câmera. A câmera do mapa (girar, aproximar, trocar o foco entre nave, nó e planeta) fica no joystick, no modo CÂMERA, não no editor.
+  - O botão MAPA fica na seção da câmera e abre a página MAPA do tablet, onde o nó aparece com a órbita depois dele. A câmera do mapa (girar e aproximar) é o toque no tablet, não o editor.
 - O que resta de combustível, oxidante, monopropelente e eletricidade vai para a página RECURSOS da tela multifunção, no lugar das barras de LED que estavam no painel da [EVA](hardware/construcao.md#eva).
 - Ponteiro analógico com motor de passo X27.168.
 - Fonte 5V externa (a USB não aguenta muitos LEDs).

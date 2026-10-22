@@ -8,7 +8,9 @@ pedidos. O painel só manda botões e cliques, e a ponte decide:
 - korry SAS e RCS: inverte o sistema; FBW e TRAVA: vão para o fbw.py;
 - encoder (ENC AP, BTN AP): o menu da página do piloto automático, na tela;
 - a página da tela: SAS ao mexer no SAS, AP ao mexer no encoder, e a navball
-  de novo PAGINA_DURA segundos depois do último toque.
+  de novo PAGINA_DURA segundos depois do último toque;
+- botão MAPA (BTN MAPA): liga e desliga o modo mapa, em que a tela volta
+  para a página MAPA em vez da navball.
 
 As luzes voltam nas mesmas linhas para o painel e para a tela. Protocolo em
 docs/protocolo.md#painel-de-sistemas-de-controle.
@@ -159,6 +161,7 @@ class Sistemas:
         self.menu = MenuPiloto()
         self.pagina = "NAV"
         self.pagina_base = "NAV"   # para onde a tela volta: a navball, ou a do script voando (POUSO)
+        self.mapa = False
         self._fecha_em = 0.0
         self._cor = CorDoModo()
         self._apv_enviados = {}
@@ -195,6 +198,13 @@ class Sistemas:
                 return True
             if nome == "AP":
                 self._encoder(apertou, None, agora, rumo, altitude)
+                return True
+            if nome == "MAPA":
+                if apertou:
+                    self.mapa = not self.mapa
+                    self._abrir("MAPA" if self.mapa else "NAV", agora)
+                    if not self.mapa:
+                        self._fecha_em = agora
                 return True
         if len(partes) == 3 and partes[0] == "ENC" and partes[1] == "AP":
             try:
@@ -257,6 +267,7 @@ class Sistemas:
             "SASM": sasm,
             "SEMEC": f"SEMEC {int(sas and sem_ec)}",
             "SEMMP": f"SEMMP {int(rcs and sem_mp)}",
+            "MAPA": f"MAPA {int(self.mapa)}",
         }
         estado.update(fbw)
         return estado
@@ -265,7 +276,7 @@ class Sistemas:
         """O que vai só para a tela: a página, o erro e o menu, além das luzes."""
         # SAS e RCS já vão para a tela pelos botões de toque (Transmissor), e
         # a falta de carga elétrica e de monopropelente é só do painel.
-        estado = {chave: linha for chave, linha in luzes.items() if chave not in ("SAS", "RCS", "SEMEC", "SEMMP", "GPWS")}
+        estado = {chave: linha for chave, linha in luzes.items() if chave not in ("SAS", "RCS", "SEMEC", "SEMMP", "GPWS", "MAPA")}
         estado["PAG"] = f"PAG {self.pagina}"
         estado["SASE"] = "SASE OFF" if erro is None or not sas else f"SASE {round(erro * 10)}"
         estado.update(self.menu.linhas())

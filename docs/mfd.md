@@ -47,7 +47,8 @@ A ponte não sabe qual tela está do outro lado: para usar a placa, basta trocar
 | [`bridge/mfd_celular.py`](../bridge/mfd_celular.py) | O servidor da tela no celular: serve a página e troca as mensagens pelo Wi-Fi |
 | [`bridge/celular/index.html`](../bridge/celular/index.html) | A página do celular: o "firmware" do navegador, com a mesma navball e o mesmo layout |
 | [`bridge/navball.py`](../bridge/navball.py) | A conta da navball, escrita para ser passada para C |
-| [`bridge/sistemas.py`](../bridge/sistemas.py) | O painel de sistemas de controle: modos do SAS, SAS, RCS, FBW, o menu do piloto automático e a troca de página |
+| [`bridge/sistemas.py`](../bridge/sistemas.py) | O painel de sistemas de controle: modos do SAS, SAS, RCS, FBW, o menu do piloto automático, o botão MAPA e a troca de página |
+| [`bridge/mapa.py`](../bridge/mapa.py) | O mapa da órbita: as linhas MAP, o conferidor delas e a demonstração |
 | [`bridge/avisos.py`](../bridge/avisos.py) | Os [avisos de voo](avisos.md) por voz (GPWS) e a luz GPWS do painel |
 | [`bridge/painel_scripts.py`](../bridge/painel_scripts.py) | O painel de scripts: o korry POUSO segurado 5 s abre e aborta o `scripts/pouso.py` num processo |
 | [`bridge/celular/painel.html`](../bridge/celular/painel.html) | A página de botões dos painéis de sistemas e de scripts, no lugar do painel de verdade |
@@ -245,6 +246,28 @@ Para não apagar: nas opções de desenvolvedor, ligar **Permanecer ativo**. A t
 
 - [ ] Testar no Tab S: a página pela Wi-Fi de casa, em tela cheia, com o toque e no carregador.
 - [x] A página SUBIDA no navegador: o menu e o voo, com o desenho, como na mikromedia.
+- [x] A página MAPA ([abaixo](#a-página-mapa)), testada com o `--demo`; os dados, com a nave em órbita no jogo.
+
+## A página MAPA
+
+O mapa da órbita fica no tablet, e não no monitor do PC, que fica sempre na vista do foguete. O botão **MAPA** (na página de botões, grupo CÂMERA; no cockpit, na seção da câmera) liga e desliga o modo mapa: a tela vai para a página MAPA e passa a voltar para ela, em vez da navball, depois que outra página (SAS, piloto, pouso) abre por cima. Com um script voando, a página dele vem antes. O korry fica azul com o modo ligado.
+
+É uma vista 3D do planeta em que a nave está, sem perspectiva:
+
+- **O planeta:** um globo com os mesmos continentes da página SUBIDA, girando com o jogo. O KSC fica na longitude dele (−74,6°), com o mar a leste, e o hemisfério sul repete o norte. A atmosfera é o anel azul em volta.
+- **A nave:** a órbita em verde, a nave como uma seta laranja no sentido do movimento, e as marcas do AP e do PE com a altitude. Em cima, à esquerda: o planeta, o AP, o PE (com o tempo até eles) e a inclinação.
+- **As luas:** a órbita em cinza, a lua na posição de agora e o nome. Aparecem dando zoom para fora.
+- **O alvo:** a órbita em rosa e o alvo. A maior aproximação são dois anéis (a nave em laranja, o alvo em rosa) ligados por um tracejado. Em cima, à direita: o nome, a distância e o tempo até ela.
+- **O nó de manobra:** o primeiro nó é um ponto azul na órbita, e a órbita depois dele fica tracejada em azul. Embaixo, à direita: o Δv e o tempo até o nó. Combina com o [editor de manobras](manobras.md): o nó é planejado olhando o tablet.
+- **O que fica atrás do planeta** aparece bem apagado.
+
+**O toque:** um dedo gira a câmera, dois dedos dão zoom (do planeta enchendo a tela até a esfera de influência), e dois toques rápidos voltam à vista padrão: 30° acima do equador, com a nave na frente e a órbita inteira na tela. No PC, a roda do mouse dá zoom.
+
+**Como a tela anda lisa:** a ponte manda os elementos da órbita 1 vez por segundo ([protocolo](protocolo.md#mapa)), e a tela leva cada objeto pela lei de Kepler entre uma linha e outra. O globo é pintado ponto a ponto, como a navball, e só é refeito quando a câmera mexe ou o planeta gira um décimo de grau (2,4 ms no PC; no tablet, bem mais, mas raramente).
+
+**Ainda não:** a trajetória que entra na esfera de influência de uma lua e sai dela, a vista centrada noutro corpo, e escolher o alvo ou mexer no nó pelo toque.
+
+Testar sem o jogo: `python mfd.py --demo --celular`, o MAPA na página de botões. A demonstração tem a nave numa órbita de 80 × 100 km a 5°, a Mun e Minmus de verdade, uma estação como alvo e um nó de manobra a cada 90 s, por 30 s.
 
 ## Painel de scripts e a página do pouso
 

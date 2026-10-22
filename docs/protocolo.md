@@ -184,10 +184,11 @@ Linhas do painel de sistemas de controle ([desenho](../hardware/construcao.md#pa
 | `BTN TRAVA 1` | O korry TRAVA ALT foi apertado | Trava a altitude do momento, ou destrava |
 | `ENC AP <cliques>` | O encoder girou | Cliques com sinal, horário positivo. Vários cliques podem ir numa linha só |
 | `BTN AP 1`, `BTN AP 0` | O encoder foi apertado e solto | Solto antes de 1 s: escolhe ou sai da linha do menu. Segurado 1 s: liga ou desliga o modo da linha, na hora, sem esperar soltar |
+| `BTN MAPA 1` | O botão MAPA (seção da câmera) foi apertado | Liga ou desliga o modo mapa: a tela vai para a página `MAPA` e passa a voltar para ela, e não para a navball. Apertar de novo volta à navball |
 
 ### Ponte → painel e tela
 
-As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão quando mudam e também 1 vez por segundo, calculadas 20 vezes por segundo. A tela não recebe `SEMEC`, `SEMMP` nem `GPWS`, e o painel não recebe `SASE`, `APV`, `APC` nem `PAG`.
+As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão quando mudam e também 1 vez por segundo, calculadas 20 vezes por segundo. A tela não recebe `SEMEC`, `SEMMP`, `GPWS` nem `MAPA`, e o painel não recebe `SASE`, `APV`, `APC` nem `PAG`.
 
 | Mensagem | Valores | No painel | Na tela |
 |---|---|---|---|
@@ -201,9 +202,10 @@ As mesmas linhas acendem os LEDs do painel e desenham as páginas da tela. Vão 
 | `APL <HDG\|ALT\|VS> <0\|1\|2>` | Modo do piloto: `0` desligado, `1` ligado, `2` armado (o ALT subindo ou descendo até a altitude) | Luz do modo, verde com `1` ou `2` | Azul armado, verde ligado |
 | `APV <HDG\|ALT\|VS> <valor>` | O valor escolhido: rumo em graus (0 a 359), altitude em metros, velocidade vertical em décimos de m/s | — | O valor da linha |
 | `APC <HDG\|ALT\|VS> <0\|1>` | A linha do cursor, e `1` se ela está escolhida (girar muda o valor) | — | O cursor, ou a caixa âmbar no valor |
-| `PAG <NAV\|SAS\|AP\|POUSO\|SUBIDA>` | A página que a tela mostra. `POUSO` e `SUBIDA` são as do [painel de scripts](#painel-de-scripts); a `SUBIDA`, a mikromedia e o celular desenham, e o simulador mostra a navball no lugar dela | — | Troca a página |
+| `MAPA <0\|1>` | `1` com o modo mapa ligado | MAPA azul | — |
+| `PAG <NAV\|SAS\|AP\|POUSO\|SUBIDA\|MAPA>` | A página que a tela mostra. `POUSO` e `SUBIDA` são as do [painel de scripts](#painel-de-scripts); a `SUBIDA`, a mikromedia e o celular desenham, e o simulador mostra a navball no lugar dela. O `MAPA` ([abaixo](#mapa)) só o celular desenha | — | Troca a página |
 
-- **A página é da ponte.** Apertar um modo, o SAS ou o RCS abre a página `SAS`; mexer no encoder abre a `AP`. Uns 10 s depois do último toque no painel, a ponte manda `PAG NAV`.
+- **A página é da ponte.** Apertar um modo, o SAS ou o RCS abre a página `SAS`; mexer no encoder abre a `AP`. Uns 10 s depois do último toque no painel, a ponte manda `PAG NAV`, ou `PAG MAPA` com o modo mapa ligado. Com um script voando, a página dele vem antes do mapa.
 - **O valor muda de 1 em 1** (1°, 10 m, 0,1 m/s) girando devagar, e de 10 em 10 girando rápido: com mais de um clique numa linha, ou menos de 80 ms desde a última.
 - **O menu é da ponte**, como o eixo do editor de manobras: o painel só manda cliques e apertos.
 
@@ -312,3 +314,32 @@ O `scripts/subida.py` manda como o pouso: UDP para a porta **50100**, 10 vezes p
 | `SUB CORPO <nome>` | O nome do planeta, em maiúsculas, só letras e dígitos (até 12): `KERBIN`, `MUN`, `MINMUS`... | O desenho do planeta: Kerbin com mar, continentes e gelo, a Mun cinza com crateras, Minmus verde-claro; outro, um disco cinza. O KSC só aparece em Kerbin |
 | `SUB AVISO <aviso>` ou `SUB AVISO OFF` | O aviso mais importante: `COMBUSTIVEL` (acabou antes da órbita), `ALVO` (sem alvo para o plano, ou alvo noutro planeta), `ALTITUDE` (dentro do ar), `INCLINACAO` (menor que a latitude da base), `EMPUXO` (empuxo/peso baixo) | O aviso em vermelho, piscando |
 | `SUB OFF` | Só da ponte para a tela: a subida não está mandando | Volta para a configuração |
+
+## Mapa
+
+Só para a tela no navegador (o celular e o tablet). A mikromedia não desenha a página `MAPA`, e o simulador aceita e ignora estas linhas. Com a página `MAPA` aberta, a ponte manda tudo 1 vez por segundo, e também logo que a página abre e quando a tela manda `READY`. Ângulos em décimos de grau, distâncias em metros e tempos em segundos. O mapa e a página estão em [docs/mfd.md](mfd.md#a-página-mapa).
+
+**O planeta em que a nave está:**
+
+| Mensagem | Valores |
+|---|---|
+| `MAP CORPO <nome>` | O nome, em maiúsculas, com `A-Z`, `0-9` e `_` no lugar do espaço, até 16 caracteres (o mesmo vale para os outros nomes) |
+| `MAP RAIO <m>`, `MAP TOPO <m>` | O raio e o topo da atmosfera (0 sem ar) |
+| `MAP SOI <m>` ou `MAP SOI OFF` | A esfera de influência (`OFF` no Sol) |
+| `MAP MU <km³/s²>` | O parâmetro gravitacional: com ele, a tela anda com as órbitas entre uma linha e outra |
+| `MAP GIRO <décimos>` | O ângulo de rotação do planeta, no mesmo referencial dos elementos: a longitude de um ponto da órbita é `LAN + ARG + ANOM − GIRO` |
+
+**As órbitas.** `<obj>` é `NAVE`, `ALVO`, `NO` (a órbita depois do primeiro nó de manobra) ou `L1` a `L4` (as luas do planeta, até 4). `MAP <obj> OFF` apaga o objeto: o alvo noutro planeta, nenhum nó, a lua que falta.
+
+| Mensagem | Valores |
+|---|---|
+| `MAP <obj> A <m>` | Semieixo maior, negativo numa trajetória de escape |
+| `MAP <obj> E <milionésimos>` | Excentricidade |
+| `MAP <obj> INC <décimos>`, `LAN`, `ARG` | Inclinação, longitude do nó ascendente e argumento do periastro |
+| `MAP <obj> ANOM <décimos>` | A anomalia verdadeira agora (0 no periastro) |
+| `MAP L<n> NOME <nome>`, `MAP L<n> RAIO <m>` | O nome e o raio da lua |
+| `MAP ALVO NOME <nome>` | O nome do alvo |
+| `MAP ALVO DMIN <m>`, `MAP ALVO TMIN <s>` | A distância na maior aproximação e o tempo até ela (ou `OFF`) |
+| `MAP ALVO NMIN <décimos>`, `MAP ALVO AMIN <décimos>` | A anomalia da nave e a do alvo na maior aproximação (ou `OFF`) |
+| `MAP NO NANOM <décimos>` | Onde o nó fica na órbita da nave (anomalia verdadeira) |
+| `MAP NO T <s>`, `MAP NO DV <décimos de m/s>` | O tempo até o nó e o Δv que falta nele |

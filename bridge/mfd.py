@@ -67,6 +67,7 @@ import serial
 
 from ajuste import Ajuste, EncoderSerial
 from avisos import FRASES, Avisos, Voo, Voz
+from mapa import LUAS_MAX, MapaDemo, Orbita, linhas_do_mapa
 from painel_scripts import MenuSubida, PainelScripts, processo_pouso, processo_subida
 from ponte import BAUD, ESPERA_READY, Painel, manter_krpc
 from sistemas import Remetente, Sistemas
@@ -88,6 +89,21 @@ MAX_PACOTE = 512          # bytes: um pacote do fbw.py, com o ponto, a lei, a tr
 RECURSO_MIN = 0.01        # abaixo disso, o recurso acabou (SEM EC, SEM MP)
 PORTA_PAINEL = 8001       # a página de botões do painel de sistemas
 INTERVALO_LUZES = 0.05    # s: as luzes do painel de sistemas e as páginas dele, 20 vezes por segundo
+INTERVALO_MAPA = 1.0
+
+CAMPOS_ORBITA = {
+    "a": "semi_major_axis", "e": "eccentricity", "inc": "inclination",
+    "lan": "longitude_of_ascending_node", "arg": "argument_of_periapsis", "anom": "true_anomaly",
+}
+
+
+def orbita_de(valores):
+    """Orbita a partir dos elementos do kRPC (ângulos em radianos)."""
+    return Orbita(valores["a"], valores["e"], *(math.degrees(valores[c]) for c in ("inc", "lan", "arg", "anom")))
+
+
+def ler_orbita(orbita):
+    return orbita_de({campo: getattr(orbita, nome) for campo, nome in CAMPOS_ORBITA.items()})
 
 # Modo do SAS no protocolo → nome do modo no kRPC (SASMode).
 MODOS_KRPC = {
@@ -618,6 +634,8 @@ class NaveKrpc:
 
         self._superficie = superficie
         self._alvo = None          # o alvo atual, como objeto do kRPC
+        self._tipo_alvo = None
+        self._mapa = None
         self._nome_alvo = None
         self._streams_alvo = {}    # posição e velocidade do alvo atual
         self._no = None            # o próximo nó de manobra
@@ -639,6 +657,7 @@ class NaveKrpc:
             antigo.remove()
         self._streams_alvo = {}
         self._alvo = alvo
+        self._tipo_alvo = tipo
         if alvo is None:
             self._nome_alvo = None
             print("Alvo: nenhum")
@@ -743,11 +762,79 @@ class NaveKrpc:
         except (ValueError, RuntimeError) as e:
             print(f"Não foi possível mudar {nome}: {e}")
 
+    def _preparar_mapa(self):
+        """Os streams do mapa: só na primeira vez que a página MAPA abre."""
+        stream = self._conn.add_stream
+        corpo = self.corpo
+        luas = []
+        for lua in corpo.satellites[:LUAS_MAX]:
+            fixos = ler_orbita(lua.orbit)
+            luas.append((lua.name, lua.equatorial_radius, fixos, stream(getattr, lua.orbit, "true_anomaly")))
+        self._mapa = {
+            "corpo": {"nome": corpo.name, "raio": self._raio, "topo": corpo.atmosphere_depth,
+                      "soi": corpo.sphere_of_influence, "mu": corpo.gravitational_parameter},
+            "giro": stream(getattr, corpo, "rotation_angle"),
+            "ut": stream(getattr, self._conn.space_center, "ut"),
+            "nave": {campo: stream(getattr, self._nave.orbit, nome) for campo, nome in CAMPOS_ORBITA.items()},
+            "luas": luas,
+        }
+
+    def _alvo_do_mapa(self):
+        """A órbita do alvo e a maior aproximação, se ele gira em volta do mesmo planeta."""
+        if self._alvo is None:
+            return None
+        dono = self._alvo.part.vessel if self._tipo_alvo == "porta" else self._alvo
+        orbita = dono.orbit
+        if orbita is None or orbita.body != self.corpo:
+            return None
+        minha = self._nave.orbit
+        quando = minha.time_of_closest_approach(orbita)
+        return {
+            "nome": self._nome_alvo,
+            "orbita": ler_orbita(orbita),
+            "dmin": minha.distance_at_closest_approach(orbita),
+            "tmin": quando - self._mapa["ut"](),
+            "nmin": math.degrees(minha.true_anomaly_at_ut(quando)),
+            "amin": math.degrees(orbita.true_anomaly_at_ut(quando)),
+        }
+
+    def _no_do_mapa(self):
+        """A órbita depois do primeiro nó, se ela continua no mesmo planeta."""
+        no = self._no
+        if no is None:
+            return None
+        orbita = no.orbit
+        if orbita.body != self.corpo:
+            return None
+        return {
+            "orbita": ler_orbita(orbita),
+            "nanom": math.degrees(self._nave.orbit.true_anomaly_at_ut(no.ut)),
+            "t": no.time_to,
+            "dv": no.remaining_delta_v,
+        }
+
+    def dados_mapa(self):
+        """O que a página MAPA desenha (bridge/mapa.py, linhas_do_mapa)."""
+        if self._mapa is None:
+            self._preparar_mapa()
+        m = self._mapa
+        luas = [(nome, raio, fixos._replace(anom=math.degrees(anom()) % 360)) for nome, raio, fixos, anom in m["luas"]]
+        return {
+            "corpo": dict(m["corpo"], giro=math.degrees(m["giro"]())),
+            "nave": orbita_de({campo: s() for campo, s in m["nave"].items()}),
+            "luas": luas,
+            "alvo": self._alvo_do_mapa(),
+            "no": self._no_do_mapa(),
+        }
+
     def remover(self):
         for s in (*self._streams.values(), *self._streams_alvo.values()):
             s.remove()
         if self._stream_no is not None:
             self._stream_no.remove()
+        if self._mapa is not None:
+            for s in (self._mapa["giro"], self._mapa["ut"], *self._mapa["nave"].values(), *(lua[3] for lua in self._mapa["luas"])):
+                s.remove()
 
 
 class Demo:
@@ -773,6 +860,7 @@ class Demo:
         self._sas_desde = -math.inf   # quando o modo foi escolhido
         self.fbw = FbwDemo()
         self._udp = Scripts()         # o pouso.py e o subida.py --demo mandam o estado por UDP, como no jogo
+        self._mapa = MapaDemo()
 
     def ler(self):
         t = time.monotonic() - self._inicio
@@ -875,6 +963,9 @@ class Demo:
 
     def estado_subida(self):
         return self._udp.estado_subida()
+
+    def dados_mapa(self):
+        return self._mapa.dados()
 
     def remover(self):
         pass
@@ -1005,7 +1096,7 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
         elif not sistemas.tratar(linha, agora, t.rumo, t.altitude):
             print(f"Linha desconhecida do painel: {linha[:40]}")
 
-    proxima_verificacao = proximas_luzes = 0.0
+    proxima_verificacao = proximas_luzes = proximo_mapa = 0.0
     while True:
         agora = time.monotonic()
         t = fonte.ler()
@@ -1014,9 +1105,11 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
             voz.falar(fala)
 
         anterior = modo.modo
+        pagina_antes = sistemas.pagina
         for linha in tela.linhas():
             if tratar_mensagem(linha, fonte, transmissor, modo):
                 luzes_tela.esquecer()
+                proximo_mapa = 0.0
         if painel is not None:
             for linha in painel.linhas():
                 if linha == "READY":
@@ -1030,10 +1123,17 @@ def voar(tela, transmissor, fonte, scripts, continua_valida, painel=None, sistem
                     do_painel(traduzida)
         painel_scripts.atualizar(agora)
         # Com um script voando, a tela fica na página dele, e não na navball.
-        sistemas.pagina_base = painel_scripts.pagina_em_uso(agora) or "NAV"
+        sistemas.pagina_base = painel_scripts.pagina_em_uso(agora) or ("MAPA" if sistemas.mapa else "NAV")
         sistemas.atualizar(agora)
         if sistemas.pagina != "SUBIDA":
             painel_scripts.sair_do_menu()
+        if sistemas.pagina == "MAPA" and (pagina_antes != "MAPA" or agora >= proximo_mapa):
+            proximo_mapa = agora + INTERVALO_MAPA
+            try:
+                for linha in linhas_do_mapa(fonte.dados_mapa()):
+                    tela.enviar(linha)
+            except (ValueError, RuntimeError) as e:
+                print(f"Mapa: o jogo não respondeu ({e})")
         atual = modo.atualizar(t)
         if atual != anterior:
             print(f"Modo da navball: {atual}")
