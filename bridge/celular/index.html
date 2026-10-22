@@ -190,6 +190,43 @@ const estado = {
 
 const cena = { modo: null, antes: null, desde: 0, chao: null };
 
+const SUAVE = { campos: ["ALT", "ANOM", "AP", "PE"], janela: 400, guarda: 1500, maximo: 500, correcao: 150 };
+let suave = {};
+
+function valorSuave(campo, agora) {
+  const s = suave[campo];
+  if (!s) return null;
+  const dt = limitar(agora - s.t, 0, SUAVE.maximo);
+  const k = Math.max(0, 1 - Math.max(0, agora - s.t) / SUAVE.correcao);
+  return s.v + s.taxa * dt + s.desvio * k;
+}
+
+function registrarSuave(campo, valor, agora) {
+  if (!SUAVE.campos.includes(campo)) return;
+  if (valor === null) {
+    delete suave[campo];
+    return;
+  }
+  const s = suave[campo];
+  if (!s) {
+    suave[campo] = { amostras: [[agora, valor]], bruto: valor, v: valor, t: agora, taxa: 0, desvio: 0 };
+    return;
+  }
+  const antes = valorSuave(campo, agora);
+  let passo = valor - s.bruto;
+  if (campo === "ANOM") passo = ((passo % 3600) + 5400) % 3600 - 1800;
+  const v = s.v + passo;
+  s.amostras.push([agora, v]);
+  while (s.amostras.length > 1 && agora - s.amostras[0][0] > SUAVE.guarda) s.amostras.shift();
+  let ref = null;
+  for (const amostra of s.amostras) if (agora - amostra[0] >= SUAVE.janela) ref = amostra;
+  s.taxa = ref ? (v - ref[1]) / (agora - ref[0]) : 0;
+  s.bruto = valor;
+  s.v = v;
+  s.t = agora;
+  s.desvio = antes - v;
+}
+
 function inteiro(texto) {
   return /^[+-]?[0-9]+$/.test(texto) ? parseInt(texto, 10) : null;
 }
@@ -199,6 +236,7 @@ function linhaDaSubida(nome, partes, numeros) {
     if (partes.length === 1 && partes[0] === "OFF") {
       estado.subida = subidaVazia();
       cena.modo = cena.chao = null;
+      suave = {};
       return true;
     }
     if (partes.length !== 2) return false;
@@ -209,6 +247,7 @@ function linhaDaSubida(nome, partes, numeros) {
     }
     if (!CAMPOS_SUBIDA.includes(campo) || (numeros[1] === null && valor !== "OFF")) return false;
     estado.subida[campo] = numeros[1];
+    registrarSuave(campo, numeros[1], performance.now());
     return true;
   }
   if (nome === "SBV" && partes.length === 2 && LINHAS_MENU_SUBIDA.includes(partes[0]) && numeros[1] !== null) {
@@ -982,10 +1021,14 @@ function desenharCenaSubida(agora) {
   const raio = limitar(s.RAIO, 1000, 1e8);
   const alvo = limitar(s.ALVO || 0, 10000, 2.5e8);
   const topo = limitar(s.TOPO || 0, 0, 1e7);
-  const alt = s.ALT || 0;
+  const lido = (campo) => {
+    const v = valorSuave(campo, agora);
+    return v === null ? s[campo] : v;
+  };
+  const alt = lido("ALT") || 0;
   const apOk = s.AP !== null, peOk = s.PE !== null;
-  const ap = apOk ? Math.min(s.AP, 9e8) : 0, pe = peOk ? Math.min(s.PE, 9e8) : 0;
-  const nu = ((((s.ANOM === null ? 1800 : s.ANOM) % 3600) + 3600) % 3600) / 10;
+  const ap = apOk ? Math.min(lido("AP"), 9e8) : 0, pe = peOk ? Math.min(lido("PE"), 9e8) : 0;
+  const nu = ((((s.ANOM === null ? 1800 : lido("ANOM")) % 3600) + 3600) % 3600) / 10;
   const ra = raio + ap, rp = Math.max(1, raio + pe);
   const conica = apOk && peOk && rp <= ra;
   const e = conica ? (ra - rp) / (ra + rp) : 0, p = conica ? 2 * ra * rp / (ra + rp) : 0;
@@ -1007,7 +1050,7 @@ function desenharCenaSubida(agora) {
     cena.modo = pedido;
     cena.desde = agora;
   }
-  if (s.FASE === "JANELA" || s.FASE === "DECOLAGEM") cena.chao = cena.chao === null ? alt : Math.min(cena.chao, alt);
+  if (s.FASE === "JANELA" || s.FASE === "DECOLAGEM") cena.chao = cena.chao === null ? s.ALT || 0 : Math.min(cena.chao, s.ALT || 0);
   const sobreChao = alt - (cena.chao || 0);
   const t = limitar((agora - cena.desde) / CENA.zoom, 0, 1);
   const b = t * t * t * (t * (6 * t - 15) + 10);
