@@ -34,6 +34,7 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pygame
 
 import navball
+from mapa import linha_valida as linha_do_mapa_valida
 
 LARGURA, ALTURA = 320, 240
 MAX_LINHA = 31          # linhas maiores são descartadas inteiras, como no painel
@@ -367,8 +368,8 @@ class Simulador:
             self._numeros[nome] = numeros[0]
         elif nome in ("SAS", "RCS") and partes in (["0"], ["1"]):
             self._estados[nome] = partes[0] == "1"
-        elif nome == "PAG" and partes in (["NAV"], ["SAS"], ["AP"], ["POUSO"], ["SUBIDA"]):
-            self._pagina = "NAV" if partes[0] == "SUBIDA" else partes[0]
+        elif nome == "PAG" and partes in (["NAV"], ["SAS"], ["AP"], ["POUSO"], ["SUBIDA"], ["MAPA"]):
+            self._pagina = "NAV" if partes[0] in ("SUBIDA", "MAPA") else partes[0]
         elif nome == "SASM" and partes == ["OFF"]:
             self._sas["modo"] = self._sas["cor"] = None
         elif nome == "SASM" and len(partes) == 2 and partes[1] in ("A", "V"):
@@ -387,6 +388,8 @@ class Simulador:
         elif nome == "SCR" and len(partes) == 3 and partes[0] in SCRIPTS and partes[1] in ("LIGA", "DESL") and numeros[2] is not None:
             if partes[0] == "POUSO":
                 self._scr = (partes[1], numeros[2])
+        elif nome == "MAP" and linha_do_mapa_valida(mensagem):
+            pass
         elif _linha_da_subida(nome, partes, numeros):
             pass
         elif nome == "POU" and partes == ["OFF"]:

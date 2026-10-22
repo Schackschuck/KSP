@@ -193,6 +193,62 @@ const cena = { modo: null, antes: null, desde: 0, chao: null };
 const SUAVE = { campos: ["ALT", "ANOM", "AP", "PE"], janela: 400, guarda: 1500, maximo: 500, correcao: 150 };
 let suave = {};
 
+const MAPA = {
+  cx: 160, cy: 128, encaixe: 100, elevacao: 30, pontos: 160, globoMax: 320, globoArrastando: 160,
+  lonKsc: -74.56, grauPorUnidade: 0.4, doisToques: 300, atras: 0.18,
+};
+const OBJETOS_MAPA = ["NAVE", "ALVO", "NO", "L1", "L2", "L3", "L4"];
+const CAMPOS_ORBITA_MAPA = ["A", "E", "INC", "LAN", "ARG", "ANOM"];
+const CAMPOS_EXTRA_MAPA = {
+  ALVO: { DMIN: true, TMIN: true, NMIN: true, AMIN: true },
+  NO: { NANOM: false, T: true, DV: true },
+  L1: { RAIO: false }, L2: { RAIO: false }, L3: { RAIO: false }, L4: { RAIO: false },
+};
+const CAMPOS_CORPO_MAPA = { RAIO: false, TOPO: false, SOI: true, MU: false, GIRO: false };
+const CORES_LUAS = { MUN: COR_CENA.mun, MINMUS: COR_CENA.minmus };
+const mapa = { corpo: {}, objetos: {}, camera: { az: null, el: MAPA.elevacao, extensao: null }, globo: null, polar: null };
+
+function linhaDoMapa(partes, numeros) {
+  const agora = performance.now();
+  const nomeValido = (v) => /^[A-Z0-9_]{1,16}$/.test(v);
+  if (partes.length === 2) {
+    const [campo, valor] = partes;
+    if (campo === "CORPO") {
+      if (!nomeValido(valor)) return false;
+      if (mapa.corpo.CORPO !== valor) {
+        mapa.polar = mapa.globo = null;
+        mapa.camera = { az: null, el: MAPA.elevacao, extensao: null };
+      }
+      mapa.corpo.CORPO = valor;
+      return true;
+    }
+    if (campo in CAMPOS_CORPO_MAPA) {
+      if (numeros[1] === null && !(CAMPOS_CORPO_MAPA[campo] && valor === "OFF")) return false;
+      mapa.corpo[campo] = numeros[1];
+      return true;
+    }
+    if (OBJETOS_MAPA.includes(campo) && valor === "OFF") {
+      delete mapa.objetos[campo];
+      return true;
+    }
+    return false;
+  }
+  if (partes.length !== 3 || !OBJETOS_MAPA.includes(partes[0])) return false;
+  const [obj, campo, valor] = partes;
+  const extras = CAMPOS_EXTRA_MAPA[obj] || {};
+  if (campo === "NOME" && (obj === "ALVO" || obj[0] === "L")) {
+    if (!nomeValido(valor)) return false;
+    (mapa.objetos[obj] = mapa.objetos[obj] || {}).NOME = valor.replace(/_/g, " ");
+    return true;
+  }
+  if (!CAMPOS_ORBITA_MAPA.includes(campo) && !(campo in extras)) return false;
+  if (numeros[2] === null && !(extras[campo] && valor === "OFF")) return false;
+  const o = mapa.objetos[obj] = mapa.objetos[obj] || {};
+  o[campo] = numeros[2];
+  o["quando" + campo] = agora;
+  return true;
+}
+
 function valorSuave(campo, agora) {
   const s = suave[campo];
   if (!s) return null;
@@ -284,7 +340,7 @@ function interpretar(mensagem) {
     n[nome] = numeros[0];
   } else if ((nome === "SAS" || nome === "RCS") && partes.length === 1 && (partes[0] === "0" || partes[0] === "1")) {
     estado.estados[nome] = partes[0] === "1";
-  } else if (nome === "PAG" && partes.length === 1 && ["NAV", "SAS", "AP", "POUSO", "SUBIDA"].includes(partes[0])) {
+  } else if (nome === "PAG" && partes.length === 1 && ["NAV", "SAS", "AP", "POUSO", "SUBIDA", "MAPA"].includes(partes[0])) {
     estado.pagina = partes[0];
   } else if (nome === "SASM" && off) {
     estado.sas.modo = estado.sas.cor = null;
@@ -303,6 +359,8 @@ function interpretar(mensagem) {
   } else if (nome === "SCR" && partes.length === 3 && SCRIPTS.includes(partes[0]) && ["LIGA", "DESL"].includes(partes[1]) && numeros[2] !== null) {
     estado[partes[0] === "POUSO" ? "scr" : "lancar"] = [partes[1], numeros[2]];
   } else if (linhaDaSubida(nome, partes, numeros)) {
+    return true;
+  } else if (nome === "MAP" && linhaDoMapa(partes, numeros)) {
     return true;
   } else if (nome === "POU" && off) {
     estado.pouso = pousoVazio();
@@ -1268,6 +1326,369 @@ function desenharPaginaSubida(agora) {
   caixaSegurar(estado.lancar[0], estado.lancar[1], "PARA LANCAR");
 }
 
+function mediaDe(e, nu) {
+  if (e < 1) {
+    const E = 2 * Math.atan2(Math.sqrt(1 - e) * Math.sin(nu / 2), Math.sqrt(1 + e) * Math.cos(nu / 2));
+    return E - e * Math.sin(E);
+  }
+  const H = 2 * Math.atanh(Math.sqrt((e - 1) / (e + 1)) * Math.tan(nu / 2));
+  return e * Math.sinh(H) - H;
+}
+
+function anomaliaDe(e, M) {
+  if (e < 1) {
+    const m = ((M + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+    let E = e < 0.8 ? m : Math.PI;
+    for (let i = 0; i < 30; i++) {
+      const d = (E - e * Math.sin(E) - m) / (1 - e * Math.cos(E));
+      E -= d;
+      if (Math.abs(d) < 1e-10) break;
+    }
+    return 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
+  }
+  let H = Math.asinh(M / e);
+  for (let i = 0; i < 30; i++) {
+    const d = (e * Math.sinh(H) - H - M) / (e * Math.cosh(H) - 1);
+    H -= d;
+    if (Math.abs(d) < 1e-10) break;
+  }
+  return 2 * Math.atan2(Math.sqrt(e + 1) * Math.sinh(H / 2), Math.sqrt(e - 1) * Math.cosh(H / 2));
+}
+
+function orbitaCompleta(o) {
+  return !!o && CAMPOS_ORBITA_MAPA.every((c) => typeof o[c] === "number");
+}
+
+function raioNaOrbita(o, nu) {
+  const e = o.E / 1e6;
+  return o.A * (1 - e * e) / (1 + e * Math.cos(nu));
+}
+
+function posicaoNaOrbita(o, nu) {
+  const r = raioNaOrbita(o, nu);
+  const xp = r * Math.cos(nu), yp = r * Math.sin(nu);
+  const i = o.INC / 10 * RAD, an = o.LAN / 10 * RAD, w = o.ARG / 10 * RAD;
+  const cO = Math.cos(an), sO = Math.sin(an), ci = Math.cos(i), si = Math.sin(i), cw = Math.cos(w), sw = Math.sin(w);
+  return [
+    (cO * cw - sO * sw * ci) * xp + (-cO * sw - sO * cw * ci) * yp,
+    (sO * cw + cO * sw * ci) * xp + (-sO * sw + cO * cw * ci) * yp,
+    sw * si * xp + cw * si * yp,
+  ];
+}
+
+function anomaliaAgora(o, agora) {
+  const e = o.E / 1e6, nu = o.ANOM / 10 * RAD;
+  const mu = (mapa.corpo.MU || 0) * 1e9;
+  if (!mu || !o.A || o.quandoANOM === undefined) return nu;
+  const dt = limitar((agora - o.quandoANOM) / 1000, 0, 5);
+  return anomaliaDe(e, mediaDe(e, nu) + Math.sqrt(mu / Math.abs(o.A) ** 3) * dt);
+}
+
+function faixaDaOrbita(o) {
+  const e = o.E / 1e6;
+  if (e < 1) return [0, 2 * Math.PI];
+  let limite = Math.acos(-1 / e) - 0.01;
+  const soi = mapa.corpo.SOI;
+  if (soi) {
+    const p = o.A * (1 - e * e);
+    limite = Math.min(limite, Math.acos(limitar((p / soi - 1) / e, -1, 1)));
+  }
+  return [-limite, limite];
+}
+
+function tempoDesde(o, campo, agora) {
+  const v = o[campo];
+  if (typeof v !== "number") return null;
+  return Math.max(0, Math.round(v - (agora - o["quando" + campo]) / 1000));
+}
+
+function mapaPolar(corpo) {
+  const n = 256, r = n / 2;
+  const c = document.createElement("canvas");
+  c.width = c.height = n;
+  const g = c.getContext("2d");
+  const ponto = (phi, f) => [r + r * f * Math.cos(phi * RAD), r - r * f * Math.sin(phi * RAD)];
+  const disco = ([x, y], raio, cor, contorno) => {
+    g.beginPath();
+    g.arc(x, y, raio, 0, 2 * Math.PI);
+    if (contorno) { g.strokeStyle = cor; g.lineWidth = 2; g.stroke(); } else { g.fillStyle = cor; g.fill(); }
+  };
+  const area = (pontos, cor) => {
+    g.beginPath();
+    pontos.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+    g.closePath();
+    g.fillStyle = cor;
+    g.fill();
+  };
+  g.fillStyle = { KERBIN: COR_CENA.mar, MUN: COR_CENA.mun, MINMUS: COR_CENA.minmus }[corpo] || COR_CENA.outro;
+  g.fillRect(0, 0, n, n);
+  if (corpo === "KERBIN") {
+    for (const [leste, oeste, dentro] of CONTINENTES) {
+      g.beginPath();
+      g.arc(r, r, r, -leste * RAD, -oeste * RAD, true);
+      for (const [phi, f] of dentro) g.lineTo(...ponto(phi, f));
+      g.closePath();
+      g.fillStyle = COR_CENA.terra;
+      g.fill();
+    }
+    for (const [phi, f, raio] of ILHAS) disco(ponto(phi, f), r * raio, COR_CENA.terra);
+    area(GELO.map((f, i) => ponto(i * 30, f)), COR_CENA.gelo);
+  } else if (corpo === "MUN") {
+    for (const mar of MARES_MUN) area(mar.map(([phi, f]) => ponto(phi, f)), COR_CENA.manchaMun);
+    for (const [phi, f, raio] of CRATERAS_MUN) disco(ponto(phi, f), r * raio, COR_CENA.manchaMun, true);
+  } else if (corpo === "MINMUS") {
+    for (const [phi, f, raio] of PLANOS_MINMUS) disco(ponto(phi, f), r * raio, COR_CENA.manchaMinmus);
+  }
+  return { n, dados: g.getImageData(0, 0, n, n).data };
+}
+
+function globoDoMapa(cam, tamanho) {
+  const giro = (mapa.corpo.GIRO || 0) / 10;
+  const chave = [mapa.corpo.CORPO, tamanho, mapa.camera.az.toFixed(2), mapa.camera.el.toFixed(2), giro.toFixed(1)].join(" ");
+  if (mapa.globo && mapa.globo.chave === chave) return mapa.globo.canvas;
+  if (!mapa.polar) mapa.polar = mapaPolar(mapa.corpo.CORPO);
+  const canvasGlobo = mapa.globo && mapa.globo.canvas.width === tamanho ? mapa.globo.canvas : document.createElement("canvas");
+  canvasGlobo.width = canvasGlobo.height = tamanho;
+  const g = canvasGlobo.getContext("2d");
+  const imagem = g.createImageData(tamanho, tamanho);
+  const d = imagem.data, P = mapa.polar.dados, np = mapa.polar.n, rp = np / 2 - 0.5;
+  const ang = (giro + MAPA.lonKsc) * RAD, ca = Math.cos(ang), sa = Math.sin(ang);
+  const { dir, cima, frente } = cam;
+  const meio = (tamanho - 1) / 2;
+  for (let i = 0; i < tamanho; i++) {
+    for (let j = 0; j < tamanho; j++) {
+      const o = (i * tamanho + j) * 4;
+      const x = (j - meio) / meio, y = -(i - meio) / meio, r2 = x * x + y * y;
+      if (r2 > 1) { d[o + 3] = 0; continue; }
+      const z = Math.sqrt(1 - r2);
+      const X = x * dir[0] + y * cima[0] + z * frente[0];
+      const Y = x * dir[1] + y * cima[1] + z * frente[1];
+      const px = Math.round(rp + rp * (-X * sa + Y * ca)), py = Math.round(rp - rp * (X * ca + Y * sa));
+      const k = (py * np + px) * 4, sombra = 0.35 + 0.65 * z;
+      d[o] = P[k] * sombra; d[o + 1] = P[k + 1] * sombra; d[o + 2] = P[k + 2] * sombra; d[o + 3] = 255;
+    }
+  }
+  g.putImageData(imagem, 0, 0);
+  mapa.globo = { chave, canvas: canvasGlobo };
+  return canvasGlobo;
+}
+
+function cameraDoMapa() {
+  const az = mapa.camera.az * RAD, el = mapa.camera.el * RAD;
+  return {
+    dir: [-Math.sin(az), Math.cos(az), 0],
+    cima: [-Math.sin(el) * Math.cos(az), -Math.sin(el) * Math.sin(az), Math.cos(el)],
+    frente: [Math.cos(el) * Math.cos(az), Math.cos(el) * Math.sin(az), Math.sin(el)],
+  };
+}
+
+function extensaoPadrao(nave, raio) {
+  const e = nave.E / 1e6;
+  const longe = e < 1 ? nave.A * (1 + e) : Math.min(mapa.corpo.SOI || 8 * raio, 8 * raio);
+  return Math.max(longe, raio) * 1.15;
+}
+
+function zoomMapa(fator) {
+  const raio = mapa.corpo.RAIO, atual = mapa.camera.extensao || mapa.ultimaExtensao;
+  if (!atual || !raio) return;
+  mapa.camera.extensao = limitar(atual * fator, raio * 1.05, mapa.corpo.SOI || 1e13);
+}
+
+function tracarOrbita(pontos, frente, cor, largura, traco = []) {
+  ctx.setLineDash(traco);
+  ctx.globalAlpha = frente ? 1 : MAPA.atras;
+  let trecho = [], anterior = null;
+  const fechar = () => {
+    if (trecho.length > 1) linha(cor, largura, ...trecho);
+    trecho = [];
+  };
+  for (const ponto of pontos) {
+    if (ponto.oculto !== frente) {
+      if (!trecho.length && anterior) trecho.push(anterior.xy);
+      trecho.push(ponto.xy);
+    } else if (trecho.length) {
+      trecho.push(ponto.xy);
+      fechar();
+    }
+    anterior = ponto;
+  }
+  fechar();
+  ctx.globalAlpha = 1;
+  ctx.setLineDash([]);
+}
+
+function rotuloNoMapa(t, [x, y], cor, tamanho = 10) {
+  if (x > 240) texto(t, cor, x - 6, y - 3, "right", "bottom", tamanho);
+  else texto(t, cor, x + 6, y - 3, "left", "bottom", tamanho);
+}
+
+function distanciaNoMapa(m) {
+  const a = Math.abs(m);
+  if (a < 1000) return `${Math.round(m)} m`;
+  if (a < 10000000) return `${(m / 1000).toFixed(1)} km`;
+  return `${Math.round(m / 1000)} km`;
+}
+
+function desenharPaginaMapa(agora) {
+  const corpo = mapa.corpo, nave = mapa.objetos.NAVE, R = corpo.RAIO;
+  if (!corpo.CORPO || !R || !orbitaCompleta(nave)) {
+    textoCentro("ESPERANDO O MAPA", COR.rotulo, 160, 120, 14);
+    return;
+  }
+  const nuNave = anomaliaAgora(nave, agora);
+  if (mapa.camera.az === null) {
+    const p = posicaoNaOrbita(nave, nuNave);
+    mapa.camera.az = Math.atan2(p[1], p[0]) * GRAUS;
+  }
+  const extensao = mapa.camera.extensao || extensaoPadrao(nave, R);
+  mapa.ultimaExtensao = extensao;
+  const s = MAPA.encaixe / extensao;
+  const cam = cameraDoMapa();
+  const ponto = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const naTela = (p) => [MAPA.cx + s * ponto(p, cam.dir), MAPA.cy - s * ponto(p, cam.cima)];
+  const oculto = (p) => {
+    const x = ponto(p, cam.dir), y = ponto(p, cam.cima);
+    return ponto(p, cam.frente) < 0 && x * x + y * y < R * R;
+  };
+  const pontosDaOrbita = (o) => {
+    const [de, ate] = faixaDaOrbita(o), pontos = [];
+    for (let k = 0; k <= MAPA.pontos; k++) {
+      const nu = de + (ate - de) * k / MAPA.pontos, r = raioNaOrbita(o, nu);
+      if (!isFinite(r) || r <= 0) continue;
+      const p = posicaoNaOrbita(o, nu);
+      pontos.push({ xy: naTela(p), oculto: oculto(p) });
+    }
+    return pontos;
+  };
+  const alvo = orbitaCompleta(mapa.objetos.ALVO) ? mapa.objetos.ALVO : null;
+  const no = orbitaCompleta(mapa.objetos.NO) ? mapa.objetos.NO : null;
+  const luas = ["L1", "L2", "L3", "L4"].map((k) => mapa.objetos[k]).filter(orbitaCompleta);
+  const orbitas = [
+    ...luas.map((o) => [pontosDaOrbita(o), COR.apagado, 1, []]),
+    alvo && [pontosDaOrbita(alvo), COR.tgt, 1, []],
+    no && [pontosDaOrbita(no), COR.mnv, 1, [4, 3]],
+    [pontosDaOrbita(nave), COR.verde, 1.5, []],
+  ].filter(Boolean);
+  const corpos = luas.map((o) => {
+    const p = posicaoNaOrbita(o, anomaliaAgora(o, agora));
+    return { xy: naTela(p), oculto: oculto(p), raio: Math.max(2.5, (o.RAIO || 0) * s), cor: CORES_LUAS[(o.NOME || "").toUpperCase()] || COR_CENA.outro, nome: o.NOME || "" };
+  });
+
+  if (corpo.TOPO > 0) circulo(MAPA.cx, MAPA.cy, (R + corpo.TOPO) * s, "rgba(76, 157, 255, 0.16)", null);
+  for (const [pontos, cor, largura, traco] of orbitas) tracarOrbita(pontos, false, cor, largura, traco);
+  ctx.globalAlpha = MAPA.atras;
+  for (const c of corpos) if (c.oculto) circulo(c.xy[0], c.xy[1], c.raio, c.cor, null);
+  ctx.globalAlpha = 1;
+
+  const raioTela = R * s;
+  const tamanho = limitar(Math.round(2 * raioTela * escala * dpr), 32, toquesMapa.size ? MAPA.globoArrastando : MAPA.globoMax);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(globoDoMapa(cam, tamanho), MAPA.cx - raioTela, MAPA.cy - raioTela, 2 * raioTela, 2 * raioTela);
+
+  for (const [pontos, cor, largura, traco] of orbitas) tracarOrbita(pontos, true, cor, largura, traco);
+  for (const c of corpos) {
+    if (c.oculto) continue;
+    circulo(c.xy[0], c.xy[1], c.raio, c.cor, null);
+    rotuloNoMapa(c.nome.toUpperCase(), c.xy, COR.rotulo);
+  }
+
+  const e = nave.E / 1e6;
+  const comRotulos = (e < 1 ? raioNaOrbita(nave, Math.PI) : 3 * R) * s > 30;
+  const marcas = [[0, "PE", raioNaOrbita(nave, 0) - R]];
+  if (e < 1) marcas.push([Math.PI, "AP", raioNaOrbita(nave, Math.PI) - R]);
+  for (const [nu, nome, altura] of marcas) {
+    const p = posicaoNaOrbita(nave, nu);
+    if (oculto(p) || !comRotulos) continue;
+    const xy = naTela(p);
+    circulo(xy[0], xy[1], 2, COR.texto, null);
+    rotuloNoMapa(`${nome} ${distanciaNoMapa(altura)}`, xy, COR.texto);
+  }
+
+  if (no && typeof no.NANOM === "number") {
+    const p = posicaoNaOrbita(nave, no.NANOM / 10 * RAD);
+    if (!oculto(p)) {
+      const xy = naTela(p);
+      circulo(xy[0], xy[1], 3.5, COR.mnv, COR.texto, 1);
+    }
+  }
+
+  if (alvo) {
+    const p = posicaoNaOrbita(alvo, anomaliaAgora(alvo, agora));
+    if (!oculto(p)) {
+      const xy = naTela(p);
+      circulo(xy[0], xy[1], 3, COR.tgt, null);
+      if (comRotulos) rotuloNoMapa(alvo.NOME || "ALVO", xy, COR.tgt);
+    }
+    if (comRotulos && typeof alvo.NMIN === "number" && typeof alvo.AMIN === "number") {
+      const pn = naTela(posicaoNaOrbita(nave, alvo.NMIN / 10 * RAD));
+      const pa = naTela(posicaoNaOrbita(alvo, alvo.AMIN / 10 * RAD));
+      ctx.setLineDash([2, 2]);
+      linha(COR.texto, 1, pn, pa);
+      ctx.setLineDash([]);
+      circulo(pn[0], pn[1], 4, null, COR.nave, 1.5);
+      circulo(pa[0], pa[1], 4, null, COR.tgt, 1.5);
+    }
+  }
+
+  const pNave = posicaoNaOrbita(nave, nuNave), xyNave = naTela(pNave);
+  const adiante = naTela(posicaoNaOrbita(nave, nuNave + 0.01));
+  const n = Math.hypot(adiante[0] - xyNave[0], adiante[1] - xyNave[1]) || 1;
+  const [ux, uy] = [(adiante[0] - xyNave[0]) / n, (adiante[1] - xyNave[1]) / n];
+  ctx.globalAlpha = oculto(pNave) ? 0.4 : 1;
+  ctx.beginPath();
+  ctx.moveTo(xyNave[0] + 7 * ux, xyNave[1] + 7 * uy);
+  ctx.lineTo(xyNave[0] - 4 * ux - 4 * uy, xyNave[1] - 4 * uy + 4 * ux);
+  ctx.lineTo(xyNave[0] - 4 * ux + 4 * uy, xyNave[1] - 4 * uy - 4 * ux);
+  ctx.closePath();
+  ctx.fillStyle = COR.nave;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  desenharTextosDoMapa(nave, nuNave, alvo, no, agora);
+}
+
+function desenharTextosDoMapa(nave, nuNave, alvo, no, agora) {
+  const R = mapa.corpo.RAIO, e = nave.E / 1e6, mu = (mapa.corpo.MU || 0) * 1e9;
+  const n = mu ? Math.sqrt(mu / Math.abs(nave.A) ** 3) : 0;
+  const M = mediaDe(e, nuNave);
+  let tAp = null, tPe = null;
+  if (n && e < 1) {
+    const m = (M % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+    tPe = (2 * Math.PI - m) / n;
+    tAp = ((Math.PI - m) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) / n;
+  } else if (n && M < 0) {
+    tPe = -M / n;
+  }
+  texto(mapa.corpo.CORPO, COR.rotulo, 8, 6, "left", "top", 11);
+  const linhas = [
+    ["AP", e < 1 ? distanciaNoMapa(raioNaOrbita(nave, Math.PI) - R) : "ESCAPE", tAp],
+    ["PE", distanciaNoMapa(raioNaOrbita(nave, 0) - R), tPe],
+    ["INC", `${(nave.INC / 10).toFixed(1)} GR`, null],
+  ];
+  linhas.forEach(([rotulo, valor, tempo], i) => {
+    const y = 20 + i * 13;
+    texto(rotulo, COR.rotulo, 8, y, "left", "top", 11);
+    texto(valor, COR.verde, 34, y, "left", "top", 11);
+    if (tempo !== null) texto(formatarTempo(Math.round(tempo)), COR.rotulo, 104, y, "left", "top", 11);
+  });
+
+  if (alvo) {
+    texto(alvo.NOME || "ALVO", COR.tgt, 312, 6, "right", "top", 11);
+    if (typeof alvo.DMIN === "number") {
+      texto(`MIN ${distanciaNoMapa(alvo.DMIN)}`, COR.texto, 312, 20, "right", "top", 11);
+      const t = tempoDesde(alvo, "TMIN", agora);
+      if (t !== null) texto(formatarTempo(t), COR.rotulo, 312, 33, "right", "top", 11);
+    }
+  }
+  if (no) {
+    texto("NO", COR.mnv, 312, 192, "right", "top", 11);
+    if (typeof no.DV === "number") texto(`DV ${(no.DV / 10).toFixed(1)} m/s`, COR.texto, 312, 205, "right", "top", 11);
+    const t = tempoDesde(no, "T", agora);
+    if (t !== null) texto(formatarTempo(t), COR.rotulo, 312, 218, "right", "top", 11);
+  }
+  texto("ARRASTE: GIRA  PINCA: ZOOM  2 TOQUES: VOLTA", COR.rotulo, 8, 230, "left", "top", 8);
+}
+
 function desenhar(agora) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = COR.fundo;
@@ -1279,6 +1700,7 @@ function desenhar(agora) {
   if (comSinal && estado.pagina === "AP") { desenharPaginaAp(); return; }
   if (comSinal && estado.pagina === "POUSO") { desenharPaginaPouso(agora); return; }
   if (comSinal && estado.pagina === "SUBIDA") { desenharPaginaSubida(agora); return; }
+  if (comSinal && estado.pagina === "MAPA") { desenharPaginaMapa(agora); return; }
   desenharAro();
   desenharNavball(comSinal);
   desenharCaixas(comSinal, agora);
@@ -1348,9 +1770,56 @@ function tocar(nome) {
   mandar(`TOQUE ${nome}`);
 }
 
+const toquesMapa = new Map();
+let ultimoToqueMapa = -Infinity, distanciaPinca = null;
+
+function pontoDoToque(e) {
+  return [(e.clientX - deslocX) / escala, (e.clientY - deslocY) / escala];
+}
+
+function apertouNoMapa(e) {
+  const agora = performance.now();
+  if (toquesMapa.size === 0 && agora - ultimoToqueMapa < MAPA.doisToques) {
+    mapa.camera = { az: null, el: MAPA.elevacao, extensao: null };
+  }
+  ultimoToqueMapa = agora;
+  toquesMapa.set(e.pointerId, pontoDoToque(e));
+  distanciaPinca = null;
+  if (canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId);
+}
+
+canvas.addEventListener("pointermove", (e) => {
+  if (estado.pagina !== "MAPA" || !toquesMapa.has(e.pointerId)) return;
+  const p = pontoDoToque(e), antes = toquesMapa.get(e.pointerId);
+  toquesMapa.set(e.pointerId, p);
+  if (toquesMapa.size === 1 && mapa.camera.az !== null) {
+    mapa.camera.az -= (p[0] - antes[0]) * MAPA.grauPorUnidade;
+    mapa.camera.el = limitar(mapa.camera.el + (p[1] - antes[1]) * MAPA.grauPorUnidade, -85, 89);
+  } else if (toquesMapa.size === 2) {
+    const [a, b] = [...toquesMapa.values()];
+    const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+    if (distanciaPinca && d > 0) zoomMapa(distanciaPinca / d);
+    distanciaPinca = d;
+  }
+});
+
+for (const evento of ["pointerup", "pointercancel"]) {
+  canvas.addEventListener(evento, (e) => {
+    toquesMapa.delete(e.pointerId);
+    distanciaPinca = null;
+  });
+}
+
+canvas.addEventListener("wheel", (e) => {
+  if (estado.pagina !== "MAPA") return;
+  e.preventDefault();
+  zoomMapa(Math.exp(e.deltaY * 0.001));
+}, { passive: false });
+
 canvas.addEventListener("pointerdown", (e) => {
   telaCheia();   // o primeiro toque põe em tela cheia, onde o navegador deixa
   liberarSom();  // e libera o alarme sonoro
+  if (estado.pagina === "MAPA") { apertouNoMapa(e); return; }
   if (estado.pagina !== "NAV") return;   // as páginas do painel são só para ver
   const x = (e.clientX - deslocX) / escala, y = (e.clientY - deslocY) / escala;
   for (const [nome, [cx, cy]] of Object.entries(BOTOES_REDONDOS)) {
