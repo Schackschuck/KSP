@@ -6,7 +6,9 @@ metalização (só resistores, capacitores cerâmicos e vias têm cobre em cima)
 e o mínimo de vias. Exporta os PDFs em tamanho real para a transferência
 térmica, o mapa de furação e os Gerbers.
 
-Uso: python3 hardware/pcb/modulo_medio_caseira.py
+Uso: python3 hardware/pcb/modulo_medio_caseira.py [--ses roteamento.ses]
+
+Com --ses, usa um roteamento já pronto do Freerouting em vez de rotear de novo.
 Precisa do mesmo que o modulo_medio.py (KiCad 7, Java, Freerouting e xvfb-run).
 """
 
@@ -209,7 +211,7 @@ def ajustar_dsn(caminho):
     dsn = open(caminho, encoding='utf-8').read()
     regras = ('    (autoroute_settings\n'
               '      (fanout off) (autoroute on) (postroute on) (vias on)\n'
-              '      (via_costs 400) (plane_via_costs 5) (start_ripup_costs 100) (start_pass_no 1)\n'
+              '      (via_costs 120) (plane_via_costs 5) (start_ripup_costs 100) (start_pass_no 1)\n'
               '      (layer_rule F.Cu (active on) (preferred_direction horizontal)\n'
               '        (preferred_direction_trace_costs 3.0) (against_preferred_direction_trace_costs 6.0))\n'
               '      (layer_rule B.Cu (active on) (preferred_direction vertical)\n'
@@ -326,7 +328,12 @@ def main():
         sys.exit('sem posicao: ' + ', '.join(faltando))
     escrever_projeto()
     board = montar(comps, nets)
-    rotear(board)
+    if len(sys.argv) == 3 and sys.argv[1] == '--ses':
+        base.importar_ses(board, open(sys.argv[2], encoding='utf-8').read())
+        if base.desconectados(board):
+            sys.exit('o SES deixa %d ligacoes sem rotear' % base.desconectados(board))
+    else:
+        rotear(board)
     marcar_faces(board)
     board.Save(PCB)
     board = pcbnew.LoadBoard(PCB)
