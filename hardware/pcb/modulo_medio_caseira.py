@@ -217,7 +217,7 @@ def ajustar_dsn(caminho):
               '      (layer_rule B.Cu (active on) (preferred_direction vertical)\n'
               '        (preferred_direction_trace_costs 1.0) (against_preferred_direction_trace_costs 1.5))\n'
               '    )\n')
-    i = dsn.index('  (structure\n') + len('  (structure\n')
+    i = dsn.index('\n  )\n  (placement') + 1
     open(caminho, 'w', encoding='utf-8').write(dsn[:i] + regras + dsn[i:])
 
 
