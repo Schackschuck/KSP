@@ -1,0 +1,3 @@
+(version 1)
+(rule "um raio basta nos pads de GND"
+  (constraint min_resolved_spokes 1))
