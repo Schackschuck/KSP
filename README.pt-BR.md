@@ -152,4 +152,4 @@ O projeto é desenvolvido com o [Claude Code](https://claude.com/claude-code): u
 
 ## Licença
 
-[MIT](LICENSE) © 2026 ArthurDSchuck
+[MIT](LICENSE) © 2026 Arthur Schuck
