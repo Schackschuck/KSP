@@ -73,7 +73,7 @@ O repositório é público, então dá para clonar sem senha:
 
 ```bash
 git --version               # se não existir: sudo apt install -y git
-git clone https://github.com/Schackschuck/KSP.git ~/cockpit
+git clone https://github.com/Schackschuck/ksp-cockpit.git ~/cockpit
 ```
 
 Para atualizar depois de mudanças no GitHub:

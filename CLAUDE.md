@@ -30,8 +30,8 @@ Um hook (`.claude/hooks/conferir_edicao.py`) roda o `pyflakes` em cada `.py` edi
 
 ## Convenções
 
-- Conversas, documentação e mensagens de commit em **português**.
+- Conversas, documentação e mensagens de commit em **português**. A exceção é o `README.md`, a vitrine do repositório em inglês: ele e o `README.pt-BR.md` têm o mesmo conteúdo, e o que muda num muda também no outro.
 - **Código gerado sem comentários:** todo código novo ou reescrito (Python, JavaScript, HTML, CSS, C/Arduino) vai sem comentários de linha ou de bloco. As docstrings do Python podem ficar. O que precisar de mais explicação vai para a documentação em `docs/` ou para o `README.md`. O código que já existe não é mexido só para tirar comentários.
 - Textos do LCD e da serial em ASCII, sem acentos.
-- A arquitetura, o roteiro das fases e as decisões ficam no `README.md`; o protocolo serial, em `docs/protocolo.md`.
+- A arquitetura fica em `docs/arquitetura.md`, as decisões em `docs/decisoes.md`, o roteiro das fases em `docs/roteiro.md`, os scripts de voo em `docs/scripts-de-voo.md`, a lista de compras em `docs/compras.md` e o protocolo serial em `docs/protocolo.md`. O `README.md` (e o `README.pt-BR.md`) é só a vitrine: o que é o projeto, o que já funciona, como testar e o mapa das pastas. Documento novo entra no índice, `docs/README.md`.
 - Todo painel segue a identidade visual de `hardware/identidade_visual.md`. Para propor o desenho de um painel, usar a skill `/desenhar-painel`; os desenhos são gerados por `node hardware/desenho/desenhar.js`.

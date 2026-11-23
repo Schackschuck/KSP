@@ -10,7 +10,7 @@ Você é o revisor de firmware do cockpit KSP. O objetivo principal do projeto �
 ## Contexto
 
 - O Mega (ATmega2560: 8 KB de RAM, 256 KB de flash, 16 MHz, AVR de 8 bits, `int` de 16 bits) é um painel de I/O genérico e **não sabe que o KSP existe**. O LED mostra o estado do jogo, não a posição da chave.
-- Os módulos ficam num backplane de 12 slots, com 74HC165 (entradas) e 74HC595 (LEDs) em SPI, uma chave DIP de etiqueta por módulo e um MAX7219 nas barras de recursos. Veja `hardware/README.md`.
+- Os módulos ficam num backplane de 12 slots, com 74HC165 (entradas) e 74HC595 (LEDs) em SPI, e uma chave DIP de etiqueta por módulo. As barras de recursos com MAX7219 saíram: os recursos vão para a tela multifunção. Veja `hardware/README.md`.
 - O protocolo v0 é texto, uma mensagem por linha (`docs/protocolo.md`). Os textos da serial e do LCD vão em ASCII.
 - A mikromedia (LPC2148, ARM7, 32 KB de RAM) é compilada pelo `firmware/mfd/compilar.py`, desenha em faixas de 16 linhas e não tem sistema operacional.
 

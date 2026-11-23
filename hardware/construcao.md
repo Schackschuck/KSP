@@ -1,8 +1,8 @@
 # Construção física: carcaça, aparência, korry switches e joystick
 
-Este documento trata da parte física do cockpit: o formato da caixa, a aparência, como fabricar as peças, os korry switches e onde entra o joystick. A eletrônica dos módulos está no [README do hardware](README.md); a arquitetura e o roteiro, no [README principal](../README.md).
+Este documento trata da parte física do cockpit: o formato da caixa, a aparência, como fabricar as peças, os korry switches e onde entra o joystick. A eletrônica dos módulos está no [README do hardware](README.md); a [arquitetura](../docs/arquitetura.md) e o [roteiro](../docs/roteiro.md), na `docs/`.
 
-**Status: ideias, nada construído.** A caixa definitiva é da [fase 7](../README.md#fase-7--hardware-definitivo), mas protótipos (um korry, um painel de seção) podem ser feitos antes, junto com os módulos da fase 2.
+**Status: ideias, nada construído.** A caixa definitiva é da [fase 7](../docs/roteiro.md#fase-7--hardware-definitivo), mas protótipos (um korry, um painel de seção) podem ser feitos antes, junto com os módulos da fase 2.
 
 ## Ferramentas disponíveis
 
@@ -139,7 +139,7 @@ Um por seção, todos desenhados com as peças reais. O que cada controle faz no
 
 ## Painel de sistemas de controle
 
-Na versão B, o painel **VOO**: os modos do SAS, os sistemas, o encoder AJUSTE, as luzes do piloto automático e os avisos, num painel duplo logo embaixo da tela. O que cada controle faz está no roteiro do [piloto automático](../README.md#piloto-automático-de-avião) e no [protocolo](../docs/protocolo.md#painel-de-sistemas-de-controle).
+Na versão B, o painel **VOO**: os modos do SAS, os sistemas, o encoder AJUSTE, as luzes do piloto automático e os avisos, num painel duplo logo embaixo da tela. O que cada controle faz está no roteiro do [piloto automático](../docs/scripts-de-voo.md#piloto-automático-de-avião) e no [protocolo](../docs/protocolo.md#painel-de-sistemas-de-controle).
 
 ![Painel VOO: dez korry de modo do SAS com o PRO aceso em verde, korry SAS, RCS, FBW e TRAVA ALT, o encoder AJUSTE com as luzes HDG, ALT e V/S, e os avisos](img/voo.svg)
 
@@ -152,7 +152,7 @@ Na versão B, o painel **VOO**: os modos do SAS, os sistemas, o encoder AJUSTE, 
 
 ## Painel do editor de manobras
 
-Painel duplo, de 250 × 125 mm. O que cada controle faz está no [roteiro da fase 4](../README.md#fase-4--instrumentos-físicos) e no [protocolo](../docs/protocolo.md#no-painel).
+Painel duplo, de 250 × 125 mm. O que cada controle faz está no [roteiro da fase 4](../docs/roteiro.md#fase-4--instrumentos-físicos) e no [protocolo](../docs/protocolo.md#no-painel).
 
 ![Painel do editor de manobras: korry PRO, NRM e RAD com o PRO aceso, grupo PERCURSO, chave rotativa do passo e botões NOVO, APAGAR e CIRC](img/editor_manobras.svg)
 
@@ -174,12 +174,12 @@ STAGE, ABORT e os scripts de voo, no centro, a um palmo do acelerador.
 
 ### Painel de scripts
 
-Os scripts de voo que pilotam a nave sozinhos, um korry por script, na metade direita da ação executiva. O que o script faz está no roteiro da [fase 5](../README.md#fase-5--protocolo-v1--scripts-de-voo) e no [protocolo](../docs/protocolo.md#painel-de-scripts).
+Os scripts de voo que pilotam a nave sozinhos, um korry por script, na metade direita da ação executiva. O que o script faz está no roteiro da [fase 5](../docs/roteiro.md#fase-5--protocolo-v1--scripts-de-voo) e no [protocolo](../docs/protocolo.md#painel-de-scripts).
 
 - **Na ordem do voo:** três fileiras de cima para baixo, como a nave: subida (LANCAR), órbita (EXEC e ENCONTRO) e descida (POUSO e PRECISAO). O POUSO fica embaixo, o mais perto da mão.
 - **Segurar 5 s:** o korry só liga o script depois de 5 s apertado, e segurar de novo 5 s aborta: o script corta o motor e devolve a nave ao piloto. Soltar antes não faz nada. Assim não precisa de chave ARM, e um toque sem querer não entrega a nave. Enquanto conta, a tela multifunção abre a página do script e mostra quantos segundos faltam.
 - **A luz mostra o script, não o aperto:** apagado parado; **âmbar piscando** enquanto conta para ligar; **verde** com o script voando (piscando âmbar enquanto conta para abortar); **vermelho** por 10 s se o script foi abortado ou falhou. Quando a nave pousa, apaga, e a tela mostra `POUSADA`.
-- **Lugares vagos:** quatro korry com a legenda em cinza, esperando os próximos scripts do [roteiro](../README.md#scripts-de-voo). O korry ganha a legenda quando o script existir; o furo e os fios já ficam prontos. O LANCAR já tem script: a [subida até a órbita](../docs/subida.md).
+- **Lugares vagos:** quatro korry com a legenda em cinza, esperando os próximos [scripts de voo](../docs/scripts-de-voo.md). O korry ganha a legenda quando o script existir; o furo e os fios já ficam prontos. O LANCAR já tem script: a [subida até a órbita](../docs/subida.md).
 - **Sem tela:** a fase, a altura, a descida e a freada aparecem na página POUSO da tela multifunção ([docs/mfd.md](../docs/mfd.md#painel-de-scripts-e-a-página-do-pouso)); a subida tem a página SUBIDA.
 - **A configuração da subida** (altitude, inclinação e o plano do alvo) é mexida por um encoder, num menu da página SUBIDA, como o do piloto automático. No cockpit, é o encoder AJUSTE do [VOO](#painel-de-sistemas-de-controle); por enquanto, ele fica na página de botões.
 - O desenho de 150 mm, quando os scripts tinham painel próprio, está em [`img/antigos/scripts.svg`](img/antigos/scripts.svg).
@@ -291,7 +291,7 @@ A peça tem ficha própria em [korry/](korry/README.md): medidas, desenho, peça
  Extreme 3D Pro ──USB──▶ Raspberry Pi (ponte) ──kRPC──▶ KSP
 ```
 
-- **Por que assim:** o joystick passa pelo mesmo lugar que o painel. A ponte pode aplicar zona morta, curva de resposta e os modos (voo, câmera e translação), e sabe na hora quando o piloto mexe no manche. Isso é o que devolve o controle ao piloto quando um script está voando (ver a [base comum dos scripts](../README.md#base-comum)).
+- **Por que assim:** o joystick passa pelo mesmo lugar que o painel. A ponte pode aplicar zona morta, curva de resposta e os modos (voo, câmera e translação), e sabe na hora quando o piloto mexe no manche. Isso é o que devolve o controle ao piloto quando um script está voando (ver a [base comum dos scripts](../docs/scripts-de-voo.md#base-comum)).
 - **Sem abrir o joystick:** ele continua inteiro e pode voltar a ser usado em outros jogos.
 - **Leitura:** pelo `pygame`, que a ponte já usa, ou pelo `evdev`, direto no Linux. Decidir quando for escrever o código.
 - **Durante o desenvolvimento no PC:** com o joystick ligado no PC, o KSP também o lê. Deixar os eixos do joystick sem nada nas configurações de controle do KSP, senão os comandos chegam em dobro.

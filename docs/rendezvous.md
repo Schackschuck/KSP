@@ -31,7 +31,7 @@ python scripts/rendezvous.py --demo               # sem o KSP: módulo e estaç�
 
 ## O que mudou da ideia original
 
-O README previa um script que só criasse nós de manobra, para o piloto conferir e o EXEC da fase 5 queimar. **O EXEC ainda não existe, então o script queima sozinho**, como a subida. O nó que ele põe no jogo é só para mostrar: no mapa, o KSP desenha a aproximação, e o piloto confere o plano. A cada queima, o script apaga o nó anterior e cria o da próxima. Os nós que o piloto já tinha no jogo ficam, com um aviso.
+O plano em [scripts de voo](scripts-de-voo.md#rendezvous) previa um script que só criasse nós de manobra, para o piloto conferir e o EXEC da fase 5 queimar. **O EXEC ainda não existe, então o script queima sozinho**, como a subida. O nó que ele põe no jogo é só para mostrar: no mapa, o KSP desenha a aproximação, e o piloto confere o plano. A cada queima, o script apaga o nó anterior e cria o da próxima. Os nós que o piloto já tinha no jogo ficam, com um aviso.
 
 Também mudou a transferência: a Hohmann com busca do momento da queima virava uma queima de 0 m/s quando a nave já está na altitude do alvo, que é o caso de hoje e o mais comum depois da subida. A busca nova ([abaixo](#a-busca-da-transferência)) cobre as duas situações.
 
