@@ -2,7 +2,7 @@
 
 **Pronto quando:** a navball da tela acompanha a do jogo, os números batem com os do KSP e os botões de toque ligam e desligam o SAS e o RCS.
 
-A tela multifunção mostra uma navball no estilo do KSP2, velocidade, altitude, acelerador, velocidade vertical e os dados da órbita ou do alvo, com botões de toque. Ela mora na mikromedia for ARM, a fase 6 do [roteiro](../README.md#fase-6--tela-multifunção-mikromedia-for-arm), com o firmware de `firmware/mfd/`: gravar e ligar em [mikromedia.md](mikromedia.md). A mesma tela roda também no PC e no celular, e os três falam o mesmo [protocolo](protocolo.md#tela-multifunção-mikromedia):
+A tela multifunção mostra uma navball no estilo do KSP2, velocidade, altitude, acelerador, velocidade vertical e os dados da órbita ou do alvo, com botões de toque. No cockpit, ela é uma página no navegador de um tablet ([no tablet do cockpit](#no-tablet-do-cockpit)). A mesma tela roda no simulador do PC, em qualquer celular e na mikromedia for ARM, a fase 6 do [roteiro](roteiro.md#fase-6--tela-multifunção-mikromedia-for-arm), com o firmware de `firmware/mfd/` (gravar e ligar em [mikromedia.md](mikromedia.md)). Todas falam o mesmo [protocolo](protocolo.md#tela-multifunção-mikromedia):
 
 ```
  KSP + kRPC (PC)
@@ -13,7 +13,7 @@ A tela multifunção mostra uma navball no estilo do KSP2, velocidade, altitude,
       │ protocolo em texto, uma mensagem por linha
       ├─────────────────────┬──────────────────────────┐
       ▼                     ▼                          ▼
- simulador             celular, pelo Wi-Fi         mikromedia, pela serial
+ simulador             tablet/celular, Wi-Fi       mikromedia, pela serial
  mfd_simulador.py      mfd_celular.py e            firmware/mfd/
  janela no PC          celular/index.html          (mikromedia.md)
  (padrão)              (--celular)                 (--porta COMx)
@@ -26,7 +26,7 @@ A ponte não sabe qual tela está do outro lado: para usar a placa, basta trocar
 - Testado com o jogo: navball (pitch, yaw e roll), pró-grado, SAS e RCS pelo toque, e a volta automática ao trocar de nave. Estão marcados na lista de [Testar com o KSP](#testar-com-o-ksp).
 - Ainda sem teste com o jogo: radar, troca automática de modo, modo ALVO, normal e radial, nó de manobra, acelerador, tempos até AP e PE, e os números na bola.
 - Ainda sem teste num celular de verdade: a página foi testada num navegador simulando um celular.
-- O firmware da placa está pronto e conferido no PC contra o simulador, mas ainda não rodou na placa: [mikromedia.md](mikromedia.md).
+- O firmware roda na placa, com o jogo: [conferido na placa](mikromedia.md#conferido-na-placa).
 
 ![O simulador em órbita: navball no centro com os números do rumo e do pitch e os marcadores, velocidade e altitude nas laterais, acelerador e velocidade vertical nas bordas, AP e PE embaixo](img/mfd_simulador.png)
 
@@ -440,10 +440,9 @@ Com raio de 72 pontos, são cerca de 16 mil pontos por quadro, cada um com umas 
 
 ## Próximos passos
 
-1. **Gravar e ligar a placa** ([mikromedia.md](mikromedia.md)): confirmar o controlador da tela, a orientação, o touch e a velocidade.
-2. **Alarme de estol na placa**, pelo chip de áudio (VS1053), como o simulador já toca.
-3. **Manobras pela tela** (ideia para depois): informações do próximo nó (Δv, tempo de queima, T− até o nó) e um editor de manobras pelo toque, junto com o editor de encoders da fase 4.
-4. **Painéis de sistemas e de scripts de verdade:** quando os módulos existirem, as mesmas linhas chegam pela serial do Mega, pela ponte do painel (`ponte.py`), e as duas pontes precisam virar uma, ou a do painel repassar as linhas para esta.
+1. **Alarme de estol na placa**, pelo chip de áudio (VS1053), como o simulador já toca.
+2. **Manobras pela tela** (ideia para depois): informações do próximo nó (Δv, tempo de queima, T− até o nó) e um editor de manobras pelo toque, junto com o editor de encoders da fase 4.
+3. **Painéis de sistemas e de scripts de verdade:** quando os módulos existirem, as mesmas linhas chegam pela serial do Mega, pela ponte do painel (`ponte.py`), e as duas pontes precisam virar uma, ou a do painel repassar as linhas para esta.
 
 ## Histórico
 
@@ -451,11 +450,11 @@ A tela foi feita aos poucos, testando no jogo entre uma etapa e outra:
 
 | PR | O que entrou |
 |---|---|
-| [#10](https://github.com/Schackschuck/KSP/pull/10) | Descoberta das duas USB da placa (a PROG tem um FT232RL); o simulador de 320x240, a ponte com o kRPC, o modo `--demo` e a navball 3D feita só com multiplicações e somas |
-| [#11](https://github.com/Schackschuck/KSP/pull/11) | Instalação com o `pygame-ce`, porque o pygame não tem pacote para o Python 3.14 |
-| [#12](https://github.com/Schackschuck/KSP/pull/12) | Altitude pelo radar perto do chão, troca automática SUP ⇄ ORB como no KSP, e o modo ALVO |
-| [#13](https://github.com/Schackschuck/KSP/pull/13) | Marcadores normal, radial e de manobra; visual inspirado no KSP2, com barras do acelerador e da velocidade vertical e botões redondos |
-| [#14](https://github.com/Schackschuck/KSP/pull/14) | A tela no celular, pelo Wi-Fi |
-| [#15](https://github.com/Schackschuck/KSP/pull/15) | Números do rumo e do pitch na própria navball; sai a fita de rumo, e o modo SUP fica sem o painel de baixo |
-| [#32](https://github.com/Schackschuck/KSP/pull/32) | Painel de sistemas de controle: a página de botões, a roda do SAS e a página do piloto automático, com a volta à navball; a conversa com o `fbw.py` nos dois sentidos |
-| [#40](https://github.com/Schackschuck/KSP/pull/40) | O firmware da mikromedia, cópia do simulador na placa, com o ajuste da tela e do touch na flash; a ponte abre a PROG sem prender a placa no reset |
+| [#10](https://github.com/Schackschuck/ksp-cockpit/pull/10) | Descoberta das duas USB da placa (a PROG tem um FT232RL); o simulador de 320x240, a ponte com o kRPC, o modo `--demo` e a navball 3D feita só com multiplicações e somas |
+| [#11](https://github.com/Schackschuck/ksp-cockpit/pull/11) | Instalação com o `pygame-ce`, porque o pygame não tem pacote para o Python 3.14 |
+| [#12](https://github.com/Schackschuck/ksp-cockpit/pull/12) | Altitude pelo radar perto do chão, troca automática SUP ⇄ ORB como no KSP, e o modo ALVO |
+| [#13](https://github.com/Schackschuck/ksp-cockpit/pull/13) | Marcadores normal, radial e de manobra; visual inspirado no KSP2, com barras do acelerador e da velocidade vertical e botões redondos |
+| [#14](https://github.com/Schackschuck/ksp-cockpit/pull/14) | A tela no celular, pelo Wi-Fi |
+| [#15](https://github.com/Schackschuck/ksp-cockpit/pull/15) | Números do rumo e do pitch na própria navball; sai a fita de rumo, e o modo SUP fica sem o painel de baixo |
+| [#32](https://github.com/Schackschuck/ksp-cockpit/pull/32) | Painel de sistemas de controle: a página de botões, a roda do SAS e a página do piloto automático, com a volta à navball; a conversa com o `fbw.py` nos dois sentidos |
+| [#40](https://github.com/Schackschuck/ksp-cockpit/pull/40) | O firmware da mikromedia, cópia do simulador na placa, com o ajuste da tela e do touch na flash; a ponte abre a PROG sem prender a placa no reset |

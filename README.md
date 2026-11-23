@@ -1,572 +1,157 @@
 # KSP Cockpit
 
-Controle físico (painel + joystick + telemetria) para o **Kerbal Space Program 1**, feito do zero com hardware e software próprios.
+**English** · [Português](README.pt-BR.md)
 
-O objetivo principal é **aprender firmware/embarcados e eletrônica**, e de quebra ter um cockpit de verdade — com direito a um botão que dispara um script de pouso autônomo estilo SpaceX.
+A physical cockpit for **Kerbal Space Program 1**, built from scratch: panels of switches, illuminated korry buttons and LEDs, a sidestick and a throttle, a multifunction display on an old tablet, and flight scripts that fly a rocket to orbit, meet a space station or land a booster at the push of a button.
 
----
+The main goal is to learn embedded firmware and electronics, and to end up with a real cockpit along the way.
 
-## Arquitetura
+<p align="center">
+  <img src="hardware/img/cockpit.svg" width="100%" alt="Drawing of the cockpit: a U-shaped desk of square panels, with the multifunction display in the middle, the throttle at the bottom left and the sidestick at the bottom right">
+</p>
 
-```
- PC com Windows: KSP 1 + servidor kRPC
-          ▲
-          │  cabo de rede direto, com IP fixo (kRPC, TCP/protobuf)
-          │  (pela Wi-Fi de casa durante o desenvolvimento)
-          ▼
- Raspberry Pi 4 = computador de bordo ............... bridge/
-   • ponte kRPC ⇄ placas, aberta sozinha quando o Pi liga
-   • tela multifunção no navegador do tablet ........ bridge/celular/
-   • dispara os scripts de voo ....................... scripts/
-          ▲                         ▲
-          │ USB/serial              │ Wi-Fi de casa
-          │ (protocolo próprio)     │ (página da tela, por HTTP)
-          ▼                         ▼
- Arduino Mega = I/O do painel    tablet = tela multifunção
- firmware/painel/                (Galaxy Tab S 8.4, no Chrome)
-          ▲
-          │  SPI + linhas analógicas
-          ▼
- Backplane: 12 slots ................................ hardware/backplane/
-          ▲
-          │  um cabo flat de 16 vias por módulo
-          ▼
- Módulos do painel, um por seção .......... hardware/modulo_pequeno/, _medio/ e _grande/
-   pequeno: 8 entradas + 8 LEDs (1 × 74HC165 + 1 × 74HC595)
-   médio: 16 entradas + 24 LEDs (2 × 74HC165 + 3 × 74HC595), com 12 jacks de korry
-   grande: 24 entradas + 16 LEDs (3 × 74HC165 + 2 × 74HC595)
-   korry, botões, LEDs, sidestick, acelerador
-```
+> [!NOTE]
+> This is a fan project. It is not affiliated with or endorsed by Squad, Private Division or Take-Two Interactive. *Kerbal Space Program* is a trademark of Take-Two Interactive Software, Inc.
 
-Cada parte tem um papel bem definido:
+The code (names, comments and command-line options) and the detailed documentation are in Brazilian Portuguese. This page is the entry point in English.
 
-| Parte | Responsabilidade | Não faz |
-|---|---|---|
-| **KSP + kRPC** (PC) | Expõe o estado da nave e aceita comandos. | — |
-| **Computador de bordo** (Raspberry Pi 4, Python) | Conecta no kRPC pela rede, abre *streams* de telemetria, traduz eventos do painel em comandos do jogo e telemetria em mensagens para o painel. Desenha a tela de telemetria. Dispara os scripts de voo de `scripts/` (ex.: pouso autônomo). | Não lê pino nenhum. |
-| **Sidestick** (joystick JH-D400X-R4 no painel, lido pelo Mega) | Manda os 3 eixos e o botão como qualquer controle do painel; a ponte os traduz em comandos do kRPC. | O KSP não enxerga o joystick: tudo passa pela ponte. |
-| **Painel** (Arduino Mega, C++) | Lê entradas (com debounce), envia eventos; recebe valores e atualiza LEDs, displays e ponteiros. | **Não sabe que o KSP existe.** É um painel de I/O genérico. |
-| **Celular** (opcional, página no navegador) | Mostra a tela multifunção pelo Wi-Fi, com o mesmo protocolo e o mesmo layout, sem precisar da mikromedia. | Não fala com o kRPC nem guarda estado: só desenha o que a ponte manda. |
-| **Tela multifunção** (um tablet Galaxy Tab S 8.4, na USB do Pi) | Abre no Chrome a mesma página do celular e desenha as páginas (navball, órbita, recursos, pouso, piloto) com o que a ponte manda; troca de página pelo toque ou sozinha, pelo painel mexido. | Não fala com o kRPC; só mostra o que o computador de bordo manda. |
+## What works today
 
-Durante o desenvolvimento, o mesmo código Python roda no PC — só muda o endereço do servidor kRPC e a porta serial.
-
-### Princípios
-
-- **O LED mostra o estado do jogo, não a posição da chave.** A chave só avisa para onde foi ("SAS para cima"); o computador de bordo decide o que fazer e o jogo confirma. Assim o painel nunca fica dessincronizado (ex.: SAS desligado pelo jogo).
-- **Uma tela só, no meio do painel: a tela multifunção.** Os módulos não têm tela própria. Cada módulo que precisa mostrar números (editor de manobras, piloto automático, rendezvous...) tem uma página na tela multifunção. Quando o piloto mexe num módulo, a ponte troca a tela para a página dele; uns segundos depois do último toque no módulo (uns 10 s, a ajustar), a tela volta sozinha para a página de antes, em geral a navball.
-- **Protocolo serial em duas versões:**
-  - **v0 — texto**, uma mensagem por linha. Fácil de depurar no Serial Monitor.
-    ```
-    Pi → placa:  ALT 12345      SAS 1      FUEL 73
-    placa → Pi:  BTN STAGE 1    SW SAS 0   AX PITCH -312
-    ```
-  - **v1 — binário**, com enquadramento [COBS](https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing), ID de mensagem e CRC. Mais rápido e robusto; vem quando a v0 começar a apertar. É o mesmo protocolo para o Mega e para a mikromedia.
-- **Entradas analógicas** (joystick, acelerador) são enviadas a uma taxa fixa, com zona morta e filtro; **entradas digitais** são enviadas só quando mudam.
-
-### Decisões
-
-| Decisão | Por quê |
+| Part | Status |
 |---|---|
-| **kRPC** em vez de mods de serial (Kerbal Simpit etc.) | Acesso a praticamente tudo do jogo (órbita, estágios, delta-v, autopilot) e permite scripts de voo. A ferramenta não deve ser o limite. |
-| **Ponte fora do microcontrolador** em vez do cliente kRPC C-nano | kRPC completo com *streams*; o firmware fica simples e ganha um protocolo próprio — que é onde está o aprendizado de embarcados. |
-| **Python** na ponte | Já usado com kRPC antes; o mesmo código roda no PC e no Pi. |
-| **Raspberry Pi 4** como computador de bordo | Deixa o cockpit independente do PC (só um cabo de rede): a ponte, os scripts e a voz dos avisos rodam dentro da caixa. |
-| **Arduino Mega** para o I/O | O Pi não tem entradas analógicas e o Linux não é tempo real; o Mega tem muitos pinos, trabalha em 5V e é compatível com praticamente todo módulo. |
-| **Painel em módulos** com 74HC165 e 74HC595, ligados ao Mega por um backplane | Cada seção do painel é uma placa, montada e testada uma de cada vez. Há três tamanhos (8 entradas e 8 LEDs, 16 e 24, ou 24 e 16), para não montar CI à toa. Cada módulo tem uma etiqueta (chave DIP lida por um 74HC165 a mais), e o Mega reconhece sozinho qual módulo está em cada slot. Os CIs custam poucos reais por módulo, o firmware continua um só e o protocolo com a ponte não muda. Um micro em cada módulo fica para a fase 8. |
-| Pinos do Raspberry Pi **não** substituem o Mega | O Pi não tem entradas analógicas, o Linux não é tempo real para encoders e ponteiros, e os pinos de 3,3 V vão direto ao processador: um fio errado nos 5 V queima o Pi. |
-| **mikromedia for ARM (LPC2148)** como tela multifunção | Já está na bancada. ARM programado sem framework, com tela touch, microSD e áudio. Começa no protocolo em texto, como o simulador, e passa para o v1 junto com o Mega. |
-| **Simulador da tela multifunção** no PC antes do firmware | A ponte, o protocolo e o desenho (navball, números, botões) ficam prontos e testados com o jogo antes da placa; o firmware só precisa copiar o simulador. A placa desenha a partir dos ângulos, porque a imagem pronta não cabe na serial (150 KB por quadro). |
-| **Firmware da mikromedia compilado com o LLVM** (clang), e não com o `arm-none-eabi-gcc` | Um compilador só, que já gera código para o ARM7, e um `compilar.py` em Python que roda igual no Windows e no Linux, sem `make`. O `mfd.hex` vai compilado no repositório: para gravar, basta o Flash Magic. |
-| **Tela da mikromedia desenhada em faixas de 16 linhas** | Não cabe a tela inteira na RAM (150 KB contra 32 KB), e desenhar direto na tela piscaria. Cada faixa de 10 KB fica pronta na RAM e vai inteira para a tela, então cada ponto é escrito uma vez só. |
-| **Orientação e touch da mikromedia ajustados na própria tela** e guardados na flash | O manual não diz a orientação do módulo nem a do touch. Ajustando na tela, o que vier trocado se corrige sem compilar de novo. |
-| **Celular como tela**, por uma página web | Funciona já, sem firmware e sem o cabo, em qualquer celular e sem instalar nada. A ponte serve a página e fala com ela por HTTP (Server-Sent Events e POST), só com a biblioteca padrão do Python. O protocolo é o mesmo da placa, então a ponte não muda. |
-| **pygame-ce** no lugar do pygame | O pygame original não tem pacote para o Python 3.14; o pygame-ce, mantido pela comunidade, tem e é usado do mesmo jeito (`import pygame`). |
-| **Pouso por previsão**: simula a freada até o chão e acha o acelerador por bisseção | Com arrasto, a freada não tem conta fechada. Simular funciona igual em qualquer planeta, com ou sem atmosfera, e refazer a conta 20 vezes por segundo corrige os erros da previsão. O arrasto é medido em voo, e a previsão só usa parte dele, porque ele cai quando a nave fica mais lenta que o som. A guiagem não conhece o kRPC, então é testada numa nave simulada. |
-| **Pé da nave medido pelas pernas do trem**, não pela caixa da nave inteira | Nas versões lançadas do kRPC (até a 0.6.0), a caixa de uma peça junta tudo o que está pendurado nela, como a chama do motor ligado. A caixa da nave inteira descia metros abaixo do pé, e a freada terminava alta. |
-| **SAS do KSP aponta a nave no pouso**, não o piloto automático do kRPC | O piloto automático do kRPC vem ajustado para levar 3 s até o ângulo pedido e não conta a força do ar. No segundo teste, a nave caindo de ré balançou até 31° na freada. O SAS o jogo ajusta para cada nave. Retrógrado enquanto a nave desce rápido; devagar, perto do chão, o retrógrado pula de um lado para o outro, então no fim o SAS só segura a atitude. |
-| **Scripts de voo numa pasta própria** (`scripts/`), fora da ponte | Cada script roda sozinho pela linha de comando, no PC ou no Pi, com ou sem o cockpit. A ponte só dispara o script quando o botão do painel é apertado; o script não depende dela nem do painel. |
-| **Script liga segurando o korry 5 s**, e aborta segurando de novo 5 s, sem chave ARM | Um toque sem querer não entrega a nave ao script, e o mesmo gesto aborta, sem procurar outro botão. Economiza a chave ARM com capa e um botão por script. Quem conta o tempo é a ponte, como no encoder do piloto automático, e o korry pisca âmbar enquanto conta. |
-| **A ponte abre o script num processo próprio** e aborta com o Ctrl+C | O script continua sendo o mesmo da linha de comando, e o Ctrl+C já corta o motor e devolve a nave. O estado volta pelo UDP, como no fly by wire, e o código de saída diz se a nave pousou. |
-| **Um joystick só, no painel** (JH-D400X-R4, um sidestick à direita), com o botão do manche trocando o modo | O cockpit fica como um avião: acelerador na mão esquerda, sidestick na direita. Os 3 eixos cabem nas 3 linhas analógicas de um slot do backplane, e o botão passa pelos modos VOO, CÂMERA e TRANSLAÇÃO, com três luzes. Passando pela ponte, dá para ter zona morta e saber quando o piloto mexe no manche para tirar o controle de um script. O Extreme 3D Pro fica para desenvolver no PC. |
-| **Uma tela no meio para todos os módulos**, a tela multifunção, no lugar de um LCD por módulo | Os olhos vão sempre ao mesmo lugar, os painéis ficam menores e só com botões, e sai um LCD por módulo da lista de compras. A página troca sozinha para o módulo em uso e volta depois, então não é preciso escolher a página na mão. Quem decide a troca é a ponte, que já recebe todos os eventos do painel: a tela continua só desenhando. |
-| **Korry switches** (botões iluminados com legenda, de avião) onde a luz mostra um estado do jogo | O botão não tem posição, então nunca discorda do jogo: cada toque pede a troca, e a legenda acesa é o estado do jogo. Feitos em casa: a legenda impressa em duas cores encaixa num corpo igual para todos, e a chave e os LEDs vão num suporte impresso atrás, sem placa perfurada ([hardware/korry/](hardware/korry/README.md)). O que não tem estado para mostrar é um botão de 16 mm sem luz. |
-| **Cockpit em U, de 766 × 391 mm, com painéis de 125 mm** ([versão B](hardware/construcao.md#cockpit-versão-b)) | Um bloco no meio e duas asas, como num avião, sem painel vazio. Os controles foram juntados em 11 painéis para a caixa não passar de 80 cm; o que não cabe em 125 mm ocupa dois quadrados. O que cada botão faz foi conferido no código-fonte do kRPC antes de desenhar. |
-| **A mikromedia de volta**, no lugar da tela de 7" no HDMI do Pi | Sai mais barato: a placa já está na bancada, e o firmware dela já roda na placa, com o jogo. A tela de 2,8" é pequena para o meio do cockpit, que era o motivo da troca pela de 7"; as páginas têm que ser feitas para caber nela. A placa desenha sozinha a partir dos números que a ponte manda, pela USB do Pi. |
-| **Um tablet velho como tela**, o Galaxy Tab S 8.4 (SM-T705M, Android 6.0.1), no lugar da mikromedia | Já está na bancada e não serve mais para outra coisa. A tela de 8,4" com toque cabe no painel duplo, e o Chrome do Android 6 roda a mesma página do celular, sem firmware novo. A página chega pela Wi-Fi de casa, vinda do Pi, em HTTP: o tablet só precisa entrar na rede, sem internet. Ele fica no próprio carregador, porque numa USB do Pi a Samsung puxa só uns 0,5 A, que não seguram a tela ligada. A tela de 2,8" da mikromedia ficava pequena no meio do cockpit; ela sai de novo, e o firmware dela continua no repositório. |
-| **O mapa da órbita no tablet**, e não no monitor do PC | O monitor fica sempre na vista do foguete. O botão MAPA abre a página MAPA no tablet: a órbita em 3D, as luas, o alvo e o nó de manobra, girada e aproximada pelo toque ([docs/mfd.md](docs/mfd.md#a-página-mapa)). O mapa do jogo continua lá, mas o cockpit não precisa dele. |
-| **Pi ligado no PC por um cabo de rede direto**, com IP fixo dos dois lados, no lugar da Wi-Fi | A ida e volta pelo cabo fica abaixo de 0,5 ms e quase não varia; pela Wi-Fi são de 2 a 10 ms, com picos de 20 a 100 ms, e a variação atrapalha o fly by wire. Não depende do roteador, os endereços não mudam, e o PC e o Pi continuam na internet pela Wi-Fi. No PC só roda o KSP com o kRPC: a ponte abre sozinha no Pi e espera o jogo. Os 1 a 2 quadros de atraso do próprio kRPC continuam ([docs/setup-pi.md](docs/setup-pi.md#8-cabo-de-rede-direto-até-o-pc)). |
-| **Recursos na tela multifunção**, sem as barras de LED | Saem o MAX7219, as 5 barras de 10 LEDs e a fiação delas, e a tela já recebe tudo da ponte. O combustível, o oxidante, o monopropelente e a eletricidade vão para uma página da tela. |
-| **Caixa em MDF cortado a laser, com peças impressas em 3D** | A laser do colégio faz as peças planas e grandes (paredes, painéis com legendas); a impressora de casa, as pequenas e complicadas (korry, knobs, suportes). Cada seção é um painel removível com o seu módulo atrás. |
-| **Fly by wire com a lei de um caça**: o manche pede carga (g) e velocidade de rolagem, e não mexe nas superfícies | A primeira versão movia um ponto na navball, e o avião ia até ele: estável, mas lenta e "interventora" no jogo (o voo gravado mostrou o avião respondendo quase 1 s depois e seguindo o ponto depois de o manche ser solto). Pedindo carga e rolagem, o avião responde na hora, e soltar o manche segura o caminho e a inclinação. O piloto automático pede um caminho, e o FBW calcula a carga e a inclinação para chegar nele. |
-| **Ganhos do FBW divididos pela autoridade do avião** (torque disponível ÷ inércia, informados pelo kRPC) | A força das superfícies cresce com o quadrado da velocidade: um ganho fixo, bom na decolagem, faz o avião balançar rápido, e cada avião precisaria do seu. Nos testes, o FBW segura o avião com a autoridade informada errada pela metade ou pelo dobro. |
-| **Scripts mandam marcadores à ponte da tela por UDP**, com a própria linha do protocolo da tela | O script continua rodando sozinho: sem a ponte aberta, a linha se perde e nada acontece. A ponte só confere e repassa. |
-| **Avisos de voo (GPWS) na ponte da tela, falados no Pi** | A ponte já lê o jogo o tempo todo, então avisa em qualquer avião, com ou sem o fly by wire. A voz sai por um alto-falante USB no Pi, pelo `espeak-ng` ou por gravações; o áudio da mikromedia (VS1053) fica para os alarmes da própria tela. |
-| **O `fbw.py` lê o joystick sozinho**, por enquanto | A ponte ainda não lê o joystick. Quando ler, a leitura passa para ela, e o script recebe o manche da ponte. |
-| **ESP32** fica para depois | Candidato a painel sem fio ou módulo extra (fase 8). |
+| **Flight computer** (Raspberry Pi 4, Python) | Working. Talks to the game over [kRPC](https://github.com/krpc/krpc) through a direct Ethernet cable, starts on boot and waits for the game. |
+| **Multifunction display** | Runs with the game. Pages for the navball, SAS modes, autopilot, landing, ascent and a 3D orbit map. It is a web page on the tablet or on any phone, and also runs in a PC simulator and as bare-metal firmware on a mikromedia for ARM board. |
+| **Ascent to orbit** ([`scripts/subida.py`](scripts/subida.py)) | Flown in the game: reached 80 and 100 km orbits on its own with a 552 t rocket. The gravity turn is still being tuned. |
+| **Rendezvous** ([`scripts/rendezvous.py`](scripts/rendezvous.py)) | Flown in the game: from a 100 km orbit to 111 m from a space station, finishing on RCS translation. |
+| **Suicide-burn landing** ([`scripts/pouso.py`](scripts/pouso.py)) | Being tested in the game. |
+| **Fly-by-wire and autopilot for planes** ([`scripts/fbw.py`](scripts/fbw.py)) | Tested on a simulated plane, not yet in the game. |
+| **Voice callouts**, like an airliner's GPWS ([`bridge/avisos.py`](bridge/avisos.py)) | Written and tested without the game; not yet heard on the Pi. |
+| **Panel I/O** (Arduino Mega) | Phase 1 done: a button, an LED and an LCD in a closed loop with the game. The switches and LEDs of phase 2 are ready to assemble. |
+| **Panel modules and backplane** (KiCad) | Schematics drawn. The PCB of the medium module is routed, with Gerbers. |
+| **Korry switches** (OpenSCAD, 3D printed) | Designed, with STL files for every part and a clearance test piece. |
+| **Enclosure** | Designed (11 panels of 125 mm in a U shape); nothing built yet. |
 
-### Estrutura planejada do repositório
+<p align="center">
+  <img src="docs/img/mfd_celular.png" width="480" alt="The multifunction display in a browser: a navball with pitch numbers and markers, orbital speed on the left, altitude on the right, throttle and vertical speed bars on the edges, and apoapsis and periapsis at the bottom">
+</p>
+
+## How it fits together
 
 ```
-bridge/           computador de bordo em Python: ponte kRPC ⇄ serial, tela de telemetria;
-                  tela multifunção: ponte (mfd.py), simulador, navball e a página do celular (celular/);
-                  painel de sistemas de controle (sistemas.py), com a página de botões (celular/painel.html);
-                  painel de scripts (painel_scripts.py): o korry POUSO abre o scripts/pouso.py, e o
-                  LANCAR, o scripts/subida.py, com o menu da subida;
-                  avisos de voo por voz, como o GPWS (avisos.py);
-                  editor de nós de manobra com botões na página (manobras.py); testes em bridge/tests/;
-                  o serviço do systemd que abre a ponte da tela quando o Pi liga (servico/)
-scripts/          scripts de voo (pouso, subida até a órbita, rendezvous, fly by wire...), que rodam com ou sem o cockpit; testes em scripts/tests/
-firmware/painel/  Arduino Mega (Arduino IDE ou PlatformIO)
-firmware/encoder/ Arduino Uno com o encoder AJUSTE da tela (docs/encoder.md)
-firmware/passos/  sketches de aprendizado, um por passo da fase 1
-firmware/mfd/     mikromedia for ARM / LPC2148 (C, compilado com o LLVM pelo compilar.py): a tela multifunção
-hardware/         esquemáticos e PCBs (KiCad), desenhos da caixa; ver hardware/README.md
-                  e hardware/construcao.md (o cockpit da versão B, a caixa e os painéis);
-                  cada peça própria numa pasta, com ficha e desenhos (hardware/korry/:
-                  modelo no OpenSCAD, STL das legendas, das grades e das peças, gerar.py e o desenho da ligação);
-                  identidade visual (hardware/identidade_visual.md) e desenhos dos painéis
-                  gerados por código (hardware/desenho/, SVG em hardware/img/)
-docs/             protocolo serial, pinagem, anotações
+ Windows PC: KSP 1 + kRPC server
+        ▲
+        │ direct Ethernet cable (kRPC, TCP/protobuf)
+        ▼
+ Raspberry Pi 4, the flight computer ............. bridge/
+   • bridge between kRPC and the boards
+   • serves the multifunction display page
+   • launches the flight scripts ................... scripts/
+        ▲                          ▲
+        │ USB serial               │ home Wi-Fi
+        │ (own text protocol)      │ (HTTP, Server-Sent Events)
+        ▼                          ▼
+ Arduino Mega, panel I/O         tablet = multifunction display
+ firmware/painel/                (Galaxy Tab S 8.4, in Chrome)
+        ▲
+        │ SPI (74HC165 / 74HC595) + analog lines
+        ▼
+ Backplane with 12 slots, one module per panel ... hardware/
+   korry switches, buttons, LEDs, sidestick, throttle
 ```
 
----
+One rule shapes the whole design: **a light shows the state of the game, not the position of a switch.** The panel only reports what was pressed. The flight computer asks the game, and the game's answer lights the korry, so the panel never disagrees with the game. The Mega does not know that KSP exists: it is a generic I/O panel that speaks a small text protocol (`BTN STAGE 1`, `SAS 1`, `ALT 12345`).
 
-## Roteiro
+More in [docs/arquitetura.md](docs/arquitetura.md) and in the [decisions](docs/decisoes.md) (in Portuguese).
 
-Cada fase termina com algo funcionando de ponta a ponta. Não pule o critério de "pronto".
+## Try it without hardware
 
-### Fase 0 — Ambiente
+All you need is Python 3.
 
-**Status: concluída.** Passo a passo detalhado e problemas encontrados em [docs/setup-pi.md](docs/setup-pi.md). No cockpit, o Pi liga no PC por um [cabo de rede direto](docs/setup-pi.md#8-cabo-de-rede-direto-até-o-pc), testado com o `fase0_altitude.py`, e a ponte da tela [abre sozinha](docs/setup-pi.md#9-a-ponte-da-tela-abrindo-sozinha) quando ele liga, espera o jogo e reconecta quando ele fecha e abre de novo.
-
-**No PC:**
-
-- Instalar KSP 1.12.x e o **kRPC** (via CKAN ou manualmente).
-- No jogo, abrir a janela do kRPC e iniciar o servidor (dica: ativar *auto-start* e *auto-accept* nas configurações).
-- Nas configurações do servidor, trocar o endereço de `localhost` para **Any** (aceitar conexões da rede), e liberar no firewall do Windows as portas do kRPC (padrão: 50000 e 50001).
-- Marcar a rede do Windows como **Privada**; em rede Pública o Windows bloqueia a conexão do Pi.
-- Instalar Python 3, `pip install krpc pyserial` e a Arduino IDE 2 (ou PlatformIO no VS Code).
-- Se a placa for clone com chip CH340, instalar o driver CH340 no Windows.
-
-**No Raspberry Pi 4:**
-
-- Gravar o Raspberry Pi OS com o Raspberry Pi Imager, já configurando Wi-Fi e SSH.
-- `pip install krpc pyserial pygame` (de preferência dentro de um *venv*).
-
-```python
-import time
-import krpc
-
-# No PC: krpc.connect(name="KSP Cockpit")
-# No Pi: informar o IP do PC onde o KSP está rodando
-conn = krpc.connect(name="KSP Cockpit", address="192.168.0.10")
-vessel = conn.space_center.active_vessel
-altitude = conn.add_stream(getattr, vessel.flight(), "mean_altitude")
-
-while True:
-    print(f"{altitude():,.0f} m")
-    time.sleep(0.1)
+```bash
+git clone https://github.com/Schackschuck/ksp-cockpit.git
 ```
 
-Versão completa, que recebe o IP como argumento, espera a cena de voo e explica os erros de conexão: [`bridge/fase0_altitude.py`](bridge/fase0_altitude.py).
-
-**Pronto quando:** o script roda **no Pi** e imprime a altitude ao vivo enquanto o foguete sobe no PC.
-
-### Fase 1 — Primeiro circuito fechado
-
-**Status: concluída**, no PC e no Pi. Roteiro passo a passo, montagem e testes: [docs/fase1.md](docs/fase1.md). Protocolo: [docs/protocolo.md](docs/protocolo.md).
-
-- Mega ligado no PC pela USB durante o desenvolvimento; no fim, no Pi.
-- 1 botão (STAGE), 1 LED (SAS) e a altitude num LCD 20x4 com módulo I2C.
-- Protocolo **v0 (texto)**.
-- Aprende: pull-up, debounce, leitura/escrita serial, laço principal sem `delay()`.
+```bash
+cd ksp-cockpit
+```
 
-**Pronto quando:** apertar o botão faz *stage*, o LED acompanha o SAS do jogo e o LCD mostra a altitude.
+```bash
+pip install -r requirements.txt
+```
 
-### Fase 2 — Painel de controle
+The display with a simulated spacecraft that moves by itself:
 
-**Status: em andamento.** Chaves, botões e LEDs estão prontos para montar: pinagem, código e testes em [docs/fase2.md](docs/fase2.md). O cockpit inteiro está desenhado: a [versão B](hardware/construcao.md#cockpit-versão-b), em U, com 11 painéis de 125 mm, o sidestick e o acelerador no painel.
+```bash
+python bridge/mfd.py --demo --celular
+```
 
-- Chaves para SAS, RCS, trem de pouso, luzes e freios; STAGE e ABORT com capa de proteção. Depois, action groups.
-- **Painel VOO, de sistemas de controle** ([desenho](hardware/construcao.md#painel-de-sistemas-de-controle)): os 10 modos do SAS em korry de duas cores (azul virando, verde segurando), korry SAS, RCS, FBW e TRAVA ALT, e o encoder do [piloto automático](#piloto-automático-de-avião). Numa placa grande com 4 × 74HC595. Apertar um modo do SAS abre a roda dos modos na tela multifunção, só para ver. Trem de pouso, luzes e freios foram para o painel do acelerador.
-- A posição da chave é o estado desejado (para cima = ligado); o LED de cada sistema mostra o estado no jogo.
-- **Painel em módulos:** cada seção vira uma placa, ligada por cabo flat a um backplane de 12 slots no Mega. A placa pequena tem 8 entradas e 8 LEDs (1 × 74HC165 + 1 × 74HC595); a média, 16 e 24 (2 + 3), com um jack JST-XH para cada korry; a grande, 24 e 32 (3 + 4). Os LEDs só mostram o que vem do jogo: nenhum é ligado a um botão. Cada módulo tem uma etiqueta numa chave DIP, e o Mega descobre sozinho o que está encaixado. Esquemáticos, etiquetas e qual placa vai em cada seção em [hardware/](hardware/README.md).
-- Enquanto o primeiro módulo não fica pronto, os controles básicos continuam direto nos pinos do Mega, como em [docs/fase2.md](docs/fase2.md).
-- Próximo passo: o firmware do Mega lendo a fila de módulos pelas etiquetas, e testar o primeiro módulo direto no Mega.
-- **Tela e encoder:** a [tela multifunção](hardware/construcao.md#tela-multifunção) agora é um tablet Galaxy Tab S 8.4, atrás do painel duplo. Um encoder só, o AJUSTE, no [VOO](hardware/construcao.md#painel-de-sistemas-de-controle), logo embaixo da tela, mexe na página aberta: o piloto automático, o Δv do editor, o alvo e a subida. As luzes do piloto e os avisos ficam ao lado dele. As barras de recursos saíram, e o painel da asa esquerda virou só [EVA](hardware/construcao.md#eva).
-- **Sidestick e acelerador no painel:** um joystick JH-D400X-R4 de 3 eixos, com o botão do manche trocando entre VOO, CÂMERA e TRANSLAÇÃO, e uma alavanca deslizante de 60 mm, os dois lidos pelo Mega nas linhas analógicas do backplane ([sidestick](hardware/construcao.md#sidestick), [acelerador](hardware/construcao.md#acelerador)). O Extreme 3D Pro fica para desenvolver no PC; mapeamento em [hardware/construcao.md](hardware/construcao.md#joystick-logitech-extreme-3d-pro).
-- **Korry switches:** botões iluminados com legenda, como nos aviões, 35 no cockpit. Legenda impressa em duas cores na FlashForge Inventor, encaixada num corpo igual para todos, com a chave e os LEDs num suporte impresso. As bases de cada grupo saem numa grade impressa, parafusada atrás do painel. O modelo, os STL das 31 legendas, das grades e das peças, o `gerar.py` e a ligação estão em [hardware/korry/](hardware/korry/README.md); o primeiro passo é o teste de folga e um korry ligado direto no Mega.
-
-**A fazer na ponte, para a versão B** (o que cada controle faz e o comando do kRPC estão em [hardware/construcao.md](hardware/construcao.md#os-painéis)):
-
-- [ ] Definir no [protocolo](docs/protocolo.md) as mensagens dos painéis novos: tempo, navegação, action groups e peças, câmera, EVA, acelerador e sidestick.
-- [ ] Tempo: WARP, PARAR, FISICO, ATE O NO, PAUSA, SALVAR, CARREGAR e REVERTER.
-- [x] Encoder AJUSTE da tela: o firmware do Uno, mandando `ENC AJUSTE` e `BTN AJUSTE` ([docs/encoder.md](docs/encoder.md)).
-- [x] Encoder AJUSTE da tela: a ponte lê o Uno (`--encoder`) e manda o giro e o aperto para a página aberta: a SUBIDA ou o piloto automático ([docs/encoder.md](docs/encoder.md#na-ponte-da-tela)).
-- [ ] Encoder AJUSTE: o Δv do editor e o alvo, quando a ponte da tela tiver as páginas deles.
-- [ ] Navegação: PROCURAR abre a página ALVO, e o AJUSTE escolhe o alvo; LIMPAR; REFERENCIA; trocar de nave.
-- [ ] Action groups 1 a 8 e os korry das peças (paraquedas, painéis solares, antenas, compartimento de carga), com a luz do estado.
-- [ ] Câmera: IVA, MODO CAM, FOTO e ESCONDER. O MAPA já existe na página de botões e abre a página MAPA do tablet.
-- [ ] Acelerador pela alavanca; TREM, FREIOS e LUZES em korry.
-- [ ] Sidestick: os 3 eixos pelo Mega, e o botão trocando o modo, com as luzes.
-- [ ] EVA, quando houver o kRPC 0.7: andar e voar pelo manche, JATO, LUZ, SAIR, EMBARCAR, AGARRAR e SOLTAR.
-- [x] Tela no tablet: a página SUBIDA no navegador, com o menu e o desenho do voo, como na mikromedia.
-- [ ] Testar a tela no Tab S pela Wi-Fi, em tela cheia.
-- [x] Página MAPA no tablet: a órbita em 3D, as luas, o alvo e o nó de manobra, no lugar do mapa do jogo ([docs/mfd.md](docs/mfd.md#a-página-mapa)). Depois: as trajetórias que trocam de esfera de influência.
-- [ ] Páginas novas na tela: ORBITA, DELTA-V, SUBIDA, ALVO, TEMPO, EVA e RECURSOS (combustível, oxidante, monopropelente e eletricidade, no lugar das barras de LED).
+Open http://localhost:8000 for the display and http://localhost:8001 for the button panel. On the button panel, hold **LANCAR** for 5 s to fly a simulated rocket to orbit, or **POUSO** to land a simulated booster. Without `--celular`, the display opens in a window, at the resolution of the mikromedia board.
 
-**Pronto quando:** dá para lançar e colocar um foguete em órbita usando só o painel.
+The flight scripts also run alone, against a simulated vehicle:
 
-### Fase 3 — Tela de telemetria
+```bash
+python scripts/subida.py --demo
+```
 
-- Interface em pygame no Pi: altitude, velocidades, apoapse/periapse, tempo até Ap/Pe, combustível e delta-v por estágio.
-- Depois: gráfico de altitude × tempo, desenho simples da órbita, indicador de atitude.
-- O Pi 4 tem folga de desempenho, mas vale o bom hábito: redesenhar só o que mudou e limitar a taxa de quadros.
-- A tela do cockpit é um tablet Galaxy Tab S 8.4, com a página da tela no Chrome, com a página chegando pela Wi-Fi de casa e o tablet no próprio carregador ([docs/mfd.md](docs/mfd.md#no-tablet-do-cockpit)). A mesma tela roda no simulador do PC, no celular e na mikromedia ([fase 6](#fase-6--tela-multifunção-mikromedia-for-arm)).
-- A tela multifunção ([docs/mfd.md](docs/mfd.md)) já mostra navball, velocidades, altitude e Ap/Pe, na placa, no simulador e numa página web.
+```bash
+python scripts/pouso.py --demo
+```
 
-**Pronto quando:** dá para circularizar uma órbita olhando só para a tela.
+The tests need neither the game nor the hardware (the flight scripts take about 3 minutes):
 
-### Fase 4 — Instrumentos físicos
+```bash
+python -m unittest discover -s bridge/tests
+```
 
-**Status: editor de manobras escrito, com botões numa página no lugar das chaves; falta testar no jogo.** [`bridge/manobras.py`](bridge/manobras.py) cria e edita os nós pelo kRPC e mostra os números do nó e da órbita (antes e depois) no navegador do PC ou do celular: [docs/manobras.md](docs/manobras.md). A página manda linhas do protocolo pela rede; o painel vai mandar as suas pela serial, com o encoder no lugar dos pares `+`/`-` do Δv. Por enquanto a página também gira a câmera do mapa, **o que tem que sair dela:** no cockpit, a câmera do mapa vai ser mexida pelo joystick, no modo CÂMERA.
+```bash
+python -m unittest discover -s scripts/tests
+```
 
-**A fazer no editor, para ficar igual ao painel desenhado** ([desenho](hardware/construcao.md#painel-do-editor-de-manobras), [mensagens](docs/protocolo.md#no-painel)):
+## With the game
 
-- [ ] Ponte (`bridge/manobras.py`): guardar o eixo escolhido (PRO, NRM ou RAD), começando pelo PRO em cada nó novo, e trocar de eixo com `BTN PRO`, `BTN NRM` e `BTN RAD`.
-- [ ] Ponte: aceitar `ENC DV <cliques>` (horário positivo) e aplicar os cliques × passo no eixo escolhido.
-- [ ] Ponte: aceitar `SW PASSO <0 a 3>`, o passo pela posição da chave rotativa, no lugar do `BTN PASSO`.
-- [ ] Ponte: mandar ao painel qual eixo está escolhido, para acender o korry certo.
-- [ ] Página do celular (`bridge/celular/manobras.html`): trocar os pares `PRO -`/`PRO +`, `NRM -`/`NRM +` e `RAD -`/`RAD +` por três botões de eixo e um par `-`/`+` que faz o papel do encoder, com o eixo escolhido destacado.
-- [ ] Testes (`bridge/tests/test_manobras.py`) para o eixo escolhido, o `ENC DV` e o `SW PASSO`.
-- [ ] Atualizar [docs/manobras.md](docs/manobras.md) e tirar o "planejado" da seção [No painel](docs/protocolo.md#no-painel) do protocolo.
+1. Install KSP 1.12 and the kRPC mod, through CKAN or by hand. The project runs server 0.5.4 in the game and the Python client 0.6.0, the one in `requirements.txt`.
+2. In the game, open the kRPC window and start the server. To connect from another computer, such as the Pi, set the address to **Any** and allow TCP ports 50000 and 50001 in the firewall.
+3. Check the connection: `python bridge/fase0_altitude.py` prints the altitude live. From another computer, add the PC's IP address.
+4. The display with the real ship: `python bridge/mfd.py --celular`. Flying to an 80 km orbit: `python scripts/subida.py`.
 
-- Displays de 7 segmentos com MAX7219 para os números mais importantes.
-- Encoder rotativo para escolher o que cada display mostra. Lido pela mesma cadeia de 74HC165 dos módulos: o Mega lê a cadeia inteira mil vezes por segundo numa **interrupção de timer**, e assim o redesenho do LCD (~20 ms) não faz perder cliques. O painel acumula os cliques e manda `ENC <nome> <cliques>`.
-- **Editor de nós de manobra** (pelo kRPC: `control.add_node`, `node.prograde` etc.):
-  - Painel duplo de 250 × 125 mm, desenho e peças em [hardware/construcao.md](hardware/construcao.md#painel-do-editor-de-manobras).
-  - **Δv por um encoder só**, porque os três eixos nunca são mexidos ao mesmo tempo. Três korry (PRO, NRM e RAD) escolhem o eixo, e a legenda do escolhido acende na cor da alça do nó no KSP. Girar no sentido horário soma o passo; no anti-horário, tira. Um nó novo já vem com o PRO escolhido. O encoder é o AJUSTE, no VOO: com a página do editor aberta, a ponte manda o giro como `ENC DV <cliques>`, e quem sabe o eixo escolhido é ela.
-  - **PERCURSO:** uma tecla basculante com mola para o centro, como a do TIME WARP, montada deitada, move o nó ao longo da órbita (para a esquerda, antes; para a direita, depois). Segurando, repete; o painel manda `INC TEMPO <passos>`. Embaixo dela, ANT e PROX trocam de nó.
-  - **PASSO:** chave rotativa de 4 posições, com a legenda gravada em volta: 0,1 / 1 / 10 / 100 m/s no Δv e 1 s / 10 s / 1 min / 10 min no tempo.
-  - Korry NOVO (nó novo no apoastro), APAGAR e CIRC (circulariza no ponto do nó, com o Δv calculado pela ponte). Sem AP e PE: o tempo já leva o nó a qualquer ponto.
-  - São 14 entradas e 3 LEDs (os korry de eixo): cabe numa placa média.
-  - **Sem tela no módulo:** Δv, tempo de queima, T− até o nó e o Ap/Pe resultante aparecem numa página do editor na tela multifunção, que abre sozinha quando uma tecla ou botão do editor é usado (ver os [princípios](#princípios)).
-  - O botão MAPA fica na seção da câmera e abre a página MAPA do tablet, onde o nó aparece com a órbita depois dele. A câmera do mapa (girar e aproximar) é o toque no tablet, não o editor.
-- O que resta de combustível, oxidante, monopropelente e eletricidade vai para a página RECURSOS da tela multifunção, no lugar das barras de LED que estavam no painel da [EVA](hardware/construcao.md#eva).
-- Ponteiro analógico com motor de passo X27.168.
-- Fonte 5V externa (a USB não aguenta muitos LEDs).
+The full setup of the Raspberry Pi is in [docs/setup-pi.md](docs/setup-pi.md), and the first circuit with the Arduino Mega is in [docs/fase1.md](docs/fase1.md).
 
-**Pronto quando:** um voo inteiro (lançamento → órbita → reentrada) é feito sem olhar para o monitor do PC, inclusive planejar a circularização pelo editor de manobras.
+## Repository map
 
-### Fase 5 — Protocolo v1 + scripts de voo
+| Folder | What is inside |
+|---|---|
+| [`bridge/`](bridge/) | The flight computer in Python: the panel bridge, the display bridge and its simulator, the browser pages, the voice callouts, the maneuver editor and the systemd service |
+| [`scripts/`](scripts/) | The flight scripts (ascent, rendezvous, landing, fly-by-wire). Each one runs alone from the command line |
+| [`firmware/`](firmware/) | The Arduino Mega panel, the Arduino Uno encoder, the phase 1 learning sketches, and the display firmware for the mikromedia (LPC2148), written without a framework |
+| [`hardware/`](hardware/) | KiCad schematics and PCB, the korry switch (OpenSCAD and STL), panel drawings generated by code, the visual identity and the enclosure |
+| [`docs/`](docs/) | The detailed documentation, in Portuguese |
+| [`.claude/`](.claude/) | The Claude Code workflow: skills, a hook and review agents |
 
-**Status: script de pouso escrito, em teste no jogo; o korry POUSO já dispara o script pela página de botões.** No primeiro teste, em Kerbin, a freada terminou alta e a nave tocou o chão inclinada e tombou. Corrigido: o pé agora é medido pelas pernas do trem. No segundo teste o pé ficou certo (0,4 m de erro no toque), mas a nave balançou até 31° na freada: o piloto automático do kRPC não segurava a nave. Agora quem aponta a nave é o SAS do KSP (falta testar de novo). [`scripts/pouso.py`](scripts/pouso.py) faz a queima de suicídio numa descida vertical, em qualquer planeta, contando o arrasto do ar; roda pela linha de comando ou pelo korry POUSO do [painel de scripts](hardware/construcao.md#painel-de-scripts), e a tela multifunção mostra o pouso numa página própria ([docs/mfd.md](docs/mfd.md#painel-de-scripts-e-a-página-do-pouso)). [`scripts/tests/test_pouso.py`](scripts/tests/test_pouso.py) testa a mesma guiagem numa nave simulada, sem o KSP, em planetas com e sem atmosfera.
+## Documentation
 
-- Migrar para o protocolo binário (COBS + CRC).
-- **Painel de scripts** ([desenho](hardware/construcao.md#painel-de-scripts)): um korry por script, em faixas na ordem do voo (SUBIDA, ORBITA, DESCIDA). Por enquanto o POUSO e o LANCAR, da [subida até a órbita](#subida-até-a-órbita); os outros quatro lugares ficam vagos, com a tampa lisa. Segurar o korry 5 s abre o script; segurar de novo 5 s aborta. O korry pisca âmbar enquanto conta, fica verde com o script voando e vermelho se ele foi abortado ou falhou.
-- Korry "EXEC" (um lugar vago do painel de scripts) que executa o nó de manobra da fase 4: aponta a nave para o nó, acelera o tempo até perto dele, queima e corta quando o Δv restante chega a zero.
-- Painel e tela mostram o estado do script (armando, voando, pousado, abortado). A página POUSO da tela, inspirada na tela do booster da SpaceX, mostra a nave descendo até o alvo, a fase, a altura, a descida, o empuxo/peso e quanto do empuxo a freada precisa. O pouso e o EXEC seguem a [base comum dos scripts](#base-comum).
+The detailed documentation is in Portuguese; your browser's translator handles it well. The full index is in [docs/README.md](docs/README.md). Good places to start:
 
-**A fazer no painel de scripts:**
+- [Architecture](docs/arquitetura.md), [decisions](docs/decisoes.md) and the [roadmap](docs/roteiro.md), in 8 phases
+- [Serial protocol](docs/protocolo.md) between the flight computer, the boards and the display
+- [Multifunction display](docs/mfd.md), with the simulator, the phone and the tablet
+- [Flight scripts](docs/scripts-de-voo.md): [ascent](docs/subida.md), [rendezvous](docs/rendezvous.md), [fly-by-wire](docs/fbw.md) and [voice callouts](docs/avisos.md)
+- [Hardware](hardware/README.md), the [korry switch](hardware/korry/README.md) and the [construction](hardware/construcao.md)
 
-- [x] Ponte (`bridge/painel_scripts.py`): segurar `BTN POUSO` 5 s abre o `scripts/pouso.py` num processo; segurar de novo aborta; a linha `SCR POUSO` acende o korry.
-- [x] `scripts/pouso.py`: estado por UDP (linhas `POU`), código de saída e `--demo` com uma nave simulada.
-- [x] Página POUSO no simulador e no celular; korry POUSO na página de botões (`bridge/celular/painel.html`).
-- [ ] Testar no jogo: o korry abre o pouso, a página acompanha, e segurar de novo aborta com o motor cortado.
-- [ ] Firmware do Mega: o korry POUSO no módulo da ação executiva, mandando `BTN POUSO 1` e `0`, e o LED de duas cores pela linha `SCR POUSO`.
-- Os outros scripts (piloto automático de avião, [subida até a órbita](#subida-até-a-órbita), pouso de precisão...) estão em [Scripts de voo](#scripts-de-voo) e não entram no critério desta fase.
+## Built with
 
-**Pronto quando:** um booster pousa sozinho a partir de um botão no painel, e um nó de manobra é executado pelo botão EXEC.
+- [kRPC](https://github.com/krpc/krpc) ([docs](https://krpc.github.io/krpc/)), which exposes the game to Python over the network
+- Python, with [pySerial](https://pyserial.readthedocs.io/), [pygame-ce](https://pyga.me/) and NumPy
+- [Arduino](https://docs.arduino.cc/) on the Mega and the Uno
+- [LLVM](https://llvm.org/) (clang and ld.lld) for the ARM7 firmware, flashed with [Flash Magic](https://www.flashmagictool.com/). Register reference: the [LPC214x user manual (UM10139)](https://www.nxp.com/docs/en/user-guide/UM10139.pdf); board manual and schematic: [MikroElektronika](https://www.mikroe.com/) (MIKROE-780)
+- [KiCad](https://www.kicad.org/) for the schematics and PCBs, [OpenSCAD](https://openscad.org/) for the korry switch, and Node.js for the panel drawings
+- The [Raspberry Pi documentation](https://www.raspberrypi.com/documentation/)
 
-### Fase 6 — Tela multifunção (mikromedia for ARM)
+The display firmware embeds bitmaps of the [DejaVu Sans Mono](https://dejavu-fonts.github.io/) font, in `firmware/mfd/tabelas.c`, under the [DejaVu fonts license](https://dejavu-fonts.github.io/License.html).
 
-**Fora do cockpit de novo:** a tela do cockpit passou a ser um tablet Galaxy Tab S 8.4, com a mesma página do celular ([decisões](#decisões)), porque a tela de 2,8" ficava pequena no meio do painel. O firmware continua aqui e roda na placa, com o jogo.
+## How it is developed
 
-Placa da MikroElektronika com **NXP LPC2148** (ARM7TDMI-S, 60 MHz, 512 KB de flash, 32 KB de RAM), tela 320x240 com touch resistivo, microSD, saída de áudio e carregador de Li-Po. Aqui o firmware é escrito **sem framework**: C, registradores, script de linker e código de inicialização próprios.
+The project is developed with [Claude Code](https://claude.com/claude-code): one agent writes a plan and reviews, another implements, and every change is checked (tests, pyflakes and firmware builds) before it is merged. The rules are in [`CLAUDE.md`](CLAUDE.md), and the skills, the hook and the review agents are in [`.claude/`](.claude/).
 
-**Status: rodando na placa, com o jogo.** O firmware em `firmware/mfd/` faz na placa o que o simulador faz no PC: navball, números, botões de toque e as páginas SAS, AP e POUSO, no protocolo em texto. A página SUBIDA ([subida até a órbita](#subida-até-a-órbita)) existe na placa e no navegador; o simulador mostra a navball no lugar dela. Ligada no Pi pela PROG, com a ponte da tela aberta pelo serviço, a placa mostra a navball ao vivo, lisa, e o toque funciona no jogo. O controlador da tela é o `0047`, o HX8347-D. Falta o áudio. Gravar e ligar: [docs/mikromedia.md](docs/mikromedia.md). A tela também roda no simulador do PC e no navegador do celular: [docs/mfd.md](docs/mfd.md).
+## License
 
-- **Placa:** duas mini-USB. A **USB** vai direto no LPC2148, e a **PROG** tem um conversor USB-serial **FT232RL**, por onde o PC conversa com a placa e o Flash Magic grava o firmware. No cockpit, o Pi liga na PROG; a USB só alimenta a placa, porque o firmware não usa ela. A tela é um módulo MI0283QT2 (320x240, barramento de 16 bits), com touch resistivo lido pelo ADC. Pinos em [docs/mikromedia.md](docs/mikromedia.md#como-o-firmware-funciona).
-- **Ferramentas:** LLVM (clang, ld.lld e llvm-objcopy), chamado pelo `firmware/mfd/compilar.py`; o `mfd.hex` já vem compilado. Gravação pelo bootloader serial de fábrica do LPC2148, pela PROG, com o Flash Magic.
-- **Passos:**
-  1. [x] Código de inicialização, script de linker, PLL a 60 MHz.
-  2. [x] Serial com interrupção e o protocolo da tela ([docs/protocolo.md](docs/protocolo.md#tela-multifunção-mikromedia)), em texto como o simulador; mais tarde o v1.
-  3. [x] Driver da tela (HX8347) e desenho em faixas de 16 linhas, porque não cabe um *framebuffer* (320×240×2 = 150 KB contra 32 KB de RAM).
-  4. [x] Touch pelo ADC, com a orientação e a calibração escolhidas na própria tela e guardadas na flash.
-  5. [x] Páginas: navball, roda do SAS, piloto automático, pouso e subida. Depois: mapa da órbita, informações e uma página para cada módulo do painel que precisa de números (a começar pelo editor de nós de manobra).
-  6. [x] Rodar na placa: o controlador é o `0047` (HX8347-D), o toque responde e a navball anda lisa ([conferido na placa](docs/mikromedia.md#conferido-na-placa)).
-  7. [ ] Áudio: alarme de estol e avisos gravados no microSD (combustível baixo, contagem de altitude no pouso), pelo VS1053.
-
-**Pronto quando:** a mikromedia mostra telemetria ao vivo recebida do Pi e toca um alarme de combustível baixo.
-
-### Fase 7 — Hardware definitivo
-
-- PCB no **KiCad** a partir dos esquemáticos de [hardware/](hardware/README.md): uma placa de módulo, fabricada em quantidade, e o backplane. Fabricação na JLCPCB, PCBWay… A do módulo médio já está pronta, com os Gerbers ([hardware/](hardware/README.md#pcb-do-módulo-médio)).
-- Caixa em MDF cortado a laser (no colégio), com peças impressas em 3D (em casa): um painel removível por seção, legendas gravadas, korry switches, o Pi e o tablet embutidos. Formato, aparência e ordem para construir em [hardware/construcao.md](hardware/construcao.md).
-
-### Fase 8 — Embarcados avançado (opcional)
-
-- Painéis modulares, cada um com seu micro, falando com um mestre via I2C, RS-485 ou CAN.
-- Painel sem fio com **ESP32**.
-- Reescrever o firmware do Mega sem o framework Arduino (registradores do AVR) ou migrar para RP2040 (Raspberry Pi Pico) com o C SDK ou Rust + Embassy.
-
----
-
-## Scripts de voo
-
-Scripts que pilotam a nave, ou ajudam o piloto a pilotar, disparados pelo painel e acompanhados na tela. O primeiro é o pouso autônomo da [fase 5](#fase-5--protocolo-v1--scripts-de-voo) ([`scripts/pouso.py`](scripts/pouso.py)); o segundo, o [fly by wire de avião](#fly-by-wire-de-avião) ([`scripts/fbw.py`](scripts/fbw.py)); o terceiro, a [subida até a órbita](#subida-até-a-órbita) ([`scripts/subida.py`](scripts/subida.py)); o quarto, o [rendezvous](#rendezvous) ([`scripts/rendezvous.py`](scripts/rendezvous.py)). Os outros desta seção são ideias ainda sem código e sem ordem: cada um entra no roteiro quando o hardware de que precisa existir.
-
-Os scripts ficam em [`scripts/`](scripts/), fora da ponte: cada um roda sozinho pela linha de comando, no PC ou no Pi, mesmo sem o painel. No cockpit, a ponte só dispara o script pelo botão e mostra o estado dele no painel e na tela. Os testes, com naves simuladas e sem o KSP, ficam em `scripts/tests/`.
-
-### Base comum
-
-- **Um script ativo por vez.** No cockpit, liga segurando o korry do script 5 s, e segurar de novo 5 s aborta. ABORT, ou mexer no joystick, também devolve o controle ao piloto na hora (a fazer).
-- O painel e a tela mostram o estado do script (armado, ativo, terminado, abortado). Como nos outros LEDs, o LED mostra o que o script está fazendo, não o botão que foi apertado.
-- **Guiagem separada do kRPC**, como em `pouso.py`: recebe uma leitura da nave e devolve comandos. Assim ela é testada numa nave simulada, sem o KSP, antes de ir para o jogo.
-- **Diretor de voo:** todo script pode rodar no automático ou só como guia. No modo guia, a tela mostra para onde apontar e quanto acelerar, e o piloto voa pelo joystick. Serve para testar a guiagem sem entregar a nave e para aprender a pilotar junto.
-
-### Fly by wire de avião
-
-**Status: script escrito e testado num avião simulado; falta testar no jogo.** Roteiro de testes, ajuste dos ganhos e problemas comuns em [docs/fbw.md](docs/fbw.md).
-
-Como nos caças, o manche não mexe nas superfícies: ele pede o que o avião deve fazer, e o FBW decide as superfícies. [`scripts/fbw.py`](scripts/fbw.py) lê o joystick (o Extreme 3D Pro, ou um controle de Xbox) e pilota o avião pelo kRPC.
-
-- **O manche:** para trás e para a frente pede carga, de −1 g a 4 g; solto, 1 g, e o caminho não curva. Para os lados pede velocidade de rolagem, até 90°/s; solto, a inclinação fica onde parou. A torção soma ao leme. O FBW não trava a altitude sozinho: numa curva, o piloto puxa.
-- **Proteções:** com o manche, só a carga até 4 g: puxando tudo devagar, o avião estola. No piloto automático e na trava, ângulo de ataque entre −8° e 15°, asas até 60° e subida entre −30° e +30°.
-- **Aviso de estol:** com o ângulo de ataque perto dos 15°, a luz ESTOL do painel pisca e a tela toca um alarme. É só aviso: o FBW não mexe no acelerador, no piloto automático, na trava nem no manche.
-- **Nada liga sozinho:** os modos do piloto automático e a trava só ligam pelo painel.
-- **Lei direta** no chão e com o botão do FBW desligado: o manche vai direto para as superfícies. O FBW assume 1 s depois da decolagem.
-- **Sem joystick** (`--sem-joystick`): decola pelo teclado do jogo, na lei direta, e no ar o piloto automático voa pelo painel.
-- **O acelerador fica com o piloto.** O acelerador automático (SPD) já existe por dentro, ainda sem interface.
-- **Na tela:** com o piloto automático ou a trava, o caminho pedido aparece na navball da [tela multifunção](docs/mfd.md), como os quatro cantos verdes de um quadrado. Com o avião nele, o pró-grado fica dentro do quadrado.
-- **Por dentro, duas camadas:** a carga e a rolagem pedidas viram velocidades de giro; os giros viram superfícies, com proporcional e integral e o ganho dividido pela autoridade do avião.
-
-**Pronto quando:** um avião decola na lei direta e, com o FBW, responde ao manche na hora, sem balançar: puxar dá carga, rolar dá rolagem, e soltar segura o que estava.
-
-**Anotado depois dos primeiros voos no jogo** (a fazer):
-
-- [x] **O FBW está muito instável no jogo.** O voo gravado mostrou o nariz oscilando a 1,5 vez por segundo (ganho de pitch alto para o atraso do kRPC) e um avião lento e "interventor". Refeito com a lei de caça e ganhos menores, testados com a leitura atrasada ([docs/fbw.md](docs/fbw.md)). Falta confirmar no jogo.
-- [ ] **Não ligar o FBW sozinho na decolagem.** Hoje ele assume 1 s depois de sair do chão; passa a começar desligado e só liga pelo korry FBW (ou pelo botão do joystick).
-- [x] **Tirar a recuperação automática do estol**, que só deu problema no jogo. Saiu tudo: o acelerador no máximo, o piloto automático e a trava desligando, o nariz para baixo, a trava ligando sozinha depois e o limite de ângulo de ataque no manche. Fica só o aviso (luz ESTOL e alarme).
-- [x] **Os modos do piloto automático ligavam sozinhos** ao ligar o FBW (o avião tentava subir para uma altitude): era a trava de altitude automática, que saiu. Falta confirmar no jogo.
-- [ ] **Avisar o estol também fora do FBW** (na lei direta): a luz ESTOL e o alarme pelo ângulo de ataque, mesmo sem o FBW voando.
-
-### Avisos de voo (GPWS)
-
-**Status: código escrito e testado sem o jogo; falta ouvir no Pi e voar.** Roteiro, limites e como ligar o alto-falante em [docs/avisos.md](docs/avisos.md).
-
-Como o GPWS dos aviões de linha, a ponte da tela fala os avisos em inglês, num alto-falante USB ligado no Pi, em qualquer nave voando na atmosfera:
-
-- **Vermelhos:** `PULL UP` (descendo rápido demais para a altura) e `TERRAIN` (o chão chegando rápido; vira `PULL UP` se continuar).
-- **Âmbar:** `SINK RATE`, `DON'T SINK` (perdendo altura depois da decolagem), `TOO LOW, GEAR` e `TOO LOW, TERRAIN` (baixo com o trem recolhido), `BANK ANGLE` e `OVERSPEED`.
-- **Chamadas de altura** no pouso: 100, 50, 40, 30, 20 e 10 pés.
-- **Luz** GPWS (âmbar) / PULL UP (vermelha) no painel de sistemas; por enquanto, na página de botões.
-
-- [x] `bridge/avisos.py`: os avisos, a prioridade e a voz (`espeak-ng` ou gravações em `bridge/sons/`); `--voz`, `--sem-voz` e `--testar-voz` no `mfd.py`; testes.
-- [x] Luz GPWS / PULL UP na página de botões.
-- [ ] Ouvir no Pi com o alto-falante USB e ajustar os limites no jogo.
-- [ ] Luz GPWS no desenho do painel de sistemas.
-- [ ] Olhar o terreno à frente (EGPWS), pela altura do terreno do kRPC.
-
-### Piloto automático de avião
-
-**Status: código escrito e testado com o avião simulado e a demonstração; falta testar no jogo.** O `fbw.py` voa HDG, ALT e V/S pedindo um caminho ao FBW ([docs/fbw.md](docs/fbw.md#piloto-automático)), e o painel de sistemas é, por enquanto, uma página de botões aberta pela ponte da tela ([docs/mfd.md](docs/mfd.md#painel-de-sistemas-de-controle)), com a roda do SAS e a página do piloto na tela.
-
-- [x] Página de botões no celular, no lugar do painel, como a do editor de manobras.
-- [x] Ponte da tela (`bridge/mfd.py` e `bridge/sistemas.py`): modos do SAS, SAS e RCS no jogo; azul ou verde pelo erro até o marcador; o menu do piloto; as páginas do SAS e do piloto, com a volta à navball.
-- [x] Tela do celular e simulador: a roda dos modos do SAS e a página do piloto.
-- [x] `scripts/fbw.py`: HDG, ALT e V/S pedindo um caminho; FBW e TRAVA pelo painel; estado e comandos por UDP com a ponte da tela; testes no avião simulado.
-- [ ] Testar no jogo: os modos do SAS e as luzes ([roteiro](docs/mfd.md#testar-o-painel-sem-o-ksp)), e o piloto automático num avião ([roteiro](docs/fbw.md#piloto-automático)).
-- [ ] **Tela: tirar os botões redondos SAS e RCS da navball.** Eles ficam só no painel.
-- [ ] **Tela: as páginas que abrem sozinhas** (a roda do SAS, a do piloto e as outras que aparecem por cima da navball) **ficam 6 s** depois do último toque, em vez de 10 s.
-- [ ] O painel de verdade: as mesmas linhas pela serial do Mega, e as pontes do painel e da tela juntas.
-
-Inspirado no painel de piloto automático dos aviões de linha (o MCP do Boeing, o FCU do Airbus).
-
-- **Modos:**
-  - **HDG:** vira para o rumo escolhido e segura.
-  - **ALT:** sobe ou desce até a altitude escolhida e segura. Enquanto não chega, fica **armado** (azul na tela); ao chegar, nivela e fica verde.
-  - **V/S:** sobe ou desce com a velocidade vertical escolhida. Com o ALT ligado junto, nivela ao chegar na altitude escolhida.
-  - **SPD:** acelerador automático, segura a velocidade escolhida. Fica para depois, como mais uma linha do menu.
-  - Sem HDG ligado, a rolagem fica com o manche, e a inclinação fica onde o piloto deixou.
-- **No painel de [sistemas de controle](hardware/construcao.md#painel-de-sistemas-de-controle)**, junto do SAS, do RCS e do FBW:
-  - **Um encoder só**, o AJUSTE, que também mexe nas outras páginas da tela, mexido pelo menu da página do piloto na tela multifunção: girar move o cursor entre HDG, ALT e V/S; apertar escolhe a linha, e girar muda o valor (horário soma); apertar de novo sai; segurar 1 s liga ou desliga o modo da linha. Girando devagar, o valor muda de 1 em 1 (1°, 10 m, 0,1 m/s); rápido, de 10 em 10.
-  - **Uma luz verde por modo**, ao lado do encoder, acesa quando o modo está ligado no FBW. Sem displays de 7 segmentos: os valores ficam na tela.
-  - Korry **FBW** (liga e desliga o FBW, como o botão do joystick) e **TRAVA ALT** (trava e destrava a altitude do momento).
-- **Na tela:** a página do piloto, com os modos (azul armado, verde ligado) e os valores escolhidos, abre sozinha quando o encoder é mexido e volta para a navball uns 10 s depois. O caminho pedido aparece na navball: é o ponto verde do FBW.
-- **Por dentro:** o piloto automático fica por cima do [fly by wire](#fly-by-wire-de-avião) e pede um caminho, como um piloto que não cansa:
-  - HDG pede o rumo escolhido, que vira inclinação das asas; sem HDG, a rolagem fica com o manche;
-  - ALT, V/S e a TRAVA ALT pedem o ângulo de subida, que vira carga; sem eles, o pitch fica com o manche;
-  - SPD liga o acelerador automático que já existe no `fbw.py`;
-  - as proteções do FBW continuam valendo, e mexer no manche devolve o eixo ao piloto.
-- **Precisa de:** o encoder e as luzes do VOO. Para começar, uma página de botões no celular faz o papel do painel.
-
-**Pronto quando:** um avião decola na mão, e o piloto automático leva ele até a altitude e o rumo escolhidos no painel e segura lá.
-
-### Rover com controle de cruzeiro
-
-- Os mesmos botões e encoders HDG e SPD do avião, e o mesmo PID: segura a velocidade e o rumo no chão, pelo acelerador e pela direção das rodas (`control.wheel_throttle` e `control.wheel_steering`).
-- Freia nas descidas, para não passar da velocidade escolhida.
-- Sai quase de graça depois do piloto automático de avião.
-
-### Subida até a órbita
-
-**Status: voou no jogo em 20/10/2026 e chegou em órbita sozinho, com um foguete de 552 t, a 80 e a 100 km; o giro está em ajuste.** [`scripts/subida.py`](scripts/subida.py) leva a nave da plataforma até uma órbita circular, em qualquer planeta, com ar ou sem. Como funciona, as contas e o roteiro de teste no jogo estão em [docs/subida.md](docs/subida.md).
-
-- **O piloto escolhe** a altitude, a inclinação e, se quiser, o plano do alvo escolhido no jogo, na página SUBIDA da tela multifunção, por um encoder. Segura o korry LANCAR 5 s, e o script voa.
-- **O rumo** desconta a rotação do planeta e é refeito a cada passo, pela velocidade que ainda falta. A inclinação final sai a menos de 0,1° da pedida.
-- **O giro** da curva de gravidade é escolhido por simulação: antes de inclinar, o script simula a subida inteira com 16 giros e fica com o de menor Δv, somando a subida e a circularização. Depois, a cada 5 s, ele simula de novo o resto da subida e corrige o nariz em até 4°, em malha fechada.
-- **Com o plano de um alvo**, o script espera a janela de lançamento, com time warp, e no fim iguala o plano numa queima na linha dos nós.
-- **Os estágios** saem sozinhos; o corte é no apoastro pedido, e a circularização, em malha fechada, centrada no apoastro. O próprio script queima: o EXEC ainda não existe.
-- Junto com o pouso, fecha o ciclo: do chão até a órbita e de volta.
-
-- [x] `scripts/subida.py`: a guiagem, a simulação do giro, a janela, o kRPC, o `--demo` e as linhas `SUB`; testes em `scripts/tests/test_subida.py`, numa nave simulada em Kerbin e na Mun.
-- [x] Ponte da tela: o korry LANCAR, o menu da subida (`ENC SUB`, `BTN SUB`) e a página SUBIDA; na página de botões, o LANCAR e um encoder para a configuração.
-- [x] A página SUBIDA na mikromedia e no navegador (o celular e o tablet): a configuração e o voo. O simulador mostra a navball no lugar dela.
-- [ ] O desenho do voo na página SUBIDA: o KSC na decolagem, a parábola na subida e a órbita na circularização, com dois zooms. No navegador, testado com o `--demo`; na placa, falta gravar. Falta ver num lançamento. Depois, a visão oblíqua do planeta na órbita.
-- [ ] Testar no jogo ([roteiro](docs/subida.md#testar-no-jogo)): primeiro 80 km e 0°, depois a inclinação, o plano de um alvo e a Mun.
-- [x] A configuração pelo encoder AJUSTE, no Uno, com a página SUBIDA aberta ([docs/encoder.md](docs/encoder.md#na-ponte-da-tela)).
-- [ ] Depois: a guiagem do vácuo (PEG), mais eficiente que seguir o pró-grado.
-- [ ] Depois: lançar na hora certa para o rendezvous. Além de esperar o plano do alvo, o script esperaria a **fase**: decolar quando o alvo estiver no ângulo certo à frente, para a subida terminar logo atrás dele, e o rendezvous virar só a aproximação final. Na Estação um (quase equatorial, ~37 min de volta), o alvo passa por cima do KSC a cada ~41 min, então a espera é curta. No primeiro voo completo (21/10/2026), a subida sem essa espera terminou a 576 km da estação, e o rendezvous previu 89,6 m/s e 5 h até o encontro.
-
-### Pouso de precisão (volta à base)
-
-O pouso da SpaceX completo. O `pouso.py` desce na vertical onde a nave estiver; aqui o booster volta para um lugar escolhido, como a plataforma do KSC.
-
-- **Queima de retorno** logo depois da separação: vira a nave e queima até a trajetória cair no alvo.
-- **Queima de reentrada**, para chegar mais devagar nas camadas grossas da atmosfera.
-- Na descida, as aletas corrigem a trajetória para o alvo.
-- Termina com a queima de suicídio do `pouso.py`, com a mira puxando para o alvo em vez de só anular a deriva.
-- É o mais difícil da lista: precisa prever onde a trajetória cai, com arrasto, como o `pouso.py` já faz na vertical.
-
-### Rendezvous
-
-**Status: voou no jogo em 21/10/2026, de 100 km até 111 m da Estação um, com 98,3 m/s gastos (89,6 previstos); a aproximação com RCS de translação também foi testada no jogo.** [`scripts/rendezvous.py`](scripts/rendezvous.py) leva a nave até 100 m de outra em órbita do mesmo planeta, parada em relação a ela. Como funciona, as contas e o roteiro de teste no jogo estão em [docs/rendezvous.md](docs/rendezvous.md).
-
-**O script queima sozinho**, porque o EXEC da fase 5 ainda não existe. O nó que ele cria no jogo é só para mostrar: no mapa, o KSP desenha a aproximação, e o piloto confere o plano. Com `--so-planejar`, o script só cria o nó, imprime o plano e sai.
-
-- **As etapas:**
-  1. **Igualar o plano:** só se a inclinação relativa passa de 0,05°. Queima na direção normal, no nodo relativo, de Δv = 2·v·sen(Δi/2).
-  2. **Transferência:** a conta pesada. Uma busca com tiro (shooting): para cada momento de queima e tempo de voo, um palpite tangencial e um Newton em 3D acertam a queima para a nave passar 300 m acima do alvo. O momento da queima varre o período sinódico, e o custo é o Δv da queima mais a velocidade relativa no encontro. Serve também quando a nave já está na altitude do alvo, onde uma Hohmann dá 0 m/s. Sem motor, as órbitas seguem Kepler: a previsão é exata.
-  3. **Correções** no meio do caminho: o mesmo tiro, a partir do estado de agora, em frações de volta antes do encontro.
-  4. **Igualar a velocidade:** no momento da menor distância, com a queima igual à diferença entre a velocidade do alvo e a da nave.
-  5. **Aproximação final**, sem nó: aponta para o alvo e vai pelo RCS de translação, sem virar a nave, a até 2 m/s, freando só no fim, e para a uns 100 m. Sem RCS, vai pelo motor. Dali segue o acoplamento assistido.
-- **Automático ou diretor de voo:** o script encadeia as etapas e acelera o tempo entre elas (`warp_to`). O modo diretor de voo, em que ele só propõe cada nó e o piloto queima, fica para depois.
-- **Na página do editor de manobras, na tela multifunção:** a menor distância prevista até o alvo, quando ela acontece e a velocidade relativa nesse ponto, atualizadas enquanto o encoder e o TEMPO mexem no nó.
-- **Ordem para fazer**, do mais simples ao mais difícil:
-  1. [ ] Só mostrar a menor distância prevista enquanto o piloto edita os nós na mão. Sem automação, e já é como se faz rendezvous "de olho" no KSP.
-  2. [x] Os nós de igualar o plano e igualar a velocidade e a busca da transferência, numa etapa só, para o script já fechar o voo. Testado em voos simulados.
-  3. [x] A aproximação final, que já entrou junto. Falta a passagem para o acoplamento.
-  4. [x] O plano conferido no jogo (`--so-planejar`, 21/10/2026): 99,5 m/s previstos de 100 km até a Estação um.
-  5. [x] O voo completo no jogo ([roteiro](docs/rendezvous.md#testar-no-jogo)), 21/10/2026: 111 m e 0,20 m/s no fim, 98,3 m/s e 117 de monopropelente gastos.
-  6. [x] A aproximação com o RCS de translação, sem virar a nave, e com a curva de frenagem até 2 m/s. Testada no jogo em 21/10/2026: de 1,3 km a 59 m, parada a 0,19 m/s. O RCS só fica ligado nela; no resto do voo, quem vira a nave é a roda de reação.
-  7. [ ] De longe (mais de ~1 km), trocar a reta por um tiro de Kepler: seguir a reta contra a órbita gasta ~2 m/s de RCS a cada 100 m.
-- **Decidido:**
-  - Quem prevê as órbitas: uma previsão própria, com a equação de Kepler (as funções f e g), rápida e testável sem o KSP. Com o kRPC, cada pergunta vai pela rede, e a busca faz milhares. O `--so-planejar` confere a menor distância da previsão própria contra a do kRPC.
-  - Queimas longas: começam metade da duração antes do nó, senão o encontro erra por quilômetros, e seguem o Δv que ainda falta, como o KSP. Como o script queima sozinho, a regra está nele; o EXEC, quando existir, usa a mesma.
-- **Precisa de:** só do kRPC e de uma nave com motor aceso; roda pela linha de comando, sem o painel. A etapa 1 da ordem precisa da tela. O EXEC e o editor de manobras só entram no modo diretor de voo.
-
-### Acoplamento assistido
-
-- Página nova na tela multifunção: a mira de alinhamento com a porta de acoplamento do alvo, a distância e a velocidade de aproximação.
-- O sidestick no modo TRANSLAÇÃO, escolhido pelo botão do manche: o manche move a nave com o RCS, sem girar ([os três modos](hardware/construcao.md#um-joystick-três-modos)).
-- Primeiro manual, com a tela ajudando. Depois automático: a nave se alinha e se aproxima devagar sozinha.
-- **Precisa de:** joystick (fase 2) e a tela multifunção.
-
----
-
-## Lista de compras
-
-Itens marcados já estão na bancada. Compre por fase — não precisa tudo de uma vez. AliExpress costuma ser mais barato (e lento); Mercado Livre e lojas nacionais chegam mais rápido.
-
-> **Atenção à tensão:** o Mega trabalha em 5V; o Pi, em 3,3V. Nunca ligue um pino do Pi direto em 5V — a comunicação entre os dois é pela USB.
-
-### Ferramentas (uma vez só)
-
-- [ ] Ferro de solda com controle de temperatura + estanho + malha dessoldadora
-- [ ] Multímetro
-- [ ] Alicate de corte e decapador de fios
-- [x] Impressora 3D (em casa)
-- Corte a laser: no colégio
-- [ ] Paquímetro (para medir as peças antes de desenhar os furos dos painéis)
-
-### Fases 0–1 — Kit inicial
-
-- [x] Arduino Mega 2560 (também tem Uno e Nano)
-- [x] Raspberry Pi 4
-- [x] Botões
-- [ ] Fonte para o Pi 4: 5,1V 3A USB-C de boa qualidade (fonte fraca causa travamentos)
-- [ ] Dissipador ou case com ventoinha (o Pi 4 esquenta, principalmente dentro de uma caixa fechada)
-- [x] Cartão microSD de 16 GB ou mais (classe A1)
-- [x] Cabo USB-B para ligar o Mega no Pi
-- [x] Cabo de rede, para ligar o Pi direto no PC (qualquer um: o Pi 4 inverte os pares sozinho)
-- [x] 2× protoboard de 830 pontos
-- [x] Jumpers macho-macho e macho-fêmea
-- [x] Kit de LEDs 5 mm + kit de resistores (220 Ω–10 kΩ)
-- [x] LCD 16x2 ou 20x4 com módulo I2C (só para a fase 1; opcional se já tiver)
-
-### Fase 2 — Painel de controle
-
-- [x] 10–15× chaves alavanca (toggle) ON-OFF
-- [x] 2–3× capas de proteção para chave ("missile switch cover")
-- [x] 4–6× botões arcade (24 ou 30 mm), de preferência com LED
-- [ ] Por módulo pequeno (5 no painel): 2× 74HC165, 1× 74HC595, 2× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 8× resistor 1 kΩ, 3× capacitor 100 nF, 1× capacitor 10 µF, 3 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
-- [ ] Por módulo médio (5 no painel): 3× 74HC165, 3× 74HC595, 3× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 24× resistor 220 Ω, 6× capacitor 100 nF, 1× capacitor 470 µF, 12× conector JST-XH de 4 vias, 6 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
-- [ ] Por módulo grande (1 no painel, o VOO): 4× 74HC165, 4× 74HC595, 4× rede resistiva 10 kΩ SIP 9 pinos, 1× chave DIP de 8 vias, 32× resistor 1 kΩ, 8× capacitor 100 nF, 1× capacitor 10 µF, 8 soquetes DIP-16, conector IDC 2x8 e cabo flat de 16 vias
-- [ ] Backplane: 12× conector IDC 2x8, 5× resistor 47 Ω, 13× resistor 10 kΩ, capacitores de 470 µF e 100 nF, borne de 2 vias e jumper de 3 pinos
-- [x] Joystick: Logitech Extreme 3D Pro (para desenvolver no PC)
-- [ ] Sidestick: 1× joystick JH-D400X-R4, 10 kΩ, 3 eixos com botão
-- [ ] Acelerador: 1× potenciômetro deslizante Bourns PTA6043, 10 kΩ linear, curso de 60 mm
-- [ ] 35 korry switches ([lista completa](hardware/korry/README.md#lista-de-peças-um-korry)), cada um com 1 chave PSW 8,5 × 8,5 mm sem trava, até 2 LEDs difusos de alto brilho de 3 mm, 4 fios finos e 1 conector JST-XH fêmea de 4 vias com os terminais; filamento PLA preto e transparente
-- [ ] 10× LED azul e verde de 3 mm, difuso, catodo comum (korry dos modos do SAS)
-- [ ] 17× parafuso M3 autoatarraxante de 8 mm, para as 9 grades dos korry ([fixação no painel](hardware/korry/README.md#fixação-no-painel))
-- [ ] 31× botão de 16 mm sem trava, com anel de 20 mm (R16-503 ou R13-507), e 2 capas impressas para o CARREGAR e o REVERTER
-- [ ] 2× botão de metal de 22 mm com anel de LED (vermelho e branco), de 5 V ou 3 V, e 2× capa transparente para botão de 22 mm
-- [ ] 2× tecla KCD1 (ON)-OFF-(ON) de 21 × 15 mm
-- [ ] 7× LED de 5 mm difuso (3 verdes e 1 vermelho do piloto, 3 brancos do sidestick)
-- [x] 7× suporte de plástico com porca para LED de 5 mm
-- [ ] Placas perfuradas de dupla face + barras de pinos (headers) e fio fino encapado (wire-wrap)
-
-### Fase 4 — Instrumentos físicos
-
-- [ ] 3–4× módulos MAX7219 com 8 dígitos de 7 segmentos (o piloto automático não usa mais: os valores vão para a tela)
-- [ ] 2× encoders rotativos (KY-040), para escolher o que os displays mostram
-- [ ] Editor de manobras ([peças e medidas](hardware/construcao.md#painel-do-editor-de-manobras)): 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm (a tecla, os botões e os korry estão na fase 2)
-- [ ] Navegação: 1× chave rotativa de 1 polo e 12 posições, com anel de batente, e knob de ponteiro de 22 mm
-- [ ] VOO, de sistemas de controle ([peças e medidas](hardware/construcao.md#painel-de-sistemas-de-controle)): 1× encoder EC11 com botão e knob de alumínio de 30 mm, o AJUSTE (os korry e os LEDs estão na fase 2); 1 módulo grande
-- [ ] 2–4× motores de passo X27.168 (ponteiros)
-- [ ] 1× fonte 5V 3A + conector/borne
-
-### Fase 6 — Tela multifunção
-
-- [x] mikromedia for ARM (LPC2148)
-- [x] Cabo mini-USB **com fios de dados**, para a PROG (o antigo alimenta a placa, mas o Windows não reconhece o FT232)
-- [ ] Cartão microSD (para os sons de alarme)
-- [ ] Fone ou caixinha de som com plugue P2
-- [ ] Alto-falante USB para o Pi (a voz dos [avisos de voo](docs/avisos.md))
-- [ ] Gravador JTAG compatível com ARM7 (opcional, só para depurar passo a passo)
-
-### Fase 7 — Hardware definitivo
-
-- [ ] PCBs fabricadas
-- [ ] Conectores JST/dupont, parafusos e espaçadores M3
-- [ ] Material da caixa: MDF 3 mm e acrílico 3 mm (preto ou branco leitoso) para a laser, filamento PLA, primer e tinta spray fosca
-- [ ] Insertos roscados M3 (colocados a quente nas peças impressas) e pés de borracha
-- [ ] Extensão USB de painel (para o joystick) e ventoinha 5 V de 40 mm (para o Pi dentro da caixa)
-
----
-
-## Referências
-
-- [kRPC — repositório](https://github.com/krpc/krpc) e [documentação](https://krpc.github.io/krpc/)
-- [pySerial](https://pyserial.readthedocs.io/)
-- [pygame](https://www.pygame.org/docs/)
-- [Raspberry Pi — documentação](https://www.raspberrypi.com/documentation/)
-- [Arduino — documentação](https://docs.arduino.cc/)
-- [KiCad](https://www.kicad.org/)
-- [LPC214x User Manual (UM10139)](https://www.nxp.com/docs/en/user-guide/UM10139.pdf) — referência de todos os registradores do LPC2148
-- [LLVM](https://llvm.org/) (clang e ld.lld), que compila o firmware da mikromedia
-- [Flash Magic](https://www.flashmagictool.com/) — gravação pelo bootloader serial do LPC2148
-- Manual e esquemático da mikromedia for ARM (MIKROE-780): site da [MikroElektronika](https://www.mikroe.com/)
-- Bibliotecas úteis para o firmware: `LiquidCrystal_I2C`, `LedControl` (MAX7219), `FastLED` ou `Adafruit_NeoPixel` (WS2812), `SwitecX25` (X27.168)
+[MIT](LICENSE) © 2026 ArthurDSchuck

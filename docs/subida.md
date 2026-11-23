@@ -170,7 +170,7 @@ Comece com uma órbita sem inclinação, num foguete simples de dois estágios e
 2. **A inclinação:** 100 km e 45°. A inclinação final, no mapa do jogo, tem que bater com a pedida.
 3. **O plano de um alvo:** escolha uma nave em órbita inclinada (ou Minmus) como alvo e rode com `--plano-do-alvo`. O script acelera o tempo até a janela, decola e, no fim, a inclinação relativa do mapa do jogo tem que ficar perto de 0°.
 4. **Sem ar:** pouse na Mun e rode com `--altitude 20000`.
-5. **Pelo cockpit:** a página SUBIDA na mikromedia, o korry LANCAR segurado 5 s e o aborto segurando de novo.
+5. **Pelo cockpit:** a página SUBIDA no tablet, o korry LANCAR segurado 5 s e o aborto segurando de novo.
 
 Se algo der errado, anote a fase, o que o terminal imprimiu e o foguete. O primeiro ponto a conferir é a primeira mensagem do script: se o referencial do kRPC não for o que o script espera, ele para antes de decolar, com uma mensagem sobre o referencial.
 

@@ -2,7 +2,7 @@
 
 **Pronto quando:** um avião decola na lei direta e, com o FBW, responde ao manche na hora, sem balançar: puxar dá carga, rolar dá rolagem, e soltar segura o que estava.
 
-Como nos caças (F-16, Gripen), o manche não mexe nas superfícies: ele pede uma **carga** (em g) e uma **velocidade de rolagem**, e o FBW decide o profundor, os ailerons e o leme para o avião fazer isso. [`scripts/fbw.py`](../scripts/fbw.py) lê o joystick pela USB e manda tudo ao jogo pelo kRPC. A arquitetura e as decisões estão no [README](../README.md#fly-by-wire-de-avião).
+Como nos caças (F-16, Gripen), o manche não mexe nas superfícies: ele pede uma **carga** (em g) e uma **velocidade de rolagem**, e o FBW decide o profundor, os ailerons e o leme para o avião fazer isso. [`scripts/fbw.py`](../scripts/fbw.py) lê o joystick pela USB e manda tudo ao jogo pelo kRPC. O plano e as decisões estão em [scripts de voo](scripts-de-voo.md#fly-by-wire-de-avião).
 
 **Onde estamos:** o script passa nos testes com um avião simulado ([`scripts/tests/test_fbw.py`](../scripts/tests/test_fbw.py)), em 100, 150, 200 e 280 m/s, e com um avião "nervoso" (superfícies fortes, pouco amortecimento e a leitura do kRPC atrasada em até 160 ms), como o do primeiro voo gravado.
 

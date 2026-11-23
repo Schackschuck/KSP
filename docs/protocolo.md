@@ -172,7 +172,7 @@ O encoder único do cockpit, no VOO, logo embaixo da tela ([desenho](../hardware
 
 ## Painel de sistemas de controle
 
-Linhas do painel de sistemas de controle ([desenho](../hardware/construcao.md#painel-de-sistemas-de-controle)): os modos do SAS, SAS, RCS, FBW, trava de altitude e o encoder do [piloto automático](../README.md#piloto-automático-de-avião). Quem responde é a ponte da tela (`bridge/mfd.py`, com a lógica em `bridge/sistemas.py`), que já tem o jogo, a tela e o fly by wire. Enquanto o painel não existe, a página de botões `bridge/celular/painel.html` manda as mesmas linhas, pelo mesmo caminho da tela no celular (`POST /linha` e `GET /eventos`, na porta 8001), e manda `READY` ao abrir, para receber todas as luzes. Uso e testes em [docs/mfd.md](mfd.md#painel-de-sistemas-de-controle).
+Linhas do painel de sistemas de controle ([desenho](../hardware/construcao.md#painel-de-sistemas-de-controle)): os modos do SAS, SAS, RCS, FBW, trava de altitude e o encoder do [piloto automático](scripts-de-voo.md#piloto-automático-de-avião). Quem responde é a ponte da tela (`bridge/mfd.py`, com a lógica em `bridge/sistemas.py`), que já tem o jogo, a tela e o fly by wire. Enquanto o painel não existe, a página de botões `bridge/celular/painel.html` manda as mesmas linhas, pelo mesmo caminho da tela no celular (`POST /linha` e `GET /eventos`, na porta 8001), e manda `READY` ao abrir, para receber todas as luzes. Uso e testes em [docs/mfd.md](mfd.md#painel-de-sistemas-de-controle).
 
 ### Painel → ponte
 

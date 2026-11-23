@@ -17,7 +17,7 @@ Antes de perguntar ou desenhar, leia:
 - `hardware/construcao.md`: formato da caixa (onde o painel fica e qual mão usa), korry e os painéis já desenhados. A seção "Painel do editor de manobras" é o exemplo pronto.
 - `hardware/korry/README.md`: o korry, a peça mais usada.
 - `hardware/README.md`, tabela "Qual placa e qual etiqueta em cada seção": quantas entradas e LEDs o módulo tem hoje e em qual placa (8, 16 ou 24 entradas).
-- `README.md`: princípios, decisões e a fase do roteiro em que o módulo aparece. Procure o nome do módulo.
+- `docs/arquitetura.md` (princípios), `docs/decisoes.md` e `docs/roteiro.md` (a fase em que o módulo aparece). Procure o nome do módulo.
 - `docs/protocolo.md` e o doc do módulo em `docs/`, se existir: as mensagens que os controles mandam.
 
 Anote o que **já está fixado** (controles, mensagens, decisões) e o que **está aberto**. O desenho tem que respeitar o fixado, ou dizer claramente o que propõe mudar.
@@ -71,5 +71,5 @@ O usuário vai mudar a versão escolhida pelo chat. A cada mudança, atualize os
 
 - Uma seção do painel em `hardware/construcao.md` (ou em `hardware/<peça>/README.md`, se for uma peça nova usada em vários painéis), com o SVG, os grupos e a tabela de peças com medidas.
 - O arquivo do painel em `hardware/desenho/paineis/` e o SVG em `hardware/img/`.
-- O que mudar fora do desenho: o roteiro no `README.md`, a lista de compras, as mensagens em `docs/protocolo.md` (marcadas como planejadas se a ponte ainda não as trata), a tabela de placas e etiquetas em `hardware/README.md` e uma lista "A fazer" no roteiro para o código.
+- O que mudar fora do desenho: o roteiro em `docs/roteiro.md`, a lista de compras em `docs/compras.md`, as mensagens em `docs/protocolo.md` (marcadas como planejadas se a ponte ainda não as trata), a tabela de placas e etiquetas em `hardware/README.md` e uma lista "A fazer" no roteiro para o código.
 - Siga o `CLAUDE.md`: merge do `main`, verificação (os testes e o `pyflakes`, mais `node hardware/desenho/desenhar.js`), commit, PR e merge com squash.
